@@ -4,12 +4,13 @@ import Tel from 'src/pages/Role/PortalCon/components/Tel';
 import InviteController from 'src/api/invitation';
 import Requests from 'src/api/addressBook';
 import EmailInput from 'src/pages/Role/PortalCon/components/Email';
-import { FROM_TYPE, DETAIL_MODE } from './addFriends';
-import default_img from 'staticfiles/images/default_user_avatar.jpg';
+import { FROM_TYPE, DETAIL_MODE } from './';
 import cx from 'classnames';
+import captcha from 'src/components/captcha';
 import _ from 'lodash';
-import { existAccountHint } from 'src/components/common/function';
+import { existAccountHint } from 'src/util';
 import { encrypt } from 'src/util';
+import DialogSettingInviteRules from 'src/pages/Admin/user/membersDepartments/structure/components/dialogSettingInviteRules';
 
 const DISPLAY_OPTIONS = [
   {
@@ -42,7 +43,10 @@ export default class MobileOrEmailInvite extends Component {
   }
 
   getValue = () => {
-    return this.state.keywords.indexOf('@') > -1 ? this.state.keywords : `+86${this.state.keywords}`;
+    // 邮箱或者国际号码带+
+    return this.state.keywords.indexOf('@') > -1 || (this.state.keywords || '').startsWith('+')
+      ? this.state.keywords
+      : `+86${this.state.keywords}`;
   };
 
   handleSearch = () => {
@@ -52,17 +56,31 @@ export default class MobileOrEmailInvite extends Component {
       return;
     }
 
-    Requests.getAccountByAccount({
-      account: this.getValue(),
-    })
-      .done(res => {
-        this.setState({ searchData: res.list });
-      })
-      .fail(err => {
-        if (err) {
-          alert(_l('请输入手机号/邮箱地址'), 3);
-        }
-      });
+    const _this = this;
+    var throttled = function (res) {
+      if (res.ret === 0) {
+        Requests.getAccountByAccount({
+          account: _this.getValue(),
+          ticket: res.ticket,
+          randStr: res.randstr,
+          captchaType: md.global.getCaptchaType(),
+        })
+          .done(res => {
+            _this.setState({ searchData: res.list });
+          })
+          .fail(err => {
+            if (err) {
+              alert(_l('请输入手机号/邮箱地址'), 3);
+            }
+          });
+      }
+    };
+
+    if (md.global.getCaptchaType() === 1) {
+      new captcha(throttled);
+    } else {
+      new TencentCaptcha(md.global.Config.CaptchaAppId.toString(), throttled).show();
+    }
   };
 
   handleAdd = () => {
@@ -197,7 +215,7 @@ export default class MobileOrEmailInvite extends Component {
 
   render() {
     const { projectId, fromType, setDetailMode } = this.props;
-    const { selectType, list, loading, keywords, searchData } = this.state;
+    const { selectType, list, loading, keywords, searchData, showDialogSettingInviteRules } = this.state;
     const hasValue = list.some(i => i.phone && !i.isErr);
 
     // 好友邀请
@@ -209,7 +227,7 @@ export default class MobileOrEmailInvite extends Component {
             : [
                 {
                   accountId: 'default',
-                  avatarBig: default_img,
+                  avatarBig: `${md.global.FileStoreConfig.pictureHost.replace(/\/$/, '')}/UserAvatar/default.gif`,
                   fullname: this.getValue(),
                   subInfo: _l('该用户未注册，你可以邀请TA加入并成为好友'),
                 },
@@ -247,10 +265,10 @@ export default class MobileOrEmailInvite extends Component {
 
     return (
       <div className="addFriendsContent">
-        <div className="Gray_75 mBottom20 flexCenter flexRow Relative">
-          {_l('邀请后，成员会收到邀请链接，验证后可加入组织')}
+        <div className="Gray_75 mBottom20 flexRow">
+          <span className="flex">{_l('邀请后，成员会收到邀请链接，验证后可加入组织')}</span>
           {fromType !== FROM_TYPE.GROUPS && (
-            <div className="addBox inviteIcon">
+            <div className="addBox mLeft10">
               <span onClick={() => setDetailMode(DETAIL_MODE.INVITE)}>
                 <Icon icon="overdue_network" />
                 {_l('邀请记录')}
@@ -280,7 +298,7 @@ export default class MobileOrEmailInvite extends Component {
           <div className="flexRow flexCenter">
             {fromType !== FROM_TYPE.GROUPS && (
               <div className="addBox Gray_9e">
-                <span onClick={() => window.open(`${location.origin}/admin/structure/${projectId}/isShowSetting`)}>
+                <span onClick={() => this.setState({ showDialogSettingInviteRules: true })}>
                   <Icon icon="settings1" />
                   {_l('邀请设置')}
                 </span>
@@ -305,6 +323,14 @@ export default class MobileOrEmailInvite extends Component {
             {_l('发送邀请')}
           </Button>
         </div>
+
+        {showDialogSettingInviteRules && (
+          <DialogSettingInviteRules
+            showDialogSettingInviteRules={showDialogSettingInviteRules}
+            setValue={({ showDialogSettingInviteRules }) => this.setState({ showDialogSettingInviteRules })}
+            projectId={projectId}
+          />
+        )}
       </div>
     );
   }

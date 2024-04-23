@@ -1,11 +1,19 @@
 import React, { Component, Fragment } from 'react';
 import { Dropdown, Menu } from 'antd';
 import { ScrollView } from 'ming-ui';
-import { formatChartData } from './BarChart';
 import { formatYaxisList, formatrChartValue, formatControlInfo, getChartColors } from './common';
 import { formatSummaryName, isFormatNumber } from 'statistics/common';
 import styled from 'styled-components';
 import cx from 'classnames';
+import gold_medal from 'statistics/assets/topChart/gold_medal.png';
+import silver_medal from 'statistics/assets/topChart/silver_medal.png';
+import copper_medal from 'statistics/assets/topChart/copper_medal.png';
+import gold_crown from 'statistics/assets/topChart/gold_crown.png';
+import silver_crown from 'statistics/assets/topChart/silver_crown.png';
+import copper_crown from 'statistics/assets/topChart/copper_crown.png';
+import one from 'statistics/assets/topChart/one.png';
+import two from 'statistics/assets/topChart/two.png';
+import there from 'statistics/assets/topChart/there.png';
 
 const formatTopChartData = (map) => {
   const data = _.get(map[0], 'value') || [];
@@ -40,7 +48,7 @@ const TopChartContent = styled.div`
     width: 50px;
   }
   .value {
-    width: 90px;
+    width: 110px;
     margin-left: 8px;
     text-align: right;
   }
@@ -65,6 +73,41 @@ const TopChartContent = styled.div`
     width: 20px;
     height: 20px;
     background-size: cover;
+  }
+  &.topChart {
+    .medal {
+      &-1 {
+        background-image: url(${gold_medal});
+      }
+      &-2 {
+        background-image: url(${silver_medal});
+      }
+      &-3 {
+        background-image: url(${copper_medal});
+      }
+    }
+    .crown {
+      &-1 {
+        background-image: url(${gold_crown});
+      }
+      &-2 {
+        background-image: url(${silver_crown});
+      }
+      &-3 {
+        background-image: url(${copper_crown});
+      }
+    }
+    .number {
+      &-1 {
+        background-image: url(${one});
+      }
+      &-2 {
+        background-image: url(${two});
+      }
+      &-3 {
+        background-image: url(${there});
+      }
+    }
   }
 `;
 
@@ -102,10 +145,11 @@ export default class extends Component {
   }
   handleClick = (event, data) => {
     const { xaxes, split } = this.props.reportData;
-    const isNumber = isFormatNumber(xaxes.controlType);
     const param = {};
     if (xaxes.cid) {
-      param[xaxes.cid] = isNumber ? Number(data.originalX) : data.originalX;
+      const isNumber = isFormatNumber(xaxes.controlType);
+      const value = data.originalX;
+      param[xaxes.cid] = isNumber && value ? Number(value) : value;
     }
     const { left, top } = this.chartWrapEl.getBoundingClientRect();
     this.setState({
@@ -168,7 +212,6 @@ export default class extends Component {
     const { reportData, isViewOriginalData } = this.props;
     const { style = {}, yaxisList, displaySetup, sorts } = reportData;
     const sortId = sorts[0] ? Object.keys(sorts[0])[0] : null;
-    const { newYaxisList } = this.state;
     const { valueProgressVisible } = style;
     return (
       <div
@@ -189,17 +232,21 @@ export default class extends Component {
         )}
         {yaxisList.map(item => (
           <div key={item.controlId} className="value ellipsis">
-            {formatrChartValue(data[item.controlId], false, newYaxisList)}
+            {formatrChartValue(data[item.controlId], false, yaxisList, item.controlId, false)}
           </div>
         ))}
       </div>
     );
   }
   renderTopChart() {
-    const { map, yaxisList, style } = this.props.reportData;
+    const { themeColor, projectId, customPageConfig = {}, reportData } = this.props;
+    const { chartColor, chartColorIndex = 1 } = customPageConfig;
+    const { map, yaxisList } = reportData;
+    const styleConfig = reportData.style || {};
+    const style = chartColor && chartColorIndex >= (styleConfig.chartColorIndex || 0) ? { ...styleConfig, ...chartColor } : styleConfig;
     const data = formatTopChartData(map);
     const maxValue = _.max(data.map(data => data[_.get(yaxisList[0], 'controlId')]));
-    const colors = getChartColors(style);
+    const colors = getChartColors(style, themeColor, projectId);
     return (
       <TopChartContent className="h100 topChart noneValueProportion" progressBgColor={colors[0]}>
         <ScrollView>

@@ -1,8 +1,6 @@
 import React from 'react';
-import { Icon } from 'ming-ui';
-import Trigger from 'rc-trigger';
+import { Icon, ColorPicker } from 'ming-ui';
 import styled from 'styled-components';
-import ColorSelectWrap from './ColorSelectWrap';
 import { getColorCountByBg } from 'src/util';
 
 const SelectIcon = styled.div`
@@ -48,10 +46,7 @@ const NormalIconStyle = styled.div`
   text-align: center;
   line-height: 34px;
   border: 1px solid #e0e0e0;
-  background: #fff;
-  &:hover {
-    background: #ededed;
-  }
+  background: #f5f5f5;
   span {
     display: inline-block;
     width: 24px;
@@ -63,17 +58,17 @@ const NormalIconStyle = styled.div`
   }
 `;
 
-export default function WidgetColor({ handleChange, color, text, type }) {
+export default function WidgetColor({ handleChange, color, text, type, fromWidget }) {
   return (
-    <Trigger
-      action={['click']}
-      popup={() => {
-        return <ColorSelectWrap color={color} handleChange={handleChange} />;
-      }}
-      zIndex={1100}
+    <ColorPicker
+      sysColor
+      isPopupBody
+      value={color}
+      fromWidget={fromWidget}
+      onChange={handleChange}
       popupAlign={{
         points: ['tl', 'bl'],
-        offset: [-120, 0],
+        offset: [-260, 0],
       }}
     >
       {type === 'normal' ? (
@@ -90,6 +85,6 @@ export default function WidgetColor({ handleChange, color, text, type }) {
           </div>
         </SelectIcon>
       )}
-    </Trigger>
+    </ColorPicker>
   );
 }

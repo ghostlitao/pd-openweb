@@ -1,76 +1,8 @@
 import React, { Fragment, useEffect, useState } from 'react';
-import styled from 'styled-components';
-import { Icon } from 'ming-ui';
+import { Icon, ColorPicker } from 'ming-ui';
 import { SCORE_COLORS_LIST } from '../../config/score';
 import cx from 'classnames';
-
-const SelectColorWrap = styled.div`
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
-  border-radius: 3px;
-  position: relative;
-  box-sizing: border-box;
-  width: 350px;
-  padding: 10px;
-  border: 1px solid #ddd;
-  background-color: #fff;
-  ul {
-    display: flex;
-    flex-wrap: wrap;
-  }
-  li {
-    box-sizing: border-box;
-    width: 10%;
-    padding: 5px 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    cursor: pointer;
-    .colorItem {
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      position: relative;
-    }
-    .colorItemCheck {
-      display: none;
-    }
-    &.active {
-      .colorItemCheck {
-        display: block;
-        color: #fff;
-        position: absolute;
-        border-radius: 50%;
-        z-index: 1;
-      }
-    }
-    &.addActive {
-      .colorItem {
-        border: 1px solid #bdbdbd;
-        padding: 2px;
-        box-sizing: border-box;
-      }
-      .colorItemAdd {
-        height: 100%;
-        border-radius: 50%;
-        margin-left: -0.5px;
-      }
-    }
-    input {
-      width: 24px;
-      height: 24px;
-      padding: 0;
-      border: none;
-      border-radius: 50%;
-      z-index: 1;
-      position: absolute;
-      opacity: 0;
-      cursor: pointer;
-      top: 0;
-      left: 0;
-    }
-  }
-`;
+import { SelectColorWrap } from './SplitLineConfig/style';
 
 export default function ColorSelectWrap({ color: activeColor, handleChange }) {
   const [customColor, setCustomColor] = useState([]);
@@ -88,18 +20,12 @@ export default function ColorSelectWrap({ color: activeColor, handleChange }) {
         {customIcon && (
           <li className={cx({ addActive: addColor })}>
             <div className="colorItem">
-              {addColor ? (
-                <div className="colorItemAdd" style={{ backgroundColor: addColor }} />
-              ) : (
-                <Icon icon="task-add-member-circle" className="Font24 Gray_bd" />
-              )}
-              <input
-                type="color"
-                value="#333333"
-                onChange={event => {
-                  setAddColor(event.target.value);
+              <ColorPicker
+                value={addColor || '#333333FF'}
+                onChange={value => {
+                  setAddColor(value);
                 }}
-                onBlur={() => {
+                handleClose={() => {
                   if (addColor) {
                     let newCustomColor = [].concat([addColor]).concat(customColor);
                     newCustomColor = newCustomColor.slice(0, customMax);
@@ -108,7 +34,13 @@ export default function ColorSelectWrap({ color: activeColor, handleChange }) {
                     safeLocalStorageSetItem('customColor', JSON.stringify(newCustomColor));
                   }
                 }}
-              />
+              >
+                {addColor ? (
+                  <div className="colorItemAdd" style={{ backgroundColor: addColor }} />
+                ) : (
+                  <Icon icon="task-add-member-circle" className="Font24 Gray_bd" />
+                )}
+              </ColorPicker>
             </div>
           </li>
         )}
@@ -128,7 +60,7 @@ export default function ColorSelectWrap({ color: activeColor, handleChange }) {
   };
 
   return (
-    <SelectColorWrap>
+    <SelectColorWrap inputCoverStyle={false}>
       {getColorList()}
       <div className="Gray_9e mTop10">{_l('自定义')}</div>
       {getColorList(true)}

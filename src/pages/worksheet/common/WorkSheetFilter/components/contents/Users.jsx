@@ -4,7 +4,7 @@ import { autobind } from 'core-decorators';
 import cx from 'classnames';
 import dialogSelectUser from 'src/components/dialogSelectUser/dialogSelectUser';
 import quickSelectUser from 'ming-ui/functions/quickSelectUser';
-import UserHead from 'src/pages/feed/components/userHead';
+import UserHead from 'src/components/userHead';
 import { getTabTypeBySelectUser } from 'src/pages/worksheet/common/WorkSheetFilter/util';
 import { FILTER_CONDITION_TYPE } from '../../enum';
 import _ from 'lodash';
@@ -73,7 +73,7 @@ export default class Users extends Component {
     quickSelectUser(this.userscon, {
       showMoreInvite: false,
       isTask: false,
-      includeUndefinedAndMySelf: !_.includes(['rule', 'portal'], from),
+      includeUndefinedAndMySelf: !_.includes(['rule', 'portal', 'subTotal'], from),
       includeSystemField: !_.includes(['rule', 'portal', 'subTotal'], from),
       ...(_.includes(['rule'], from)
         ? {
@@ -166,12 +166,13 @@ export default class Users extends Component {
       return (
         <UserHead
           className="userHead"
-          alwaysBindCard
           user={{
             userHead: user.avatar,
             accountId: user.accountId,
           }}
           size={24}
+          appId={this.props.appId}
+          projectId={this.props.projectId}
         />
       );
     }

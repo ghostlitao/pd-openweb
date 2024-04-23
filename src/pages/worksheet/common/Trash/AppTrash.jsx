@@ -4,7 +4,7 @@ import styled from 'styled-components';
 import moment from 'moment';
 import { VerifyPasswordConfirm } from 'ming-ui';
 import BaseTrash from './BaseTrash';
-import UserHead from 'src/pages/feed/components/userHead';
+import UserHead from 'src/components/userHead';
 import SvgIcon from 'src/components/SvgIcon';
 import homeAppAjax from 'src/api/homeApp';
 import _ from 'lodash';
@@ -59,6 +59,7 @@ export default function AppTrash(props) {
       });
   }
   useEffect(load, []);
+
   return (
     <div>
       <BaseTrash
@@ -106,14 +107,13 @@ export default function AppTrash(props) {
           app.wsCount,
           [
             <UserHead
+              projectId={projectId}
               className="cellUserHead"
-              // projectId={projectId}
-              bindBusinessCard
               user={{
                 userHead: app.deletePerson.avatar,
                 accountId: app.deletePerson.accountId,
               }}
-              lazy={'false'}
+              appId={app.appId}
               size={24}
             />,
             <span className="mLeft8 ellipsis">{app.deletePerson.fullname || app.deletePerson.fullName}</span>,
@@ -164,13 +164,11 @@ export default function AppTrash(props) {
                 {_l('将彻底删除应用 “%0”，请认证你的身份', app.appName)}
               </div>
             ),
-            description: (
-              <div className="Font14 Gray_75">
-                {_l('应用为极其重要的数据，彻底删除应用数据时需要验证身份。彻底删除该数据后，将无法恢复。')}
-              </div>
-            ),
+            description: <div className="Font14 Gray_75">{_l('删除后无法恢复(物理删除)，请谨慎操作！')}</div>,
             confirmType: 'danger',
-            passwordPlaceHolder: _l('请输入密码确认删除'),
+            allowNoVerify: false,
+            isRequired: false,
+            closeImageValidation: false,
             onOk: () => {
               homeAppAjax
                 .appRecycleBinDelete({

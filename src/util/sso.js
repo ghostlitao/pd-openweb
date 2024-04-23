@@ -44,7 +44,7 @@ export const ajax = {
         if (result.state) {
           params.succees.call(this, result);
         } else {
-          _alert(result.exception);
+          window.nativeAlert(result.exception);
           params.error.call(this, result);
         }
       }
@@ -57,8 +57,7 @@ export const ajax = {
 };
 
 export const login = () => {
-  // setTimeout(() => { location.href = '/login.htm'; }, 3000);
-  location.href = '/login.htm';
+  location.href = '/login';
 };
 
 export const getScript = (src, func) => {
@@ -103,6 +102,22 @@ export const replenishRet = (ret, pc_slide) => {
     return add(url);
   }
 };
+
+export const formatOtherParam = param => {
+  let result = '';
+  for(let i in param) {
+    result = `${result ? `${result}&` : ``}` + `${i}=${param[i]}`;
+  }
+  return result;
+}
+
+export const addOtherParam = (url, param) => {
+  if (url) {
+    return url.includes('?') ? `${url}&${param}` : `${url}?${param}`;
+  } else {
+    return url;
+  }
+}
 
 export const checkLogin = () => {
   let isLoing = false;

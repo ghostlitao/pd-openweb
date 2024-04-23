@@ -1,6 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import { createUploader } from 'src/pages/kc/utils/qiniuUpload';
+import createUploader from 'src/library/plupload/createUploader';
 import _ from 'lodash';
 
 export default class QiniuUpload extends React.Component {
@@ -12,7 +12,10 @@ export default class QiniuUpload extends React.Component {
     onInit: PropTypes.func,
     onAdd: PropTypes.func,
     onUploaded: PropTypes.func,
+    onUploadProgress: PropTypes.func,
+    onBeforeUpload: PropTypes.func,
     onError: PropTypes.func,
+    onUploadComplete: PropTypes.func,
   };
 
   componentDidMount() {
@@ -21,7 +24,10 @@ export default class QiniuUpload extends React.Component {
       onInit = () => {},
       onAdd = () => {},
       onUploaded = () => {},
+      onUploadProgress = () => {},
+      onBeforeUpload = () => {},
       onError = () => {},
+      onUploadComplete = () => {},
       bucket,
     } = this.props;
 
@@ -33,19 +39,9 @@ export default class QiniuUpload extends React.Component {
             browse_button: this.upload,
             bucket,
             init: {
-              FileUploaded: (up, file, info) => {
-                const response = info.response;
-
-                // 处理分片上传之后返回值少了的问题
-                if (response.serverName === 'null') {
-                  response.fileExt = `.${File.GetExt(file.name)}`;
-                  response.fileName = File.GetName(file.name);
-                  response.filePath = file.key.replace(new RegExp(file.fileName), '');
-                  response.originalFileName = File.GetName(file.name);
-                  response.serverName = file.serverName;
-                }
-
-                onUploaded(up, file, response);
+              Init: onInit,
+              FilesAdded: (up, files) => {
+                onAdd(up, files);
               },
               BeforeUpload: (up, file) => {
                 const fileExt = `.${File.GetExt(file.name)}`;
@@ -63,14 +59,33 @@ export default class QiniuUpload extends React.Component {
                     : file.name,
                 );
                 up.settings.multipart_params['x:fileExt'] = fileExt;
+                onBeforeUpload(up, file);
               },
-              FilesAdded: (up, files) => {
-                onAdd(up, files);
+              FileUploaded: (up, file, info) => {
+                const response = info.response;
+
+                // 处理分片上传之后返回值少了的问题
+                if (!response.serverName || response.serverName === 'null') {
+                  response.fileExt = `.${File.GetExt(file.name)}`;
+                  response.fileName = File.GetName(file.name);
+                  response.filePath = file.key.replace(new RegExp(file.fileName), '');
+                  response.originalFileName = File.GetName(file.name);
+                  response.serverName = file.serverName;
+                } else {
+                  response.originalFileName = decodeURIComponent(response.originalFileName);
+                }
+
+                onUploaded(up, file, response);
+              },
+              UploadProgress: (uploader, file) => {
+                onUploadProgress(uploader, file);
+              },
+              UploadComplete: (up, files) => {
+                onUploadComplete(up, files);
               },
               Error: (...args) => {
                 onError(...args);
               },
-              Init: onInit,
             },
           },
           options,

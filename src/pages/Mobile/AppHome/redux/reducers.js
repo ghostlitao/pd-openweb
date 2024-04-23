@@ -1,12 +1,3 @@
-export const getAppHomeList = (state = [], actions) => {
-  switch (actions.type) {
-    case 'UPDATE_APPHOMELIST':
-      return actions.data;
-    default:
-      return state;
-  }
-};
-
 export const myAppData = (state = {}, actions) => {
   switch (actions.type) {
     case 'UPDATE_MYAPPLIST':
@@ -22,6 +13,32 @@ export const isHomeLoading = (state = true, action) => {
       return true;
     case 'MOBILE_FETCHHOMELIST_SUCCESS':
       return false;
+    default:
+      return state;
+  }
+};
+
+export const platformSetting = (state = {}, action) => {
+  switch (action.type) {
+    case 'PLATE_FORM_SETTING':
+      return action.data;
+    default:
+      return state;
+  }
+};
+export const myPlatformData = (state = {}, action) => {
+  switch (action.type) {
+    case 'PLATE_FORM_DATA':
+      return action.data;
+    default:
+      return state;
+  }
+};
+
+export const collectRecords = (state = [], action) => {
+  switch (action.type) {
+    case 'COLLECT_RECORDS':
+      return action.data;
     default:
       return state;
   }

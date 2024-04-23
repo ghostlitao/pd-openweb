@@ -25,4 +25,6 @@ package-lock.json
 
 .scannerwork
 *.llog
+yarn.lock
+
 .history

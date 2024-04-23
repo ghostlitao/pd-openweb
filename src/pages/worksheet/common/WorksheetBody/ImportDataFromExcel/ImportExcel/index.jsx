@@ -3,7 +3,7 @@ import cx from 'classnames';
 import _ from 'lodash';
 import Immutable from 'immutable';
 import { Button, Dialog, Support } from 'ming-ui';
-import { createUploader } from 'src/pages/kc/utils/qiniuUpload';
+import createUploader from 'src/library/plupload/createUploader';
 import * as utils from 'src/pages/kc/utils';
 import { UPLOAD_STATUS, UPLOAD_ERROR } from 'src/pages/kc/constant/enum';
 import './index.less';
@@ -180,9 +180,9 @@ export default class ImportExcel extends React.Component {
           <div>
             {_l(
               '支持10MB以内的xls、xlsx、csv文件, 最大行数不超过%0行，列数不超过200列；导入多选类型的控件，请确保Excel字段内各个选项/人员用“，”隔开；导入地区控件，省市县之间以“/”隔开，如：江西省/上饶市/铅山县，如填写的地区格式没有“/”，则会按照名称精准匹配',
-              worksheetExcelImportDataLimitCount
+              worksheetExcelImportDataLimitCount,
             )}
-            <Support type={3} href="https://help.mingdao.com/zh/operation3.html" text={_l('使用帮助')} />
+            <Support type={3} href="https://help.mingdao.com/operation3" text={_l('使用帮助')} />
           </div>
         }
         overlayClosable={false}

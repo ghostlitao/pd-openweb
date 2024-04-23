@@ -11,16 +11,32 @@ const Entry = props => {
   const [loading, setLoading] = useState(true);
   const [share, setShare] = useState({});
   let shareId;
+  let printId;
 
   if (location.pathname.indexOf('public/print') >= 0) {
-    shareId = location.pathname.match(/.*\/public\/print\/(.*)/)[1].split('&&')[0];
+    const ids = location.pathname.match(/.*\/public\/print\/(.*)/)[1].split('&&');
+    shareId = ids[0];
+    printId = ids[1];
   } else {
     shareId = location.pathname.match(/.*\/public\/record\/(.*)/)[1];
   }
 
   useEffect(() => {
     const clientId = sessionStorage.getItem(shareId);
-    getShareInfoByShareId({ clientId }).then(data => {
+    window.clientId = clientId;
+    getShareInfoByShareId({ clientId, printId }).then(({ data }) => {
+      if (!data.rowId) {
+        location.href = `/public/view/${shareId}`;
+        return;
+      }
+      localStorage.setItem('currentProjectId', data.projectId);
+      preall(
+        { type: 'function' },
+        {
+          allownotlogin: true,
+          requestParams: { projectId: data.projectId },
+        },
+      );
       setLoading(false);
     });
   }, []);
@@ -28,10 +44,16 @@ const Entry = props => {
   const getShareInfoByShareId = data => {
     return new Promise(async (resolve, reject) => {
       const result = await sheetApi.getShareInfoByShareId({ shareId, ...data });
-      const shareAuthor = _.get(result, 'data.shareAuthor');
-      const clientId = _.get(result, 'data.clientId');
-      window.share = shareAuthor;
+      const clientId = _.get(result, 'data.identity');
+      const printClientId = _.get(result, 'data.clientId');
+      window.clientId = printClientId;
       clientId && sessionStorage.setItem(shareId, clientId);
+
+      if (printClientId) {
+        window.clientId = printClientId;
+        !sessionStorage.getItem('clientId') && sessionStorage.setItem('clientId', printClientId);
+      }
+
       setShare(result);
       resolve(result);
     });
@@ -73,6 +95,4 @@ const Entry = props => {
   return share.resultCode === 1 ? <RecordShare data={share.data} /> : <ShareState code={share.resultCode} />;
 };
 
-const Comp = preall(Entry, { allownotlogin: true });
-
-ReactDom.render(<Comp />, document.getElementById('app'));
+ReactDom.render(<Entry />, document.getElementById('app'));

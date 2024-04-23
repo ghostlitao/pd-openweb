@@ -8,9 +8,9 @@ import { FlexCenter } from 'worksheet/components/Basics';
 import RecordOperate from 'worksheet/components/RecordOperate';
 import ChangeSheetLayout from 'worksheet/components/ChangeSheetLayout';
 import { isEmpty } from 'lodash';
-import { isOpenPermit } from 'src/pages/FormSet/util.js';
-import { permitList } from 'src/pages/FormSet/config.js';
 import _ from 'lodash';
+import addRecord from 'worksheet/common/newRecord/addRecord';
+import { handleRowData } from 'src/util/transControlDefaultValue';
 const Con = styled.div`
   user-select: none;
   padding-left: 2px;
@@ -105,7 +105,7 @@ const OpenRecordBtn = styled(FlexCenter)`
   color: #2196f3;
   border-radius: 4px;
   &:hover {
-    background: #f5f5f5;
+    background: rgba(0, 0, 0, 0.05);
   }
 `;
 
@@ -138,17 +138,17 @@ export default function RowHead(props) {
     rowIndex,
     updateRows,
     sheetSwitchPermit,
-    customButtons,
     hideRows,
     onSelect,
     onSelectAllWorksheet,
     handleAddSheetRow = () => {},
     onReverseSelect = () => {},
     saveSheetLayout,
-    resetSehetLayout,
+    resetSheetLayout,
     setHighLight = () => {},
     refreshWorksheetControls = () => {},
     onOpenRecord = () => {},
+    columns,
   } = props;
   let { className } = props;
   const [selectAllPanelVisible, setSelectAllPanelVisible] = useState();
@@ -192,10 +192,10 @@ export default function RowHead(props) {
             <RecordOperate
               {...{ appId, viewId, worksheetId, recordId: row.rowid, projectId, isCharge }}
               formdata={controls.map(c => ({ ...c, value: row[c.controlId] }))}
-              shows={['share', 'print', 'copy', 'openinnew']}
-              allowCopy={allowAdd}
-              defaultCustomButtons={customButtons}
+              shows={['share', 'print', 'copy', 'openinnew', 'recreate', 'fav']}
+              allowCopy={allowAdd && row.allowedit}
               allowDelete={row.allowdelete}
+              allowRecreate={allowAdd}
               sheetSwitchPermit={sheetSwitchPermit}
               popupAlign={{
                 offset: [0, 4],
@@ -222,6 +222,29 @@ export default function RowHead(props) {
                 if (value) {
                   setHighLight(tableId, rowIndex);
                 }
+              }}
+              onRecreate={() => {
+                handleRowData({
+                  rowId: row.rowid,
+                  worksheetId: worksheetId,
+                  columns: controls,
+                }).then(res => {
+                  const { defaultData, defcontrols } = res;
+                  addRecord({
+                    worksheetId,
+                    appId,
+                    viewId,
+                    defaultFormData: defaultData,
+                    defaultFormDataEditable: true,
+                    directAdd: false,
+                    writeControls: defcontrols,
+                    onAdd: record => {
+                      setHighLight(tableId, rowIndex + 1);
+                      handleAddSheetRow({ ...record }, row.rowid);
+                      alert(_l('创建成功'));
+                    },
+                  });
+                });
               }}
             />
           ) : (
@@ -254,8 +277,8 @@ export default function RowHead(props) {
       )}
       {!readonly && rowIndex === -1 && (
         <Fragment>
-          {layoutChangeVisible && <ChangeSheetLayout onSave={saveSheetLayout} onCancel={resetSehetLayout} />}
-          <div className="topCheckbox" style={{ right: tableType === 'classic' ? 38 : 22, width: numberWidth }}>
+          {layoutChangeVisible && <ChangeSheetLayout onSave={saveSheetLayout} onCancel={resetSheetLayout} />}
+          <div className="topCheckbox" style={{ right: tableType === 'classic' ? 46 : 30, width: numberWidth }}>
             {hasBatch && (
               <div className="checkboxCon mTop3">
                 <Checkbox
@@ -292,7 +315,7 @@ export default function RowHead(props) {
                             setSelectAllPanelVisible(false);
                           }}
                         >
-                          {_l('选择本页记录')}
+                          {_l('选择本页记录%02053')}
                         </MenuItem>
                         <MenuItem
                           onClick={e => {
@@ -301,7 +324,7 @@ export default function RowHead(props) {
                             onSelectAllWorksheet(true);
                           }}
                         >
-                          {_l('选择所有记录')}
+                          {_l('选择所有记录%02054')}
                         </MenuItem>
                         {(selectedIds.length || allWorksheetIsSelected) && (
                           <MenuItem
@@ -311,7 +334,7 @@ export default function RowHead(props) {
                               onReverseSelect();
                             }}
                           >
-                            {_l('反选')}
+                            {_l('反选%02055')}
                           </MenuItem>
                         )}
                       </Menu>
@@ -367,7 +390,6 @@ RowHead.propTypes = {
   controls: PropTypes.arrayOf(PropTypes.shape({})),
   canSelectAll: PropTypes.bool,
   className: PropTypes.string,
-  customButtons: PropTypes.arrayOf(PropTypes.shape({})),
   data: PropTypes.arrayOf(PropTypes.shape({})),
   hideRows: PropTypes.func,
   lineNumberBegin: PropTypes.number,

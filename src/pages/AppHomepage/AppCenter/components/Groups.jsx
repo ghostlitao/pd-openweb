@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { string, bool, arrayOf, shape } from 'prop-types';
 import styled from 'styled-components';
 import { SortableContainer, SortableElement, arrayMove } from 'react-sortable-hoc';
-import { Dialog, ScrollView } from 'ming-ui';
+import { Dialog, ScrollView, UpgradeIcon } from 'ming-ui';
 import cx from 'classnames';
 import { VerticalMiddle, FlexCenter } from 'worksheet/components/Basics';
 import { navigateTo } from 'router/navigateTo';
 import homeAppAjax from 'src/api/homeApp';
 import { getFeatureStatus, buriedUpgradeVersionDialog } from 'src/util';
+import { VersionProductType } from 'src/util/enum';
 import AppTrash from 'src/pages/worksheet/common/Trash/AppTrash';
 import GroupsSkeleton from './GroupsSkeleton';
 import EditGroup from './EditGroup';
@@ -67,7 +68,7 @@ function getSortType(type) {
 const SortableGroupItem = SortableElement(props => <GroupItem {...props} />);
 
 const SortableGroupList = SortableContainer(
-  ({ isAdmin, projectId, activeGroupId, groups, item, isDragging, setIsEditingGroupId, actions }) => {
+  ({ isAdmin, projectId, activeGroupId, groups, item, isDragging, setIsEditingGroupId, actions, dashboardColor }) => {
     return (
       <div>
         {!!item.groups.length &&
@@ -79,6 +80,7 @@ const SortableGroupList = SortableContainer(
                 index={j}
                 itemType={item.type}
                 {...{
+                  dashboardColor,
                   isDragging,
                   projectId,
                   activeGroupId,
@@ -142,6 +144,7 @@ export default function Groups(props) {
     activeGroup,
     groups = [],
     actions,
+    dashboardColor,
   } = props;
   const [isDragging, setIsDragging] = useState();
   const [sorts, setSorts] = useState({});
@@ -152,25 +155,23 @@ export default function Groups(props) {
   const isFree = currentProject.licenseType === 0;
   const editingGroup = _.find(groups, { id: editingGroupId });
   const list = [
-    { name: '星标', type: 'star', groups: markedGroup },
-    { name: '个人', type: 'personal', groups: groups.filter(g => g.groupType === 0) },
-    { name: '组织', type: 'project', groups: groups.filter(g => g.groupType === 1) },
+    { name: _l('星标'), type: 'star', groups: markedGroup },
+    { name: _l('个人'), type: 'personal', groups: groups.filter(g => g.groupType === 0) },
+    { name: _l('组织'), type: 'project', groups: groups.filter(g => g.groupType === 1) },
   ].map(item => ({
     ...item,
     groups: _.sortBy(item.groups, g => (sorts[item.type] || []).indexOf(g.id)),
   }));
-  const featureType = getFeatureStatus(projectId, 16);
+  const featureType = getFeatureStatus(projectId, VersionProductType.recycle);
   const expandBtn = (
     <BaseBtnCon
-      className={isFolded ? 'mLeft16' : ''}
+      className={isFolded ? 'mLeft24' : ''}
       onClick={() => {
         setIsFolded(!isFolded);
         safeLocalStorageSetItem('homeGroupsIsFolded', !isFolded ? '1' : '');
       }}
     >
-      <i
-        className={`expandIcon Right Hand Font20 Gray_75 icon ${!isFolded ? 'icon-menu_left' : 'icon-menu_right'}`}
-      ></i>
+      <i className={`expandIcon Right Hand Font20 Gray_75 icon ${!isFolded ? 'icon-menu_left' : 'icon-menu'}`}></i>
     </BaseBtnCon>
   );
   if (loading && !isFolded) {
@@ -216,12 +217,14 @@ export default function Groups(props) {
               {expandBtn}
             </VerticalMiddle>
             <GroupItem
+              dashboardColor={dashboardColor}
               itemType="static"
               className="mTop10"
               fontIcon="grid_view"
+              // fontIcon="home_page"
               to="/app/my"
               active={!activeGroupId}
-              name={_l('首页')}
+              name={_l('我的应用')}
               onClick={() => {
                 actions.loadAppAndGroups({ projectId, noGroupsLoading: true });
                 navigateTo('/app/my');
@@ -229,17 +232,18 @@ export default function Groups(props) {
             />
             {featureType && (
               <GroupItem
+                dashboardColor={dashboardColor}
                 itemType="static"
                 fontIcon="knowledge-recycle"
                 name={
                   <span>
                     {_l('回收站')}
-                    {isFree && <i className="upgradeIcon icon-auto_awesome"></i>}
+                    {isFree && <UpgradeIcon />}
                   </span>
                 }
                 onClick={() => {
                   if (featureType === '2') {
-                    buriedUpgradeVersionDialog(projectId, 16);
+                    buriedUpgradeVersionDialog(projectId, VersionProductType.recycle);
                   } else {
                     setTrashVisible(true);
                   }
@@ -255,7 +259,7 @@ export default function Groups(props) {
           </PaddingCon>
           <GroupsCon>
             <ScrollView>
-              <PaddingCon>
+              <PaddingCon className="pBottom25">
                 {list
                   .filter(item => item.groups && item.groups.length)
                   .map((item, i) => (
@@ -272,6 +276,7 @@ export default function Groups(props) {
                             item,
                             isDragging,
                             setIsEditingGroupId,
+                            dashboardColor,
                           }}
                           axis={'y'}
                           hideSortableGhost
@@ -288,8 +293,8 @@ export default function Groups(props) {
                               ids: sortedGroups.map(g => g.id),
                               sortType: getSortType(item.type),
                             });
-                            if (item.type === 'star') {
-                              actions.updateGroupSorts(sortedGroups);
+                            if (item.type !== 'personal') {
+                              actions.updateGroupSorts(sortedGroups, item.type);
                             }
                           }}
                         />

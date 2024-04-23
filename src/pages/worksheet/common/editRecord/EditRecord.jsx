@@ -5,15 +5,18 @@ import { autobind } from 'core-decorators';
 import { Dialog, Dropdown } from 'ming-ui';
 import sheetAjax from 'src/api/worksheet';
 import RadioGroup from 'ming-ui/components/RadioGroup';
+import { getIconByType } from 'src/pages/widgetConfig/util';
 import CustomFields from 'src/components/newCustomFields';
 import { SYSTEM_CONTROL_WITH_UAID, WORKFLOW_SYSTEM_CONTROL } from 'src/pages/widgetConfig/config/widget';
 import quickSelectUser from 'ming-ui/functions/quickSelectUser';
-import { CONTROL_EDITABLE_BLACKLIST } from 'worksheet/constants/enum';
+import { CONTROL_EDITABLE_WHITELIST } from 'worksheet/constants/enum';
 import { controlState } from 'src/components/newCustomFields/tools/utils';
 import { formatControlToServer } from 'src/components/newCustomFields/tools/utils.js';
 import { SYS } from 'src/pages/widgetConfig/config/widget.js';
+import { replaceControlsTranslateInfo } from 'worksheet/util';
 import './EditRecord.less';
 import _ from 'lodash';
+import { BrowserRouter } from 'react-router-dom';
 
 export default class EditRecord extends Component {
   static propTypes = {
@@ -35,6 +38,7 @@ export default class EditRecord extends Component {
   constructor(props) {
     super(props);
     this.state = {
+      isUpdating: false,
       worksheetId: props.worksheetId,
       controlsForSelect: [],
       selectedControlId: undefined, // 选中的要修改数据的字段id
@@ -54,11 +58,12 @@ export default class EditRecord extends Component {
       getTemplate: true,
     };
     sheetAjax.getWorksheetInfo(args).then(data => {
-      const formData = data.template.controls;
-      const controlsForSelect = data.template.controls.filter(
+      const formData = replaceControlsTranslateInfo(data.appId, data.template.controls);
+      const controlsForSelect = formData.filter(
         control =>
           ((control.type < 10000 &&
-            !_.includes(CONTROL_EDITABLE_BLACKLIST, control.type) &&
+            _.includes(CONTROL_EDITABLE_WHITELIST, control.type) &&
+            !(control.type === 29 && _.get(control, 'advancedSetting.showtype') === '2') &&
             !_.find(SYSTEM_CONTROL_WITH_UAID.concat(WORKFLOW_SYSTEM_CONTROL), { controlId: control.controlId }) &&
             !_.find(view.controls, id => control.controlId === id)) ||
             control.controlId === 'ownerid') &&
@@ -127,6 +132,7 @@ export default class EditRecord extends Component {
       appId,
       viewId,
       worksheetId,
+      recordId,
       selectedRows,
       worksheetInfo,
       searchArgs,
@@ -171,7 +177,7 @@ export default class EditRecord extends Component {
     }
     const hasAuthRowIds = selectedRows.filter(row => row.allowedit || row.allowEdit).map(row => row.rowid);
     if (!allWorksheetIsSelected && hasAuthRowIds.length === 0) {
-      alert(_l('无权限修改选择的%0', worksheetInfo.entityName));
+      alert(_l('无权限修改选择的%0', worksheetInfo.entityName), 2);
       return false;
     }
     if (hasError) {
@@ -196,7 +202,7 @@ export default class EditRecord extends Component {
     if (!selectedControl) {
       return;
     }
-    const needUpdateControl = formatControlToServer(selectedControl, { needFullUpdate: true });
+    const needUpdateControl = formatControlToServer(selectedControl, { needFullUpdate: !recordId });
     if ((needUpdateControl.type === 29 || needUpdateControl.type === 35) && needUpdateControl.value) {
       try {
         needUpdateControl.relationValues = JSON.parse(needUpdateControl.value);
@@ -234,12 +240,11 @@ export default class EditRecord extends Component {
       args.keyWords = searchArgs.keyWords;
       args.searchType = searchArgs.searchType;
     }
-
-    this.updating = true;
+    this.setState({ isUpdating: true });
 
     sheetAjax.updateWorksheetRows(args).then(data => {
-      this.updating = false;
       if (data.isSuccess) {
+        this.setState({ isUpdating: false });
         clearSelect();
         hideEditRecord();
         if (data.successCount === selectedRows.length) {
@@ -306,8 +311,21 @@ export default class EditRecord extends Component {
     }
   }
 
+  renderItem(item) {
+    return (
+      <span>
+        <i
+          className={cx('Font16 icon Gray_9e mRight6', `icon-${getIconByType(item.control.type)}`)}
+          style={{ verticalAlign: 'text-top' }}
+        ></i>
+        {item.text}
+      </span>
+    );
+  }
+
   render() {
     const {
+      isUpdating,
       updateType,
       selectedControlId,
       formData = [],
@@ -319,111 +337,123 @@ export default class EditRecord extends Component {
     const { projectId, worksheetId, hideEditRecord, appId } = this.props;
     const selectedControl = controlsForSelect.filter(control => control.controlId === selectedControlId)[0] || {};
     return (
-      <Dialog
-        className="workSheetEditRecord"
-        title={_l('批量编辑')}
-        description={_l('通过批量编辑可快速统一修改相同字段的数据内容，无编辑权限的记录无法修改。')}
-        overlayClosable={false}
-        width="560"
-        anim={false}
-        okDisabled={selectedControl && selectedControl.required && selectedControl.unique}
-        onCancel={() => {
-          hideEditRecord();
-        }}
-        onOk={this.updateRecords}
-        visible={this.props.visible}
-      >
-        <div className={cx('editRecordBox Font14', showError && hasError && 'hasError')}>
-          <div className="selectControl mBottom10">
-            <span className="TxtMiddle mRight8 label Gray_9e">{_l('字段')}</span>
-            <Dropdown
-              isAppendToBody
-              openSearch
-              className="workSheetControlDropDown"
-              value={selectedControlId}
-              data={controlsForSelect
-                .filter(o => !SYS.includes(o.controlId) || o.controlId === 'ownerid')
-                .map(control => ({ text: control.controlName, value: control.controlId }))}
-              onChange={value => {
-                const newFormData = formData.map(control =>
-                  control.controlId === value ? Object.assign({}, control, { value: undefined }) : control,
-                );
-                const newSelectedControl = controlsForSelect.filter(control => control.controlId === value)[0] || {};
-                const newState = {
-                  selectedControlId: value,
-                  updateType: newSelectedControl.type === 14 ? 1 : 2,
-                  formData: newFormData,
-                  hasError: false,
-                  formFlag: Math.random().toString(32),
-                };
-                this.setState(newState);
-              }}
-            />
-          </div>
-          <div className="selectControlContent">
-            <span className="TxtMiddle mRight8 label Gray_9e">{_l('字段内容')}</span>
-            <span className="TxtMiddle updateControlType mLeft5">
-              <RadioGroup
-                className="controlValueRadio TxtMiddle InlineBlock"
-                vertical
-                data={this.getUpdateTypes(selectedControl)}
-                checkedValue={updateType}
+      <BrowserRouter>
+        <Dialog
+          className="workSheetEditRecord"
+          title={_l('批量编辑')}
+          description={_l('通过批量编辑可快速统一修改相同字段的数据内容，无编辑权限的记录无法修改。')}
+          overlayClosable={false}
+          width="560"
+          anim={false}
+          okText={isUpdating ? _l('操作中...') : undefined}
+          okDisabled={(selectedControl && selectedControl.required && selectedControl.unique) || isUpdating}
+          onCancel={() => {
+            if (isUpdating) {
+              return;
+            }
+            hideEditRecord();
+          }}
+          onOk={this.updateRecords}
+          visible={this.props.visible}
+        >
+          <div className={cx('editRecordBox Font14', showError && hasError && 'hasError')}>
+            <div className="selectControl mBottom10">
+              <span className="TxtMiddle mRight8 label Gray_9e">{_l('字段')}</span>
+              <Dropdown
+                isAppendToBody
+                openSearch
+                className="workSheetControlDropDown"
+                value={selectedControlId}
+                data={controlsForSelect
+                  .filter(o => !SYS.includes(o.controlId) || o.controlId === 'ownerid')
+                  .map(control => ({ text: control.controlName, value: control.controlId, control }))}
+                renderItem={this.renderItem}
+                renderTitle={this.renderItem}
                 onChange={value => {
                   const newFormData = formData.map(control =>
-                    control.controlId === selectedControlId
-                      ? Object.assign({}, control, { value: undefined })
-                      : control,
+                    control.controlId === value ? Object.assign({}, control, { value: undefined }) : control,
                   );
+                  const newSelectedControl = controlsForSelect.filter(control => control.controlId === value)[0] || {};
                   const newState = {
-                    updateType: value,
+                    selectedControlId: value,
+                    updateType: newSelectedControl.type === 14 ? 1 : 2,
                     formData: newFormData,
                     hasError: false,
-                  };
-                  this.setState(newState);
-                }}
-                size="small"
-              />
-            </span>
-          </div>
-          {selectedControl &&
-            this.state.selectedControlId !== 'ownerid' &&
-            !selectedControl.unique &&
-            updateType === 2 &&
-            selectedControl.type !== 14 &&
-            controlsForSelect.length > 0 && (
-              <CustomFields
-                disableRules
-                recordId="00000"
-                ref={this.customwidget}
-                flag={formFlag}
-                data={formData
-                  .filter(control => control.controlId === selectedControlId)
-                  .map(c => ({ ...c, size: 12 }))}
-                projectId={projectId}
-                appId={appId}
-                worksheetId={worksheetId}
-                onChange={data => {
-                  const newState = {
-                    formData: formData.map(item => {
-                      const newItem = _.find(data, c => c.controlId === item.controlId);
-                      return newItem || item;
-                    }),
+                    formFlag: Math.random().toString(32),
                   };
                   this.setState(newState);
                 }}
               />
-            )}
-          {/* // TODO 更新拥有者 */}
-          {this.state.selectedControlId === 'ownerid' && (
-            <div className="selectOwnerBox">
-              <div className="selectOwner mTop8 pointer" ref={owner => (this.owner = owner)} onClick={this.selectOwner}>
-                <span className="InlineBlock flex">{this.state.ownerAccount.fullname || ''}</span>
-                <i className="Right ming Icon icon icon-charger" />
-              </div>
             </div>
-          )}
-        </div>
-      </Dialog>
+            <div className="selectControlContent">
+              <span className="TxtMiddle mRight8 label Gray_9e">{_l('字段内容')}</span>
+              <span className="TxtMiddle updateControlType mLeft5">
+                <RadioGroup
+                  className="controlValueRadio TxtMiddle InlineBlock"
+                  vertical
+                  data={this.getUpdateTypes(selectedControl)}
+                  checkedValue={updateType}
+                  onChange={value => {
+                    const newFormData = formData.map(control =>
+                      control.controlId === selectedControlId
+                        ? Object.assign({}, control, { value: undefined })
+                        : control,
+                    );
+                    const newState = {
+                      updateType: value,
+                      formData: newFormData,
+                      hasError: false,
+                    };
+                    this.setState(newState);
+                  }}
+                  size="small"
+                />
+              </span>
+            </div>
+            {selectedControl &&
+              this.state.selectedControlId !== 'ownerid' &&
+              !selectedControl.unique &&
+              updateType === 2 &&
+              selectedControl.type !== 14 &&
+              controlsForSelect.length > 0 && (
+                <CustomFields
+                  disableRules
+                  recordId="00000"
+                  ref={this.customwidget}
+                  flag={formFlag}
+                  data={formData
+                    .filter(control => control.controlId === selectedControlId)
+                    .map(c => ({ ...c, size: 12, sectionId: undefined }))}
+                  projectId={projectId}
+                  appId={appId}
+                  worksheetId={worksheetId}
+                  onChange={data => {
+                    const newState = {
+                      formData: formData.map(item => {
+                        const newItem = _.find(data, c => c.controlId === item.controlId);
+                        return newItem || item;
+                      }),
+                    };
+                    this.setState(newState);
+                  }}
+                />
+              )}
+            {/* // TODO 更新拥有者 */}
+            {this.state.selectedControlId === 'ownerid' && (
+              <div className="selectOwnerBox">
+                <div
+                  className="selectOwner mTop8 pointer"
+                  ref={owner => (this.owner = owner)}
+                  onClick={this.selectOwner}
+                >
+                  <span className="InlineBlock flex">{this.state.ownerAccount.fullname || ''}</span>
+                  <i className="Right ming Icon icon icon-charger" />
+                </div>
+              </div>
+            )}
+          </div>
+        </Dialog>
+      </BrowserRouter>
     );
   }
 }

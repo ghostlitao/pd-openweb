@@ -4,14 +4,15 @@ import { isEmptyValue } from 'src/components/newCustomFields/tools/filterFn.js';
 import moment from 'moment';
 
 const getAttachmentData = (control = {}) => {
-  let attachmentData;
+  let fileData;
   if (control.value && _.isArray(JSON.parse(control.value))) {
-    attachmentData = JSON.parse(control.value);
+    fileData = JSON.parse(control.value);
   } else {
     const data = JSON.parse(control.value || '{}');
-    attachmentData = (data.attachments || []).concat(data.knowledgeAtts || []);
+    const { attachments = [], attachmentData = [], knowledgeAtts = [] } = data;
+    fileData = [...attachments, ...attachmentData, ...knowledgeAtts];
   }
-  return attachmentData;
+  return fileData;
 };
 
 const getValue = (control = {}, type) => {
@@ -43,8 +44,10 @@ const getValue = (control = {}, type) => {
       return noDelControls.map(i => i.value).join('、');
     case 14:
       const attachmentData = getAttachmentData(control);
-      const fileId = _.get(attachmentData[0], 'fileID');
-      return /\w{8}(-\w{4}){3}-\w{12}/.test(fileId) ? [fileId] : [JSON.stringify(attachmentData[0])];
+      return attachmentData.map(att => {
+        const fileId = _.get(att, 'fileID');
+        return /\w{8}(-\w{4}){3}-\w{12}/.test(fileId) ? fileId : JSON.stringify(att);
+      });
     case 15:
     case 16:
       const { formatMode } = getDatePickerConfigs(control);
@@ -91,7 +94,7 @@ const getDynamicValue = (item, formData, keywords) => {
       const isOcr = _.includes(['ocr-file', 'ocr-file-url'], source.cid);
 
       if (source.cid === 'ocr-file-url' && item.type === 2) {
-        return keywords ? `${_.get(keywords, 'serverName')}${_.get(keywords, 'key')}` : '';
+        return keywords ? `${_.get(keywords, 'serverName')}${_.get(keywords, 'key')}?imageView2/2/w/1920/q/90` : '';
       }
       if (source.cid === 'ocr-file' && item.type === 14) {
         const fileId = _.get(keywords, 'fileId');
@@ -177,7 +180,7 @@ export const getParamsByConfigs = (requestMap = [], formData = [], keywords = ''
                   return i;
                 })
               : formData;
-            rowItem[c.id] = childControl ? getDynamicValue(c, controlValues, keywords) : '';
+            rowItem[c.id] = childControl || !cid ? getDynamicValue(c, controlValues, keywords) : '';
           });
           return rowItem;
         });
@@ -204,6 +207,8 @@ export const getShowValue = (control, value = '') => {
       curValue = safeParse(value || '[]').map(i => i.fullname);
     } else if (control.type === 27) {
       curValue = safeParse(value || '[]').map(i => i.departmentName);
+    } else if (control.type === 48) {
+      curValue = safeParse(value || '[]').map(i => i.organizeName);
     } else {
       return clearValue(value);
     }

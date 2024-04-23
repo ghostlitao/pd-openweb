@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { arrayOf, func, shape, string } from 'prop-types';
 import { RELATE_RECORD_SHOW_TYPE } from 'worksheet/constants/enum';
@@ -38,14 +38,18 @@ const Dropdown = styled(RelateRecordDropdown)`
       line-height: 32px !important;
       display: block;
     }
-    .icon {
+    .clearIcon,
+    .dropIcon {
       margin: 8px;
+    }
+    .activeSelectedItem {
+      margin-top: 0px !important;
     }
   }
 `;
 
 export default function RelateRecord(props) {
-  const { from, values = [], advancedSetting, onChange = () => {} } = props;
+  const { from, values = [], filtersData, advancedSetting, onChange = () => {} } = props;
   const controlAdvancedSetting = _.get(props, 'control.advancedSetting') || {};
   const control = _.assign({}, props.control, {
     advancedSetting: {
@@ -64,7 +68,20 @@ export default function RelateRecord(props) {
       .map(safeParse)
       .map(r => ({ rowid: r.id, ...r }));
   }
+  let fastSearchControlArgs;
+  if (advancedSetting.searchcontrol) {
+    control.advancedSetting.searchcontrol = advancedSetting.searchcontrol;
+    fastSearchControlArgs = {
+      controlId: advancedSetting.searchcontrol,
+      filterType: advancedSetting.searchtype === '1' ? 2 : 1,
+    };
+  }
+  if (advancedSetting.clicksearch) {
+    control.advancedSetting.clicksearch = advancedSetting.clicksearch;
+  }
+  const conRef = useRef();
   const [active, setActive] = useState();
+  const [width, setWidth] = useState();
   const isMultiple = String(allowitem) === '2';
   const prefixRecords =
     shownullitem === '1'
@@ -102,11 +119,17 @@ export default function RelateRecord(props) {
       );
     };
   }
+  useLayoutEffect(() => {
+    if (conRef.current) {
+      setWidth(conRef.current.clientWidth);
+    }
+  }, []);
   if (String(direction) === '1') {
     return (
       <RelateRecordOptions
         multiple={isMultiple}
         selected={values}
+        formData={filtersData}
         control={control}
         prefixRecords={prefixRecords}
         staticRecords={staticRecords}
@@ -116,8 +139,11 @@ export default function RelateRecord(props) {
       />
     );
   }
+  // searchcontrol
+  // searchtype 0 模糊[default] 1精确
+  // clicksearch 1 搜索后限制 0[default]
   return (
-    <Con>
+    <Con ref={conRef}>
       <Dropdown
         zIndex="xxx"
         disableNewRecord
@@ -125,6 +151,9 @@ export default function RelateRecord(props) {
         isQuickFilter
         control={control}
         {...control}
+        selectedStyle={{ width }}
+        popupOffset={[0, -16]}
+        formData={filtersData}
         advancedSetting={{}}
         controls={relationControls}
         selected={values}
@@ -134,6 +163,7 @@ export default function RelateRecord(props) {
         renderSelected={active ? undefined : renderSelected}
         prefixRecords={prefixRecords}
         staticRecords={staticRecords}
+        fastSearchControlArgs={fastSearchControlArgs}
         onChange={newRecords => {
           handleChange({ values: newRecords });
         }}

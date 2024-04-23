@@ -5,10 +5,11 @@ import cx from 'classnames';
 import Config from '../config';
 import { hasCaptcha } from '../util';
 import captcha from 'src/components/captcha';
-import { encrypt } from 'src/util';
+import { encrypt, mdAppResponse } from 'src/util';
 import { setPssId } from 'src/util/pssId';
 import { getRequest, htmlDecodeReg } from 'src/util';
 import _ from 'lodash';
+import ChangeLang from 'src/components/ChangeLang';
 
 export default class Container extends React.Component {
   constructor(props) {
@@ -78,6 +79,11 @@ export default class Container extends React.Component {
                 createAccountLoading: false,
               });
               var actionResult = Config.ActionResult;
+              data.token &&
+                onChangeData({
+                  ...registerData,
+                  tokenProjectCode: data.token,
+                });
               if (data.actionResult == actionResult.success) {
                 changeStep('editInfo');
               } else {
@@ -95,6 +101,11 @@ export default class Container extends React.Component {
               this.setState({
                 createAccountLoading: false,
               });
+              data.token &&
+                onChangeData({
+                  ...registerData,
+                  tokenProjectCode: data.token,
+                });
               var actionResult = Config.ActionResult;
               if (data.actionResult == actionResult.success) {
                 setPssId(data.sessionId);
@@ -186,14 +197,14 @@ export default class Container extends React.Component {
         () => {
           this.doAction(
             Object.assign({}, res, {
-              captchaType: md.staticglobal.getCaptchaType(),
+              captchaType: md.global.getCaptchaType(),
             }),
           );
         },
       );
     };
     if (isFrequentLoginError) {
-      if (md.staticglobal.getCaptchaType() === 1) {
+      if (md.global.getCaptchaType() === 1) {
         new captcha(callback);
       } else {
         new TencentCaptcha(md.global.Config.CaptchaAppId.toString(), callback).show();
@@ -263,6 +274,11 @@ export default class Container extends React.Component {
       referrer: window.localStorage.getItem('Referrer'),
     }).then(
       data => {
+        data.token &&
+          onChangeData({
+            ...registerData,
+            tokenProjectCode: data.token,
+          });
         // 接口调用成功后需要删除 cookie RegFrom 和  Referrer
         delCookie('RegFrom');
         window.localStorage.removeItem('Referrer');
@@ -276,6 +292,14 @@ export default class Container extends React.Component {
           if ([7, 8].includes(tpType)) {
             //url 中的 tpType 参数为 7 或 8 ，则直接进
             location.href = '/app';
+            const isMingdao = navigator.userAgent.toLowerCase().indexOf('mingdao application') >= 0;
+            if (isMingdao) {
+              mdAppResponse({
+                sessionId: 'register',
+                type: 'native',
+                settings: { action: 'registerSuccess', account: dialCode + emailOrTel, password },
+              });
+            }
             return;
           }
           if (isLink) {
@@ -300,7 +324,12 @@ export default class Container extends React.Component {
         } else if (data.actionResult == ActionResult.userAccountExists) {
           onChangeData({
             ...registerData,
-            warnningData: [{ tipDom: '#txtMobilePhone', warnningText: _l('该号码已注册，您可以使用已有账号登录') }],
+            warnningData: [
+              {
+                tipDom: '#txtMobilePhone',
+                warnningText: _l('账号已注册'),
+              },
+            ],
           });
         } else if (data.actionResult == ActionResult.inviteLinkExpirate) {
           changeStep('inviteLinkExpirate');
@@ -362,37 +391,31 @@ export default class Container extends React.Component {
         </div>
         <Message
           type={isLink ? (loginForAdd ? 'login' : 'invite') : 'register'}
-          keys={
-            isLink
+          keys={[
+            ...(isLink
               ? loginForAdd || location.pathname.indexOf('join') >= 0 //定向邀请已存在手机号和邮箱不需要验证
                 ? ['emailOrTel', !loginForAdd ? 'setPassword' : 'password']
                 : ['emailOrTel', 'code', 'setPassword']
-              : ['tel', 'code', 'setPassword']
-          }
+              : ['tel', 'code', 'setPassword']),
+            ,
+            isLink && loginForAdd ? '' : 'privacy',
+          ]}
           dataList={_.cloneDeep(registerData)}
+          accountFailCallback={() => {
+            this.useOldAccountFn();
+          }}
           onChangeData={onChangeData}
           nextHtml={isValid => {
             return (
               <React.Fragment>
                 {createAccountLoading && <div className="loadingLine"></div>}
-                <p className="termsText Gray_75">
-                  {isLink && loginForAdd ? (
-                    <a target="_blank" href="/findPassword.htm">
+                {isLink && loginForAdd && (
+                  <p className="termsText Gray_75">
+                    <a target="_blank" href="/findPassword">
                       {_l('忘记密码？')}
                     </a>
-                  ) : (
-                    <span>
-                      {_l('点注册即代表同意')}
-                      <a target="_blank" className="terms Hand" href="/terms">
-                        {_l('《服务协议》')}
-                      </a>
-                      {_l('和')}
-                      <a target="_blank" className="terms Hand" href="/privacy">
-                        {_l('《隐私政策》')}
-                      </a>
-                    </span>
-                  )}
-                </p>
+                  </p>
+                )}
                 <span
                   className={cx('btnForRegister Hand', { loading: createAccountLoading })}
                   onClick={() => {
@@ -416,44 +439,55 @@ export default class Container extends React.Component {
           }}
         />
         {/* 已有账号只能登录并加入 */}
-        {!inviteInfo.account && (
+        {!inviteInfo.account ? (
           <React.Fragment>
             <span className={cx('line', { mTopH: loginForAdd })}></span>
-            <span className="btnUseOldAccount">
-              {isLink ? (
-                loginForAdd ? (
-                  <span
-                    className="Hand"
-                    onClick={() => {
-                      this.useOldAccountFn();
-                    }}
-                  >
-                    {_l('注册并加入')}
-                  </span>
-                ) : (
-                  <React.Fragment>
-                    <span className="textG">{_l('已经有账号')} , </span>
+            <div className="flexRow alignItemsCenter justifyContentCenter footerCon">
+              <span className="changeBtn Hand TxtRight">
+                {isLink ? (
+                  loginForAdd ? (
                     <span
-                      className="textB Hand"
+                      className="Hand textB"
                       onClick={() => {
                         this.useOldAccountFn();
                       }}
                     >
-                      {_l('登录')}
+                      {_l('注册并加入')}
                     </span>
-                  </React.Fragment>
-                )
-              ) : (
-                <span
-                  className="Hand"
-                  onClick={() => {
-                    this.useOldAccountFn();
-                  }}
-                >
-                  {_l('登录已有账号')}
-                </span>
-              )}
-            </span>
+                  ) : (
+                    <React.Fragment>
+                      <span className="textG">{_l('已有账号')} , </span>
+                      <span
+                        className="textB Hand"
+                        onClick={() => {
+                          this.useOldAccountFn();
+                        }}
+                      >
+                        {_l('登录')}
+                      </span>
+                    </React.Fragment>
+                  )
+                ) : (
+                  <span
+                    className="Hand textB"
+                    onClick={() => {
+                      this.useOldAccountFn();
+                    }}
+                  >
+                    {_l('登录已有账号')}
+                  </span>
+                )}
+              </span>
+              <span className="lineCenter mLeft16"></span>
+              <div className="mLeft16 TxtLeft">
+                <ChangeLang className="justifyContentLeft" />
+              </div>
+            </div>
+          </React.Fragment>
+        ) : (
+          <React.Fragment>
+            <span className={cx('line', { mTopH: loginForAdd })}></span>
+            <ChangeLang className="mTop20" />
           </React.Fragment>
         )}
       </React.Fragment>

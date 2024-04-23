@@ -6,7 +6,7 @@ import styled from 'styled-components';
 import update from 'immutability-helper';
 import DataFormat from 'src/components/newCustomFields/tools/DataFormat';
 import { formatControlToServer } from 'src/components/newCustomFields/tools/utils.js';
-import { getSubListError, filterHidedSubList } from 'worksheet/util';
+import { getSubListError, filterHidedSubList, handleChildTableUniqueError } from 'worksheet/util';
 import CustomFields from 'src/components/newCustomFields';
 import useWorksheetRowProvider from '../WorksheetRecordProvider';
 import './FillRecordControls.less';
@@ -38,6 +38,7 @@ class FillRecordControls extends React.Component {
     writeControls: PropTypes.arrayOf(PropTypes.shape({})),
     hideDialog: PropTypes.func,
     onSubmit: PropTypes.func,
+    customButtonConfirm: PropTypes.func,
   };
 
   constructor(props) {
@@ -114,6 +115,8 @@ class FillRecordControls extends React.Component {
               if (_.isUndefined(c.dataSource)) {
                 return undefined;
               }
+              // 自定义动作异化：标签页不能配置，所以默认都显示
+              if (c.type === 52) return { ...c, controlPermissions: '111', fieldPermission: '111' };
               if (!writeControl || c.fromMaster) {
                 return {
                   ...c,
@@ -161,12 +164,12 @@ class FillRecordControls extends React.Component {
     this.setState({ submitLoading: true });
     this.customwidget.current.submitFormData();
   }
-  onSave(error, { data, updateControlIds }) {
+  async onSave(error, { data, updateControlIds, handleRuleError }) {
     if (error) {
       this.setState({ submitLoading: false });
       return;
     }
-    const { writeControls, onSubmit } = this.props;
+    const { writeControls, onSubmit, customButtonConfirm } = this.props;
     let hasError;
     const newData = data.filter(item =>
       _.find(writeControls, writeControl => writeControl.controlId === item.controlId),
@@ -224,19 +227,43 @@ class FillRecordControls extends React.Component {
       });
       return;
     }
+    if (customButtonConfirm) {
+      try {
+        await customButtonConfirm();
+      } catch (err) {
+        this.setState({
+          submitLoading: false,
+        });
+        return;
+      }
+    }
     this.setState({ isSubmitting: true, submitLoading: false });
     updateControlIds = _.uniq(updateControlIds.concat(writeControls.filter(c => c.defsource).map(c => c.controlId)));
     onSubmit(
-      newData.filter(c => _.find(updateControlIds, controlId => controlId === c.controlId)).map(formatControlToServer),
+      newData
+        .filter(c => _.find(updateControlIds, controlId => controlId === c.controlId))
+        .map(c => formatControlToServer(c, { needFullUpdate: true })),
       {
         ..._.pick(this.props, ['appId', 'projectId', 'worksheetId', 'viewId', 'recordId']),
       },
       this.customwidget.current,
+      (err, res) => {
+        if (err) {
+          this.setState({ isSubmitting: false, submitLoading: false });
+        }
+        if (res && res.resultCode === 22) {
+          handleChildTableUniqueError({ badData: res.badData, data, cellObjs: this.cellObjs });
+        }
+        if (res && res.resultCode === 32) {
+          handleRuleError(res.badData, this.cellObjs);
+        }
+      },
     );
   }
 
   render() {
-    const { widgetStyle, recordId, visible, className, title, worksheetId, projectId, hideDialog } = this.props;
+    const { isCharge, widgetStyle, recordId, visible, className, title, worksheetId, projectId, hideDialog } =
+      this.props;
     const { submitLoading, formData, showError, formFlag, isSubmitting } = this.state;
     return (
       <Modal
@@ -257,8 +284,9 @@ class FillRecordControls extends React.Component {
             <LoadDiv />
           </LoadMask>
         )}
-        <div ref={this.formcon}>
+        <div className="formCon" ref={this.formcon}>
           <CustomFields
+            isCharge={isCharge}
             widgetStyle={widgetStyle}
             isWorksheetQuery
             ignoreLock
@@ -274,6 +302,7 @@ class FillRecordControls extends React.Component {
             worksheetId={worksheetId}
             showError={showError}
             registerCell={({ item, cell }) => (this.cellObjs[item.controlId] = { item, cell })}
+            disabledFunctions={['controlRefresh']}
             onChange={data => {
               this.setState({
                 formData: data,

@@ -1,11 +1,31 @@
 export const PAGE_HEADER_ROUTE_CONFIG = {
+  home: {
+    path: '/dashboard',
+    component: () => import('src/pages/PageHeader/AppCenterHeader'),
+  },
   my: {
     path: '/app/my/(group)?/:projectId?/:groupType?/:groupId?',
+    component: () => import('src/pages/PageHeader/AppCenterHeader'),
+  },
+  recordFav: {
+    path: '/favorite',
     component: () => import('src/pages/PageHeader/AppCenterHeader'),
   },
   lib: {
     path: '/app/lib',
     component: () => import('src/pages/PageHeader/AppCenterHeader'),
+  },
+  appLogs: {
+    path: '/app/:appId/logs/:projectId',
+    component: () => import('src/pages/PageHeader/AppPkgSimpleHeader'),
+  },
+  analytics: {
+    path: '/app/:appId/analytics/:projectId',
+    component: () => import('src/pages/PageHeader/AppPkgSimpleHeader'),
+  },
+  appSettings: {
+    path: '/app/:appId/settings/:navTab?',
+    component: () => import('src/pages/PageHeader/AppPkgSimpleHeader'),
   },
   appPkg: {
     path: '/app/:appId/:groupId?/:worksheetId?/:viewId?',
@@ -97,7 +117,11 @@ export const PAGE_HEADER_ROUTE_CONFIG = {
   },
   integration: {
     path: '/integration',
-    component: () => import('src/pages/PageHeader/HubHeader'),
+    component: () => import('src/pages/PageHeader/HubAndPluginHeader'),
+  },
+  plugin: {
+    path: '/plugin',
+    component: () => import('src/pages/PageHeader/HubAndPluginHeader'),
   },
   app: {
     path: '/app/?',

@@ -1,7 +1,7 @@
 import React, { Component, Fragment } from 'react';
 import './modules/calendarControl/css/fullcalendar.less';
 import './modules/css/share.less';
-import './modules/calendarControl/javascript/fullcalendar';
+import fullCalendar from './modules/calendarControl/javascript/fullcalendar';
 
 import toolBar from './modules/toolbar/toolbar';
 import LoadDiv from 'ming-ui/components/LoadDiv';
@@ -14,17 +14,20 @@ export default class CalendarEntrypoint extends Component {
       openTaskDetail: false,
       taskId: '',
     };
+
+    fullCalendar();
   }
   componentDidMount() {
     $('html').addClass('AppCalendar');
     toolBar.bindEvent();
 
     let promise;
-    if ((getCookie('i18n_langtag') || getNavigatorLang()) === 'zh-Hant') {
+    const lang = getCookie('i18n_langtag') || md.global.Config.DefaultLang;
+    if (lang === 'zh-Hant') {
       promise = import('./modules/calendarControl/lang/zh-tw');
-    } else if ((getCookie('i18n_langtag') || getNavigatorLang()) === 'ja') {
+    } else if (lang === 'ja') {
       promise = import('./modules/calendarControl/lang/ja');
-    } else if ((getCookie('i18n_langtag') || getNavigatorLang()) !== 'en') {
+    } else if (lang !== 'en') {
       promise = import('./modules/calendarControl/lang/zh-cn');
     } else {
       promise = Promise.resolve();
@@ -34,7 +37,7 @@ export default class CalendarEntrypoint extends Component {
     }
 
     const _this = this;
-    $('#calendar').on('openTask', function (event, taskId) {
+    $('#calendar').on('openTask', function(event, taskId) {
       _this.setState({ openTaskDetail: true, taskId });
     });
   }

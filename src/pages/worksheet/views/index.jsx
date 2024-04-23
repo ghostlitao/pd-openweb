@@ -2,19 +2,26 @@ import React, { useEffect } from 'react';
 import PropTypes from 'prop-types';
 import errorBoundary from 'ming-ui/decorators/errorBoundary';
 import SheetView from 'worksheet/views/SheetView';
+import ViewContext from './ViewContext';
 import BoardView from './BoardView';
 import HierarchyView from './HierarchyView';
 import { navigateTo } from 'src/router/navigateTo';
 import GalleryView from 'worksheet/views/GalleryView';
 import CalendarView from 'worksheet/views/CalendarView';
 import GunterView from 'worksheet/views/GunterView/enter';
-import Skeleton from 'src/router/Application/Skeleton';
+import { Skeleton } from 'ming-ui';
 import UnNormal from 'worksheet/views/components/UnNormal';
 import { VIEW_DISPLAY_TYPE } from 'worksheet/constants/enum';
 import styled from 'styled-components';
 import _ from 'lodash';
+import HierarchyVerticalView from './HierarchyVerticalView';
+import HierarchyMixView from './HierarchyMixView';
+import DetailView from './DetailView';
+import CustomWidgetView from './CustomWidgetView';
+import MapView from './MapView';
+import ResourceView from './ResourceView';
 
-const { board, sheet, calendar, gallery, structure, gunter } = VIEW_DISPLAY_TYPE;
+const { board, sheet, calendar, gallery, structure, gunter, detail, customize, resource, map } = VIEW_DISPLAY_TYPE;
 
 const Con = styled.div`
   height: 100%;
@@ -32,9 +39,17 @@ const TYPE_TO_COMP = {
   [calendar]: props => <CalendarView watchHeight {...props} />,
   [structure]: HierarchyView,
   [gunter]: GunterView,
+  [detail]: DetailView,
+  structureVertical: HierarchyVerticalView,
+  structureMix: HierarchyMixView,
+  [customize]: CustomWidgetView,
+  [map]: MapView,
+  [resource]: ResourceView,
 };
 function View(props) {
-  const { loading, error, view, showAsSheetView } = props;
+  const { loading, error, view, views, showAsSheetView } = props;
+  const { advancedSetting = {} } = view;
+
   let activeViewStatus = props.activeViewStatus;
   if (loading) {
     return (
@@ -68,6 +83,7 @@ function View(props) {
 
   const viewProps = _.pick(props, [
     'isCharge',
+    'appPkg',
     'appId',
     'groupId',
     'worksheetId',
@@ -83,26 +99,33 @@ function View(props) {
   ]);
 
   if (_.isEmpty(view) && !props.chartId && !_.get(window, 'shareState.isPublicView')) {
-    // 图表引用视图允许不存在 viewId
-    if (window.redirected && viewProps.appId && viewProps.groupId && viewProps.worksheetId && !error) {
-      if (/^\/app\/[0-9a-z-]{36}(\/[0-9a-z-]{24}){2}$/.test(location.pathname)) {
-        navigateTo(`/app/${viewProps.appId}/`, true);
-      } else {
-        navigateTo(`/app/${viewProps.appId}/${viewProps.groupId}/${viewProps.worksheetId}`, true);
-      }
+    if (views.length && viewProps.appId && viewProps.groupId && viewProps.worksheetId) {
+      navigateTo(`/app/${viewProps.appId}/${viewProps.groupId}/${viewProps.worksheetId}`, true);
+    } else {
+      activeViewStatus = -10000;
     }
-    activeViewStatus = -10000;
   }
 
-  const Component = TYPE_TO_COMP[String(showAsSheetView ? sheet : view.viewType)];
+  let viewType = String(showAsSheetView ? sheet : view.viewType);
+
+  if (!showAsSheetView && view.viewType === 2 && advancedSetting.hierarchyViewType === '1') {
+    viewType = 'structureVertical';
+  } else if (!showAsSheetView && view.viewType === 2 && advancedSetting.hierarchyViewType === '2') {
+    viewType = 'structureMix';
+  }
+
+  const Component = TYPE_TO_COMP[viewType];
+
   return (
-    <Con>
-      {!Component || activeViewStatus !== 1 ? (
-        <UnNormal resultCode={error ? -999999 : activeViewStatus} />
-      ) : (
-        <Component {...viewProps} />
-      )}
-    </Con>
+    <ViewContext.Provider value={{ isCharge: props.isCharge }}>
+      <Con>
+        {!Component || activeViewStatus !== 1 ? (
+          <UnNormal resultCode={error ? -999999 : activeViewStatus} />
+        ) : (
+          <Component {...viewProps} />
+        )}
+      </Con>
+    </ViewContext.Provider>
   );
 }
 

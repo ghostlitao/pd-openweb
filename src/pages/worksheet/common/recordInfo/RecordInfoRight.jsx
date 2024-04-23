@@ -6,10 +6,13 @@ import { permitList } from 'src/pages/FormSet/config.js';
 
 export default function RecordInfoRight(props) {
   const {
+    loading,
+    workflowStatus,
     className,
     recordbase,
     workflow,
     approval,
+    isOpenNewAddedRecord,
     sheetSwitchPermit,
     onFold,
     projectId,
@@ -18,6 +21,9 @@ export default function RecordInfoRight(props) {
   } = props;
   const { isSubList, appId, viewId, appSectionId, worksheetId, recordId, recordTitle } = recordbase;
   let hiddenTabs = [];
+  const noApproved =
+    !isOpenPermit(permitList.approveDetailsSwitch, sheetSwitchPermit, viewId) ||
+    (md.global.Account.isPortal && !props.approved);
   if (isSubList) {
     hiddenTabs.push('discuss', 'discussPortal', 'files');
   }
@@ -30,19 +36,18 @@ export default function RecordInfoRight(props) {
     hiddenTabs.push('logs');
   }
   // 审批权限 || 流程详情不需要显示表审批
-  if (!isOpenPermit(permitList.approveDetailsSwitch, sheetSwitchPermit, viewId) || workflow) {
+  if (noApproved || workflow) {
     hiddenTabs.push('approval');
   }
   if (!workflow) {
     hiddenTabs.push('workflow');
   }
 
-
   if (md.global.Account.isPortal) {
     //外部门户 需要判断当前是否开始讨论
     hiddenTabs.push('logs', 'files'); //外部门户不可见日志和文件
     if (!props.allowExAccountDiscuss) {
-      return '';
+      hiddenTabs.push('discuss', 'discussPortal');
     } else {
       if (props.exAccountDiscussEnum === 0) {
         hiddenTabs.push('discussPortal'); //允许外部门户参与讨论，且全部可见 不显示外部门户讨论
@@ -65,6 +70,9 @@ export default function RecordInfoRight(props) {
   return (
     <div className={`recordInfoInfo ${className || ''}`}>
       <DiscussLogFile
+        configLoading={loading}
+        workflowStatus={workflowStatus}
+        isOpenNewAddedRecord={isOpenNewAddedRecord}
         workflow={workflow}
         approval={approval}
         hiddenTabs={hiddenTabs}
@@ -82,12 +90,14 @@ export default function RecordInfoRight(props) {
         formdata={formdata}
         allowExAccountDiscuss={props.allowExAccountDiscuss}
         exAccountDiscussEnum={props.exAccountDiscussEnum}
+        approved={props.approved}
       />
     </div>
   );
 }
 
 RecordInfoRight.propTypes = {
+  isOpenNewAddedRecord: PropTypes.bool,
   className: PropTypes.string,
   workflow: PropTypes.element,
   approval: PropTypes.element,

@@ -19,7 +19,7 @@ export const getSuffix = url => {
   let addressSuffix = decodeURIComponent(url)
     .replace(/http(s)?:\/\/([^/]+)\//i, '')
     .split(/portal\/(.*)/)
-    .filter(o => o)[0].split(/\/(.*)/)[0];
+    .filter(o => o)[0].split(/\/(.*)/)[0].split('?')[0];
   return addressSuffix;
 };
 
@@ -152,6 +152,9 @@ export const accountResultAction = res => {
       break;
     case 17:
       msg = _l('微信扫码登录方式关闭');
+      break;
+    case 18:
+      msg = _l('当前门户不在设置的注册时间范围内，暂不支持注册');
       break;
     case 20:
       msg = _l('手机号/邮箱或者验证码错误');

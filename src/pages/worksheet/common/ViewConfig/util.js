@@ -31,7 +31,7 @@ export const updateAdvancedSetting = (view, obj) => {
 };
 
 //格式化advancedSetting的navfilters
-export const formatAdvancedSettingByNavfilters = (view, newValue) => {
+export const formatAdvancedSettingByNavfilters = (view, newValue = {}) => {
   const { navfilters } = newValue;
   const { advancedSetting = {} } = view;
   const { navshow } = advancedSetting;
@@ -54,11 +54,22 @@ export const formatAdvancedSettingByNavfilters = (view, newValue) => {
               } catch (error) {
                 id = info;
               }
-              return id
-
+              return id + '';
             }),
           ),
     });
+  }
+};
+
+//格式化带有Navfilters的配置数据
+export const formatObjWithNavfilters = o => {
+  if (!!_.get(o, 'advancedSetting.navfilters')) {
+    return {
+      ...o,
+      advancedSetting: formatAdvancedSettingByNavfilters(o),
+    };
+  } else {
+    return o;
   }
 };
 
@@ -95,7 +106,6 @@ export const ViewSettingWrap = styled.div`
     }
   }
   .subTitle {
-    margin-top: 12px;
     color: #515151;
     &.withDisplayControl {
       display: flex;
@@ -126,3 +136,14 @@ export const WORKFLOW_SYSTEM_FIELDS_SORT = [
   'wfctime',
   'wfcotime',
 ];
+
+export const getCanDisplayControls = (worksheetControls) => {
+  return worksheetControls.filter(
+    c => c.attribute !== 1 && !!c.controlName && !_.includes([22, 10010, 43, 45, 47, 49, 51, 52], c.type),
+  );
+}
+
+export const isSameType = (list, control) => {
+  return list.includes(control.type) ||
+    (list.includes(control.sourceControlType) && control.type === 30)
+};

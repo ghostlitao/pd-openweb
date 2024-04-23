@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import styled from 'styled-components';
 import { bindActionCreators } from 'redux';
 import { connect } from 'react-redux';
-import { Input, Icon, ScrollView, LoadDiv } from 'ming-ui';
+import { Icon, ScrollView, LoadDiv } from 'ming-ui';
 import cx from 'classnames';
 import sheetAjax from 'src/api/worksheet';
 import renderCellText from 'src/pages/worksheet/components/CellControls/renderText';
@@ -13,6 +13,8 @@ import _ from 'lodash';
 import { isOpenPermit } from 'src/pages/FormSet/util.js';
 import { permitList } from 'src/pages/FormSet/config.js';
 import { FILTER_CONDITION_TYPE } from 'src/pages/worksheet/common/WorkSheetFilter/enum.js';
+import { getFilledRequestParams } from 'worksheet/util';
+
 const Con = styled.div(
   ({ width }) => `
   width: ${width}px;
@@ -40,8 +42,9 @@ const Con = styled.div(
         color: #2196f3;
       }
     }
-    .Input {
+    input {
       width: 100%;
+      height: 36px;
       border: none;
       padding-left: 6px;
       font-size: 13px;
@@ -151,7 +154,9 @@ function GroupFilter(props) {
     navGroupCounts,
     getNavGroupCount,
     sheetSwitchPermit = [],
+    navGroupFilters,
   } = props;
+  const inputRef = useRef(null);
   const { appId, worksheetId, viewId } = base;
   const view = _.find(views, { viewId }) || (!viewId && views[0]) || {};
   const navGroup = _.isEmpty(view.navGroup) ? {} : view.navGroup[0];
@@ -167,6 +172,15 @@ function GroupFilter(props) {
     setKeywords('');
   }, [navGroup, navGroup.controlId, navGroup.viewId, navGroup.isAsc]);
   useEffect(() => {
+    if (_.isEmpty(navGroupFilters)) {
+      setRowIdForFilter('');
+    }
+  }, [navGroupFilters]);
+  useEffect(() => {
+    let soucre = controls.find(o => o.controlId === navGroup.controlId) || {};
+    if (29 === soucre.type && getAdvanceSetting(view).navshow === '1' && isOpenGroup) {
+      getNavGroupCount();
+    }
     isOpenGroup && fetch();
   }, [
     navGroup.controlId,
@@ -186,6 +200,13 @@ function GroupFilter(props) {
   useEffect(() => {
     fetch();
   }, [keywords]);
+  useEffect(() => {
+    let soucre = controls.find(o => o.controlId === navGroup.controlId) || {};
+    let { navshow } = getAdvanceSetting(view);
+    if (29 === soucre.type && navshow === '1') {
+      fetch();
+    }
+  }, [navGroupCounts]);
   const handleSearch = useCallback(
     _.throttle(value => {
       let keyWords = value.trim();
@@ -235,6 +256,9 @@ function GroupFilter(props) {
     return !keywords && isSoucreTree();
   };
   const fetch = () => {
+    if (inputRef && inputRef.current) {
+      inputRef.current.value = keywords;
+    }
     const { controlId } = navGroup;
     let { navfilters = '[]', navshow } = getAdvanceSetting(view);
     if (controlId === 'wfstatus' && !isOpenPermit(permitList.sysControlSwitch, sheetSwitchPermit)) {
@@ -269,12 +293,30 @@ function GroupFilter(props) {
     let soucre = controls.find(o => o.controlId === filter.controlId) || {};
     //级联选择字段 或 已配置层级展示的关联字段
     if ([29, 35].includes(soucre.type)) {
-      loadData({
-        worksheetId: soucre.dataSource,
-        viewId: 29 === soucre.type ? filter.viewId : soucre.viewId,
-        rowId,
-        cb,
-      });
+      let { navshow } = getAdvanceSetting(view);
+      if (29 === soucre.type && navshow === '1' && !key) {
+        dataUpdate({
+          filterData: navGroupData,
+          data: navGroupCounts
+            .filter(o => !['all', ''].includes(o.key)) //排除全部和空
+            .map(item => {
+              return {
+                value: item.key,
+                txt: item.name, //renderTxt(item, control, viewId),
+                isLeaf: false,
+              };
+            }),
+          rowId,
+          cb,
+        });
+      } else {
+        loadData({
+          worksheetId: soucre.dataSource,
+          viewId: 29 === soucre.type ? filter.viewId : soucre.viewId,
+          rowId,
+          cb,
+        });
+      }
     } else {
       let options = (controls.find(o => o.controlId === filter.controlId) || {}).options || [];
       data = !filter.isAsc ? options.slice().reverse() : options;
@@ -342,34 +384,49 @@ function GroupFilter(props) {
     }
     if (soucre.type !== 35 && navfilters.length > 0 && ['3'].includes(navshow)) {
       /// 显示 符合筛选条件的处理
-      let filterControls = navfilters.map(handleCondition);
+      let filterControls = navfilters.map(o => handleCondition(o));
       param = { ...param, filterControls };
     }
     sheetAjax
-      .getFilterRows({
-        worksheetId,
-        viewId,
-        keywords,
-        pageIndex: 1,
-        pageSize: 10000,
-        isGetWorksheet: true,
-        kanbanKey: rowId,
-        ...param,
-      })
+      .getFilterRows(
+        getFilledRequestParams({
+          worksheetId,
+          viewId,
+          keywords,
+          pageIndex: 1,
+          pageSize: 10000,
+          isGetWorksheet: true,
+          kanbanKey: rowId,
+          ...param,
+        }),
+        { fireImmediately: true },
+      )
       .then(result => {
         if (result.resultCode === 4) {
-          //视图删除的情况下，显示成为选中视图的状态
+          //视图删除的情况下，显示成未选中视图的状态
           fetchData({ worksheetId, viewId: '', rowId, cb });
+        } else if (result.resultCode === 7) {
+          dataUpdate({
+            filterData: navGroupData,
+            data: [],
+            rowId,
+            cb,
+          });
         } else {
           let { data = [] } = result;
+          let newDate = data;
           if (soucre.type !== 35 && navfilters.length > 0 && navshow === '2') {
-            data = data.filter(o => navfilters.map(value => safeParse(value).id).includes(o.rowid));
+            newDate = [];
+            const ids = navfilters.map(value => safeParse(value).id);
+            ids.map(it => {
+              newDate = newDate.concat(data.find(o => o.rowid === it));
+            });
           }
           const controls = _.get(result, ['template', 'controls']) || [];
           const control = controls.find(item => item.attribute === 1);
           dataUpdate({
             filterData: navGroupData,
-            data: data.map(item => {
+            data: newDate.map((item = {}) => {
               return {
                 value: item.rowid,
                 txt: renderTxt(item, control, viewId),
@@ -386,18 +443,18 @@ function GroupFilter(props) {
   const loadData = obj => {
     fetchData(obj);
   };
-  const dataUpdate = ({ filterData, data, rowId, cb }) => {
+  const dataUpdate = ({ filterData, data, rowId, cb }, notUpdate) => {
     if (rowId && !keywords) {
       filterData.forEach(item => {
         if (item.value === rowId) {
           item.children = data;
         } else if (_.isArray(item.children)) {
-          dataUpdate({ filterData: item.children, data, rowId });
+          dataUpdate({ filterData: item.children, data, rowId }, true);
         }
       });
-      setGroupFilterData(filterData);
+      !notUpdate && setGroupFilterData(filterData);
     } else {
-      setGroupFilterData(data);
+      !notUpdate && setGroupFilterData(data);
     }
     setLoading(false);
     cb && cb();
@@ -406,7 +463,9 @@ function GroupFilter(props) {
     return data.map(d => {
       let hasChildren = !d.isLeaf;
       let isClose = hasChildren && !openKeys.includes(d.value);
-      let count = Number((navGroupCounts.find(o => o.key === (!d.value ? 'all' : d.value)) || {}).count || 0);
+      let count = Number(
+        (navGroupCounts.find(o => o.key === (!d.value ? 'all' : d.value === 'null' ? '' : d.value)) || {}).count || 0,
+      );
       const soucre = controls.find(o => o.controlId === navGroup.controlId) || {};
       const { advancedSetting, type } = soucre;
       const { allpath = '0' } = advancedSetting;
@@ -529,7 +588,13 @@ function GroupFilter(props) {
     }
     if (isOption && navfilters.length > 0 && navshow === '2') {
       // 显示 指定项 //加上全部和空
-      navData = navData.filter(o => navfilters.includes(o.value) || ['null', ''].includes(o.value));
+      let list = ['', ...navfilters, 'null'];
+      const data = navData;
+      navData = [];
+      list.map(it => {
+        navData = navData.concat(data.find(o => o.value === it));
+      });
+      navData = navData.filter(o => !!o);
     }
     return (
       <ScrollView className="flex">
@@ -545,7 +610,10 @@ function GroupFilter(props) {
                         backgroundColor: o.color,
                       }
                     : {};
-                let count = Number((navGroupCounts.find(d => d.key === (!o.value ? 'all' : o.value)) || {}).count || 0);
+                let count = Number(
+                  (navGroupCounts.find(d => d.key === (!o.value ? 'all' : o.value === 'null' ? '' : o.value)) || {})
+                    .count || 0,
+                );
                 // 显示有数据的项 //排除全部和空
                 if (navshow === '1' && count <= 0 && !['null', ''].includes(o.value)) {
                   return;
@@ -594,11 +662,12 @@ function GroupFilter(props) {
         {isOpenGroup && (
           <React.Fragment>
             <i className="icon icon-search"></i>
-            <Input
-              value={keywords}
+            <input
+              type="text"
               placeholder={_l('搜索')}
+              ref={inputRef}
               className={cx('flex', { placeholderColor: !keywords })}
-              onChange={handleSearch}
+              onChange={e => handleSearch(e.target.value)}
             />
           </React.Fragment>
         )}

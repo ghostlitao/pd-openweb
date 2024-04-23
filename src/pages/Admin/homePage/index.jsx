@@ -1,4 +1,4 @@
-import React, { Fragment, useEffect, useState } from 'react';
+import React, { Fragment, useEffect, useState, useRef } from 'react';
 import { HomePageWrap, FreeTrialWrap } from './styled';
 import cx from 'classnames';
 import projectAjax from 'src/api/project';
@@ -8,41 +8,87 @@ import { Modal, Button, Progress } from 'antd';
 import { QUICK_ENTRY_CONFIG, USER_COUNT, ITEM_COUNT, UPLOAD_COUNT, formatFileSize, formatValue } from './config';
 import moment from 'moment';
 import { getCurrentProject } from 'src/util';
+import { navigateTo } from 'src/router/navigateTo';
 import InstallDialog from './installDialog';
 import { Support, Tooltip, Icon } from 'ming-ui';
-import addFriends from 'src/components/addFriends/addFriends';
+import addFriends from 'src/components/addFriends';
+import { purchaseMethodFunc } from 'src/components/pay/versionUpgrade/PurchaseMethodModal';
+import { useSetState } from 'react-use';
 import _ from 'lodash';
 
 export default function HomePage({ match, location: routerLocation }) {
   const { projectId } = _.get(match, 'params');
   const { companyName } = getCurrentProject(projectId);
-  const [data, setData] = useState({});
-  const [loading, setLoading] = useState(false);
+  const [data, setData] = useSetState({});
   const [installType, setType] = useState('');
   const [freeTrialVisible, setVisible] = useState(_.includes(routerLocation.pathname, 'showInvite'));
   const isTrial = data.licenseType === 2;
   const isFree = data.licenseType === 0;
+  const wrap = useRef(null);
+  const content1 = useRef(null);
+  const content2 = useRef(null);
+  const isEnLang = md.global.Account.lang === 'en';
+
   useEffect(() => {
-    setLoading(true);
     document.title = _l('组织管理 - 首页 - %0', companyName);
-    axios
-      .all([
-        projectAjax.getProjectLicenseSupportInfo({ projectId }),
-        processVersionAjax.getProcessUseCount({ companyId: projectId }),
-        projectAjax.getInviteGiveRule({ projectId }),
-      ])
-      .then(res => {
-        let data = res.reduce((p, c) => ({ ...p, ...c }), {});
-        setLoading(false);
-        setData(data);
-      });
+    getBaseData();
+    getUsageData();
+    getVersionInfo();
   }, []);
+
+  useEffect(() => {
+    if (!freeTrialVisible || data.rules) return;
+    projectAjax.getInviteGiveRule({ projectId }).then(res => {
+      setData(res);
+    });
+  }, [freeTrialVisible]);
+
+  // 获取版本信息
+  const getVersionInfo = () => {
+    processVersionAjax.getProcessUseCount({ companyId: projectId }).then(res => {
+      setData(res);
+    });
+  };
+
+  // 获取基本信息
+  const getBaseData = () => {
+    projectAjax.getProjectLicenseSupportInfo({ projectId, onlyNormal: true, onlyUsage: false }).then(res => {
+      if (!res.currentLicense.version) {
+        res.currentLicense.version = { name: _l('免费版') };
+      }
+      setData(res);
+    });
+  };
+
+  // 获取用量信息
+  const getUsageData = data => {
+    projectAjax.getProjectLicenseSupportInfo({ projectId, onlyNormal: false, onlyUsage: true }).then(res => {
+      const {
+        effectiveApkCount,
+        effectiveApkStorageCount,
+        effectiveWorkflowCount,
+        effectiveWorksheetCount,
+        effectiveWorksheetRowCount,
+        effectiveDataPipelineJobCount,
+        effectiveDataPipelineRowCount,
+      } = res;
+      setData({
+        effectiveApkCount,
+        effectiveApkStorageCount,
+        effectiveWorkflowCount,
+        effectiveWorksheetCount,
+        effectiveWorksheetRowCount,
+        effectiveDataPipelineJobCount,
+        effectiveDataPipelineRowCount,
+      });
+    });
+  };
 
   const linkHref = (type, subType) => {
     if (subType) {
-      location.assign(`/admin/${type}/${projectId}/${subType}`);
+      navigateTo(`/admin/${type}/${projectId}/${subType}`);
     } else {
-      location.assign(`/admin/${type}/${projectId}`);
+      navigateTo(`/admin/${type}/${projectId}`);
     }
   };
   const handleActionClick = action => {
@@ -85,55 +131,61 @@ export default function HomePage({ match, location: routerLocation }) {
       location.assign(`/admin/upgradeservice/${projectId}`);
     }
     if (type === 'renew') {
-      location.assign(`/upgrade/choose?projectId=${projectId}`);
+      purchaseMethodFunc({ projectId, isTrial });
     }
     if (type === 'toast') {
       alert(_l('单应用版暂不支持线上续费，请联系顾问进行续费'), 3);
     }
   };
   const { currentLicense = {}, nextLicense = {} } = data;
-  const { endDate, expireDays, startDate, version = {} } = currentLicense;
+  const { endDate, expireDays, version = {} } = currentLicense;
   const { version: nextVersion, startDate: nextStartDate, endDate: nextEndDate } = nextLicense;
   const versionIdV2 = parseInt(version.versionIdV2);
 
-  const getValue = value => (loading ? '-' : value);
+  const getValue = value => (_.isUndefined(value) || _.isNaN(value) ? '-' : value);
 
-  const getCountText = (key, limit) => {
-    if (key === 'useExecCount' || key === 'effectiveDataPipelineRowCount') {
-      let percent1 =
-        data[key] / data[limit] > 0 && (data[key] / data[limit]) * 10000 <= 1
-          ? 0.01
-          : ((data[key] / data[limit]) * 100).toFixed(2);
+  const getCountText = (key, limit, numUnit) => {
+    const isAttchmentUpload = key === 'effectiveApkStorageCount'; // 附件上传量
+    let percent = isAttchmentUpload
+      ? ((data[key] / (getValue(data[limit]) * Math.pow(1024, 3))) * 100).toFixed(2)
+      : data[key] / data[limit] > 0 && (data[key] / data[limit]) * 10000 <= 1
+      ? 0.01
+      : ((data[key] / data[limit]) * 100).toFixed(2);
+    let isBreak = false;
+    if (wrap.current) {
+      isBreak = content1.current.clientWidth + content2.current.clientWidth + 20 >= wrap.current.clientWidth;
+    }
 
-      const unit = key === 'effectiveDataPipelineRowCount' ? _l('行') : _l('次');
-
-      return (
-        <div className="flex TxtLeft">
+    return (
+      <div className="useCount">
+        <dov>
           {_l('已用')}
-          <span className="Gray mLeft4">{`${percent1 === 'NaN' ? '-' : percent1}%，`}</span>
-          <span>
-            {data[key] >= 1000 ? getValue(data[key] / 10000) + ' ' + _l('万') + unit : getValue(data[key]) + ' ' + unit}
+          <span className="Gray mLeft4">{`${percent === 'NaN' ? '-' : percent}%`}</span>
+        </dov>
+        <div className="flex TxtRight" ref={wrap}>
+          <span ref={content1}>
+            {isAttchmentUpload
+              ? formatFileSize(data[key])
+              : isEnLang
+              ? formatValue(data[key]) + numUnit
+              : data[key] >= 10000
+              ? getValue(data[key] / 10000) + ' ' + _l('万') + numUnit
+              : getValue(data[key]) + ' ' + numUnit}
           </span>
           <span className="mLeft4">/</span>
-          <span className="mLeft4">
-            {data[limit] >= 10000
-              ? getValue(data[limit] / 10000) + ' ' + _l('万') + unit
-              : getValue(data[limit] || 0) + ' ' + unit}
+          {isBreak && <br />}
+          <span className="mLeft4" ref={content2}>
+            {isAttchmentUpload
+              ? `${getValue(data[limit])}GB`
+              : isEnLang
+              ? formatValue(data[limit]) + numUnit
+              : data[limit] >= 10000
+              ? getValue(data[limit] / 10000) + ' ' + _l('万') + numUnit
+              : getValue(data[limit] || 0) + ' ' + numUnit}
           </span>
-          <span className="flex" />
         </div>
-      );
-    } else {
-      let percent2 = ((data[key] / (getValue(data[limit]) * Math.pow(1024, 3))) * 100).toFixed(2);
-
-      return (
-        <div className="flex TxtLeft">
-          {_l('已用')}
-          <span className="Gray mLeft4">{`${percent2 === 'NaN' ? '-' : percent2}%，`}</span>
-          {`${formatFileSize(data[key])}/${getValue(data[limit])}GB`}
-        </div>
-      );
-    }
+      </div>
+    );
   };
   const getCountProcess = (key, limit) => {
     let percent = 0;
@@ -167,16 +219,17 @@ export default function HomePage({ match, location: routerLocation }) {
       );
     }
     return (
-      <div className={cx('upgrade pointer', { Hidden: loading })} onClick={() => handleClick('upgrade')}>
+      <div className="upgrade pointer" onClick={() => handleClick('upgrade')}>
         {_l('升级')}
       </div>
     );
   };
   const getTotalCount = value => {
-    return value >= 10000 ? (
+    const denominator = 10000;
+    return value >= 10000 && !isEnLang ? (
       <span>
-        {parseFloat(value / 10000)}
-        <span className="Gray_9e Font16">{_l(' 万')}</span>
+        {parseFloat(value / denominator)}
+        <span className="Gray_9e Font16">{_l('万')}</span>
       </span>
     ) : (
       formatValue(value)
@@ -191,13 +244,6 @@ export default function HomePage({ match, location: routerLocation }) {
           <div className="userInfo userInfoWrap">
             <div className="title bold">{_l('成员')}</div>
             <div className="content">
-              {/*<div className="computeMethod">
-                <Support
-                  type={3}
-                  href="https://help.mingdao.com/zh/prices4.html"
-                  text={<span className="Gray_9e Hover_21">{_l('计算方法')}</span>}
-                />
-              </div>*/}
               <ul>
                 {USER_COUNT.map(({ key, text, link }) => (
                   <li
@@ -210,53 +256,13 @@ export default function HomePage({ match, location: routerLocation }) {
                     {key === 'effectiveUserCount' && (
                       <Fragment onClick={e => e.stopPropagation()}>
                         <div className="limitUser">
-                          <span className="nowrap" data-tip={!md.global.Config.IsPlatformLocal ? _l('多组织共享') : ''}>
-                            {_l('上限 %0 人', getValue(data.limitUserCount || 0))}
-                          </span>
-                          {/* {!isFree && !loading && (
-                            <span
-                              className="ThemeColor3 hoverColor mLeft10 nowrap "
-                              onClick={e => {
-                                e.stopPropagation();
-                                handleClick('user');
-                              }}
-                            >
-                              {_l('扩充')}
-                            </span>
-                          )} */}
+                          <span className="nowrap">{_l('上限 %0 人', getValue(data.limitUserCount || 0))}</span>
                         </div>
                       </Fragment>
                     )}
                     {key === 'effectiveExternalUserCount' && (
                       <Fragment>
                         <div className="limitUser">{_l('上限 %0 人', getValue(data.limitExternalUserCount || 0))}</div>
-                        {/* {!isFree && !isTrial && !loading && (
-                          <div>
-                            {data.allowUpgradeExternalPortal && (
-                              <Fragment>
-                                <span
-                                  className="ThemeColor3 hoverColor"
-                                  onClick={e => {
-                                    e.stopPropagation();
-                                    handleClick('portalupgrade');
-                                  }}
-                                >
-                                  {_l('续费')}
-                                </span>
-                                <span className="mLeft6 mRight6">{_l('或')}</span>
-                              </Fragment>
-                            )}
-                            <span
-                              className="ThemeColor3 hoverColor"
-                              onClick={e => {
-                                e.stopPropagation();
-                                handleClick('portaluser');
-                              }}
-                            >
-                              {_l('扩充')}
-                            </span>
-                          </div>
-                        )} */}
                       </Fragment>
                     )}
                   </li>
@@ -287,7 +293,7 @@ export default function HomePage({ match, location: routerLocation }) {
               <div className="licenseInfoWrap">
                 <div className="licenseInfo">
                   <div className="licenseFlag" />
-                  <div className="licenseType Font15">{getValue(version.name || '免费版')}</div>
+                  <div className="licenseType Font15">{getValue(version.name)}</div>
                   {isTrial && <span>{_l('-试用')}</span>}
                   {isFree ? null : (
                     <Fragment>
@@ -355,10 +361,10 @@ export default function HomePage({ match, location: routerLocation }) {
                   <li
                     key={key}
                     className={cx('useAnalysis', {
-                      useAnalysisHover:
-                        key === 'effectiveApkCount' ||
-                        key === 'useProcessCount' ||
-                        key === 'effectiveDataPipelineJobCount',
+                      useAnalysisHover: _.includes(
+                        ['effectiveApkCount', 'useProcessCount', 'effectiveDataPipelineJobCount'],
+                        key,
+                      ),
                     })}
                     onClick={() => {
                       if (key === 'effectiveDataPipelineJobCount') {
@@ -396,44 +402,63 @@ export default function HomePage({ match, location: routerLocation }) {
               <ul>
                 {UPLOAD_COUNT.filter(item =>
                   md.global.Config.IsPlatformLocal ? item : item.key === 'useExecCount',
-                ).map(({ key, limit, text, link, click, unit }) => (
-                  <li
-                    className="pLeft10 pRight10 Hand"
-                    onClick={() => {
-                      if (key == 'effectiveDataPipelineRowCount') {
-                        localStorage.setItem('currentProjectId', projectId);
-                        return location.assign('/integration/task');
-                      }
-                      linkHref(link);
-                    }}
-                  >
-                    <div className="workflowTitle">
-                      {text}
-                      <span className="Gray_9e">{unit}</span>
-                      {key === 'effectiveApkStorageCount' && (
-                        <Tooltip
-                          popupPlacement="top"
-                          text={<span>{_l('应用中本年的附件上传量，上传即占用，删除不会恢复')}</span>}
-                        >
-                          <span className="icon-help1 Font13 Gray_9e" />
-                        </Tooltip>
-                      )}
-                    </div>
-                    <Progress
-                      showInfo={false}
-                      style={{ margin: '7px 0', textAlign: 'left' }}
-                      trailColor="#eaeaea"
-                      strokeColor={
-                        getCountProcess(key, limit) > 90
-                          ? { from: '#F51744 ', to: '  #FF5779' }
-                          : { from: '#2196f3 ', to: '  #4bb2ff' }
-                      }
-                      strokeWidth={4}
-                      percent={getCountProcess(key, limit)}
-                    />
-                    <div className="useCount pointer">{getCountText(key, limit)}</div>
-                  </li>
-                ))}
+                ).map(({ key, limit, text, link, click, unit, numUnit }) => {
+                  const percentValue = getCountProcess(key, limit);
+                  return (
+                    <li
+                      className="pLeft10 pRight10 Hand"
+                      onClick={() => {
+                        if (key == 'effectiveDataPipelineRowCount') {
+                          localStorage.setItem('currentProjectId', projectId);
+                          return location.assign('/integration/task');
+                        }
+                        linkHref(link);
+                      }}
+                    >
+                      <div className="workflowTitle flexRow">
+                        <div className="flex">
+                          {text}
+                          <span className="Gray_9e">{unit}</span>
+                          {key === 'effectiveApkStorageCount' && (
+                            <Tooltip
+                              popupPlacement="top"
+                              text={<span>{_l('应用中本年的附件上传量，上传即占用，删除不会恢复')}</span>}
+                            >
+                              <span className="icon-help1 Font13 Gray_9e" />
+                            </Tooltip>
+                          )}
+                        </div>
+                        {/* {!isTrial && !isFree ? (
+                          <span
+                            className="Normal ThemeColor"
+                            onClick={e => {
+                              e.stopPropagation();
+                              e.nativeEvent.stopImmediatePropagation();
+                              handleClick(click);
+                            }}
+                          >
+                            {_l('扩容')}
+                          </span>
+                        ) : null} */}
+                      </div>
+                      <Progress
+                        showInfo={false}
+                        style={{ margin: '7px 0', textAlign: 'left' }}
+                        trailColor="#eaeaea"
+                        strokeColor={
+                          _.isNaN(Number(percentValue))
+                            ? '#eaeaea'
+                            : percentValue > 90
+                            ? { from: '#F51744 ', to: '#FF5779' }
+                            : { from: '#2196f3 ', to: '#4bb2ff' }
+                        }
+                        strokeWidth={4}
+                        percent={percentValue}
+                      />
+                      {getCountText(key, limit, numUnit)}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           </div>

@@ -13,6 +13,7 @@ import { FORM_ERROR_TYPE } from './config';
 import { accDiv } from 'src/util';
 import { getDatePickerConfigs } from 'src/pages/widgetConfig/util/setting';
 import _ from 'lodash';
+import { filterEmptyChildTableRows } from 'worksheet/util';
 
 export const isEmptyValue = value => {
   return _.isUndefined(value) || _.isNull(value) || String(value).trim() === '';
@@ -237,7 +238,7 @@ const dayFn = (filterData = {}, value, isGT, type) => {
   }
 };
 
-export const filterFn = (filterData, originControl, data = []) => {
+export const filterFn = (filterData, originControl, data = [], recordId) => {
   try {
     let { filterType = '', dataType = '', dynamicSource = [], dateRange } = filterData;
     const control = redefineComplexControl(originControl);
@@ -256,10 +257,13 @@ export const filterFn = (filterData, originControl, data = []) => {
     if (filterData.dateRange === 18) {
       filterData.dataShowType = advancedSetting.showtype;
     }
-    //手机号默认去除区号
+    //手机号去除区号
     if (control.type === 3) {
-      const { dialCode = '' } = safeParse(advancedSetting.defaultarea || '{}');
-      value = (value || '').replace(dialCode, '');
+      value = (value || '').replace('+86', '');
+    }
+    if (_.includes([9, 10, 11], control.type) && value && value.indexOf('other')) {
+      const optionsFormatVal = safeParse(value, 'array').map(i => (i.startsWith('other:') ? 'other' : i));
+      value = JSON.stringify(optionsFormatVal);
     }
 
     value = value === null ? '' : value;
@@ -276,7 +280,24 @@ export const filterFn = (filterData, originControl, data = []) => {
     //是否多选
     if (dynamicSource.length > 0) {
       const { cid = '' } = dynamicSource[0];
-      currentControl = _.find(data, it => it.controlId === cid) || {};
+      if (cid === 'rowid') {
+        currentControl = { type: 2, value: recordId };
+      } else if (cid === 'currenttime') {
+        currentControl = {
+          type: 16,
+          advancedSetting: { showtype: '6' },
+          value: moment(new Date()).format('YYYY-MM-DD HH:mm:ss'),
+        };
+      } else {
+        currentControl = _.cloneDeep(_.find(data, it => it.controlId === cid)) || {};
+      }
+      // 他表字段取原字段类型，不然日期值截取有问题，比较出错
+      if (currentControl.type === 30) {
+        currentControl.type = currentControl.sourceControlType;
+      }
+      if (currentControl.type === 3) {
+        currentControl.value = (currentControl.value || '').replace('+86', '');
+      }
       //是(等于)、不是(不等于)、大于(等于)、小于(等于) && NUMBER
       //大于、小于 && NUMBER、DATE
       //日期是、日期不是 && DATE
@@ -290,10 +311,13 @@ export const filterFn = (filterData, originControl, data = []) => {
         compareValue = currentControl.value;
         //是(等于)、不是(不等于) && (OPTIONS && (单选) || USER)
       } else if (
-        _.includes([2, 6, 26, 27], filterType) &&
-        ((_.includes([5], conditionGroupType) && _.includes([9, 11, 27, 48], dataType)) ||
+        _.includes([2, 6, 26, 27, 51, 52], filterType) &&
+        ((_.includes([5], conditionGroupType) && _.includes([9, 10, 11, 27, 48], dataType)) ||
           _.includes([6], conditionGroupType))
       ) {
+        const val = currentControl.value ? safeParse(currentControl.value) : currentControl.value;
+        compareValues = typeof val === 'object' ? val : [currentControl.value];
+      } else if (_.includes([24, 25, 26, 27, 28, 51, 52], filterType) && _.includes([29], dataType)) {
         const val = currentControl.value ? safeParse(currentControl.value) : currentControl.value;
         compareValues = typeof val === 'object' ? val : [currentControl.value];
       } else {
@@ -321,6 +345,10 @@ export const filterFn = (filterData, originControl, data = []) => {
     if ((_.includes[(15, 16, 46)], control.type)) {
       formatMode = getFormatMode(control, currentControl, conditionGroupType);
       timeLevel = TIME_OPTIONS[TIME_MODE_OPTIONS[formatMode]];
+      // 今天、昨天、明天，对比单位天
+      if (_.includes([1, 2, 3], dateRange) && !dynamicSource.length) {
+        timeLevel = 'day';
+      }
     }
 
     // value精度处理(公式、汇总计算)
@@ -340,7 +368,6 @@ export const filterFn = (filterData, originControl, data = []) => {
       case FILTER_CONDITION_TYPE.LIKE:
         switch (conditionGroupType) {
           case CONTROL_FILTER_WHITELIST.TEXT.value:
-          case CONTROL_FILTER_WHITELIST.RELATE_RECORD.value:
             let isInValue = false;
             _.map(compareValues, it => {
               if (value.indexOf(it) >= 0) {
@@ -352,7 +379,9 @@ export const filterFn = (filterData, originControl, data = []) => {
             return true;
         }
       // EQ: 2, // 是（等于）
+      // EQ_FOR_SINGLE: 51 是
       case FILTER_CONDITION_TYPE.EQ:
+      case FILTER_CONDITION_TYPE.EQ_FOR_SINGLE:
         switch (conditionGroupType) {
           case CONTROL_FILTER_WHITELIST.USERS.value: // ???
             if (_.isEmpty(value) && _.isEmpty(compareValues)) return true;
@@ -378,9 +407,10 @@ export const filterFn = (filterData, originControl, data = []) => {
               if (!value) {
                 return !!value;
               }
-              let { id = '0' } = safeParse(compareValues);
-              let { code } = safeParse(value);
-              return parseInt(id) === parseInt(code);
+
+              const { code } = safeParse(value || '{}');
+              const areaValues = compareValues.map(it => safeParse(it, '{}').id);
+              return _.includes(areaValues, code);
               // 部门
             } else if (dataType === API_ENUM_TO_TYPE.GROUP_PICKER) {
               if (_.isEmpty(value) && _.isEmpty(compareValues)) return true;
@@ -449,6 +479,21 @@ export const filterFn = (filterData, originControl, data = []) => {
             return isInValue;
           case CONTROL_FILTER_WHITELIST.BOOL.value:
             return value === '1';
+          // 给EQ_FOR_SINGLE专用
+          case CONTROL_FILTER_WHITELIST.RELATE_RECORD.value:
+          case CONTROL_FILTER_WHITELIST.CASCADER.value:
+            let isInVal = false;
+            _.map(compareValues, it => {
+              let itValue = dynamicSource.length > 0 ? it || {} : safeParse(it || '{}');
+              let valueN = _.isArray(value) ? value : safeParse(value || '[]', 'array');
+              _.map(valueN, item => {
+                let curId = dynamicSource.length > 0 ? itValue.sid : itValue.id;
+                if (curId === item.sid) {
+                  isInVal = true;
+                }
+              });
+            });
+            return isInVal;
           default:
             return true;
         }
@@ -512,7 +557,6 @@ export const filterFn = (filterData, originControl, data = []) => {
       case FILTER_CONDITION_TYPE.NCONTAIN:
         switch (conditionGroupType) {
           case CONTROL_FILTER_WHITELIST.TEXT.value:
-          case CONTROL_FILTER_WHITELIST.RELATE_RECORD.value:
             let isInValue = true;
             _.map(compareValues, it => {
               if (value.indexOf(it) >= 0) {
@@ -524,7 +568,9 @@ export const filterFn = (filterData, originControl, data = []) => {
             return true;
         }
       //   NE: 6, // 不是（不等于）
+      //   NE_FOR_SINGLE: 52 不是
       case FILTER_CONDITION_TYPE.NE:
+      case FILTER_CONDITION_TYPE.NE_FOR_SINGLE:
         switch (conditionGroupType) {
           case CONTROL_FILTER_WHITELIST.USERS.value: // ???
             if (_.isEmpty(value) && _.isEmpty(compareValues)) return false;
@@ -550,9 +596,9 @@ export const filterFn = (filterData, originControl, data = []) => {
               if (!value) {
                 return !!value;
               }
-              let { id = '0' } = safeParse(compareValues);
-              let { code } = safeParse(value);
-              return parseInt(id) !== parseInt(code);
+              const { code } = safeParse(value || '{}');
+              const areaValues = compareValues.map(it => safeParse(it, '{}').id);
+              return !_.includes(areaValues, code);
               // 部门
             } else if (dataType === API_ENUM_TO_TYPE.GROUP_PICKER) {
               if (_.isEmpty(value) && _.isEmpty(compareValues)) return false;
@@ -620,6 +666,22 @@ export const filterFn = (filterData, originControl, data = []) => {
             return isInValue1;
           case CONTROL_FILTER_WHITELIST.BOOL.value:
             return value !== '1';
+          // 给NE_FOR_SINGLE专用
+          case CONTROL_FILTER_WHITELIST.RELATE_RECORD.value:
+          case CONTROL_FILTER_WHITELIST.CASCADER.value:
+            let isInV = true;
+            _.map(compareValues, it => {
+              let itValue = {};
+              itValue = dynamicSource.length > 0 ? it || {} : safeParse(it || '{}');
+              let valueN = _.isArray(value) ? value : safeParse(value || '[]', 'array');
+              _.map(valueN, item => {
+                let curId = dynamicSource.length > 0 ? itValue.sid : itValue.id;
+                if (curId === item.sid) {
+                  isInV = false;
+                }
+              });
+            });
+            return isInV;
           default:
             return true;
         }
@@ -692,7 +754,7 @@ export const filterFn = (filterData, originControl, data = []) => {
               return !value;
             } else {
               if (value.rows) {
-                return value.rows.length <= 0;
+                return filterEmptyChildTableRows(value.rows).length <= 0;
               } else {
                 return value === '0';
               }
@@ -816,9 +878,9 @@ export const filterFn = (filterData, originControl, data = []) => {
               if (!value) {
                 return !!value;
               }
-              let { id = '0' } = safeParse(compareValues);
-              let { code } = safeParse(value);
-              return parseInt(id) === parseInt(code);
+              const { code } = safeParse(value || '{}');
+              const areaValues = compareValues.map(it => safeParse(it, '{}').id);
+              return _.includes(areaValues, code);
               // 部门
             }
           default:
@@ -861,9 +923,9 @@ export const filterFn = (filterData, originControl, data = []) => {
               if (!value) {
                 return !!value;
               }
-              let { id = '0' } = safeParse(compareValues);
-              let { code } = safeParse(value);
-              return parseInt(id) !== parseInt(code);
+              const { code } = safeParse(value || '{}');
+              const areaValues = compareValues.map(it => safeParse(it, '{}').id);
+              return !_.includes(areaValues, code);
               // 部门
             }
           default:
@@ -1016,7 +1078,7 @@ export const filterFn = (filterData, originControl, data = []) => {
           case CONTROL_FILTER_WHITELIST.CASCADER.value:
             let isInValue = false;
             _.map(compareValues, it => {
-              let itValue = dynamicSource.length > 0 ? safeParse(it || '[]')[0] || {} : safeParse(it || '{}');
+              let itValue = dynamicSource.length > 0 ? it || {} : safeParse(it || '{}');
               let valueN = _.isArray(value) ? value : safeParse(value || '[]', 'array');
               _.map(valueN, item => {
                 let curId = dynamicSource.length > 0 ? itValue.sid : itValue.id;
@@ -1037,7 +1099,7 @@ export const filterFn = (filterData, originControl, data = []) => {
             let isInValue = true;
             _.map(compareValues, it => {
               let itValue = {};
-              itValue = dynamicSource.length > 0 ? safeParse(it || '[]')[0] || {} : safeParse(it || '{}');
+              itValue = dynamicSource.length > 0 ? it || {} : safeParse(it || '{}');
               let valueN = _.isArray(value) ? value : safeParse(value || '[]', 'array');
               _.map(valueN, item => {
                 let curId = dynamicSource.length > 0 ? itValue.sid : itValue.id;
@@ -1097,11 +1159,7 @@ export const filterFn = (filterData, originControl, data = []) => {
 
             return _.isEqual(
               compareValues
-                .map(it =>
-                  dynamicSource.length > 0
-                    ? _.get(safeParse(it || '[]')[0], 'sid')
-                    : _.get(safeParse(it || '{}'), 'id'),
-                )
+                .map(it => (dynamicSource.length > 0 ? _.get(it, 'sid') : _.get(safeParse(it || '{}'), 'id')))
                 .sort(),
               safeParse(value || '[]', 'array')
                 .map(item => item.sid)
@@ -1157,11 +1215,7 @@ export const filterFn = (filterData, originControl, data = []) => {
 
             return !_.isEqual(
               compareValues
-                .map(it =>
-                  dynamicSource.length > 0
-                    ? _.get(safeParse(it || '[]')[0], 'sid')
-                    : _.get(safeParse(it || '{}'), 'id'),
-                )
+                .map(it => (dynamicSource.length > 0 ? _.get(it, 'sid') : _.get(safeParse(it || '{}'), 'id')))
                 .sort(),
               safeParse(value || '[]', 'array')
                 .map(item => item.sid)
@@ -1203,15 +1257,19 @@ export const filterFn = (filterData, originControl, data = []) => {
           // 关联记录
           case CONTROL_FILTER_WHITELIST.RELATE_RECORD.value:
             if (_.isEmpty(value) && _.isEmpty(compareValues)) return false;
+            if (_.isEmpty(value) || _.isEmpty(compareValues)) return false;
 
             const reCompareArr = compareValues.map(it =>
-              dynamicSource.length > 0 ? _.get(safeParse(it || '[]')[0], 'sid') : _.get(safeParse(it || '{}'), 'id'),
+              dynamicSource.length > 0 ? _.get(it, 'sid') : _.get(safeParse(it || '{}'), 'id'),
             );
             const reArr = safeParse(value || '[]', 'array').map(it => it.sid);
             return _.every(reCompareArr, its => _.includes(reArr, its));
           default:
             return true;
         }
+      // 文本同时包含
+      case FILTER_CONDITION_TYPE.TEXT_ALLCONTAIN:
+        return compareValues.every(i => value.includes(i));
       default:
         return true;
     }
@@ -1247,7 +1305,7 @@ const getResult = (arr, index, result, ava) => {
 };
 
 //判断业务规则配置条件是否满足
-export const checkValueAvailable = (rule = {}, data = [], from) => {
+export const checkValueAvailable = (rule = {}, data = [], recordId, from) => {
   let isAvailable = false;
   //不满足条件的id,过滤错误
   let filterControlIds = {};
@@ -1256,12 +1314,17 @@ export const checkValueAvailable = (rule = {}, data = [], from) => {
   let transFilters = rule.filters || [[]]; //条件二维数组
 
   //条件字段或字段值都隐藏
+  // 记录id存在才参与业务规则
   if (from) {
     transFilters = transFilters.filter(arr => {
       const ids = getIds(arr);
       return _.some(ids, id => {
         const da = _.find(data, d => d.controlId === id);
-        return da && controlState(da, from).visible & !da.hidden;
+        return (
+          (recordId && id === 'rowid') ||
+          _.includes(['currenttime'], id) ||
+          (da && controlState(da, from).visible & !da.hidden)
+        );
       });
     });
   }
@@ -1279,7 +1342,7 @@ export const checkValueAvailable = (rule = {}, data = [], from) => {
       arr.groupFilters.forEach((its, index) => {
         let filterControl = data.find(a => a.controlId === its.controlId);
         if (filterControl && !isRelateMoreList(filterControl, its)) {
-          const result = filterFn(its, filterControl, data);
+          const result = filterFn(its, filterControl, data, recordId);
           childItemAvailable = getResult(arr.groupFilters, index, result, childItemAvailable);
 
           const ids = getFieldIds(its);
@@ -1313,14 +1376,14 @@ export const checkValueAvailable = (rule = {}, data = [], from) => {
 };
 
 //判断所有业务规则是否满足条件
-export const checkAllValueAvailable = (rules = [], data = [], from) => {
+export const checkAllValueAvailable = (rules = [], data = [], recordId, from) => {
   let errors = [];
-  const filterRules = getAvailableFilters(rules, data);
+  const filterRules = getAvailableFilters(rules, data, recordId);
   if (filterRules && filterRules.length > 0) {
     filterRules.map(rule => {
       rule.ruleItems.map(item => {
-        if (item.type === 6) {
-          const { isAvailable } = checkValueAvailable(rule, data, from);
+        if (item.type === 6 && rule.checkType !== 2) {
+          const { isAvailable } = checkValueAvailable(rule, data, recordId, from);
           isAvailable && errors.push(item.message);
         }
       });
@@ -1329,16 +1392,46 @@ export const checkAllValueAvailable = (rules = [], data = [], from) => {
   return errors;
 };
 
+// 业务规则后端校验
+export const getRuleErrorInfo = (rules = [], badData = []) => {
+  return badData
+    .map(itemBadData => {
+      const errorInfo = [];
+      const [rowId, ruleId, controlId] = (itemBadData || '').split(':').reverse();
+
+      rules.map(rule => {
+        if (rule.ruleId === ruleId && _.find(_.get(rule, 'ruleItems') || [], r => r.type === 6)) {
+          _.get(rule, 'ruleItems').map(item => {
+            const errorIds = (_.get(item, 'controls') || []).map(c => c.controlId);
+            const curErrorIds = errorIds.length > 0 ? errorIds : (rule.filters || []).map(i => getIds(i));
+            curErrorIds.map(c => {
+              errorInfo.push({
+                controlId: c,
+                errorMessage: item.message,
+                ruleId,
+                errorType: FORM_ERROR_TYPE.RULE_ERROR,
+                showError: true,
+              });
+            });
+          });
+        }
+      });
+
+      return { rowId, controlId, errorInfo };
+    })
+    .filter(i => !_.isEmpty(i.errorInfo));
+};
+
 //判断所有业务规则是否有锁定状态
-export const checkRuleLocked = (rules = [], data = []) => {
+export const checkRuleLocked = (rules = [], data = [], recordId) => {
   let isLocked = false;
-  const filterRules = getAvailableFilters(rules, data);
+  const filterRules = getAvailableFilters(rules, data, recordId);
   if (filterRules && filterRules.length > 0) {
     filterRules.forEach(rule => {
       if (isLocked) return;
       rule.ruleItems.map(item => {
         if (item.type === 7) {
-          const { isAvailable } = checkValueAvailable(rule, data);
+          const { isAvailable } = checkValueAvailable(rule, data, recordId);
           isAvailable && (isLocked = true);
         }
       });
@@ -1347,12 +1440,12 @@ export const checkRuleLocked = (rules = [], data = []) => {
   return isLocked;
 };
 
-const replaceStr = (str, index, value) => {
+export const replaceStr = (str, index, value) => {
   return str.substring(0, index) + value + str.substring(index + 1);
 };
 
 // 更新业务规则权限属性
-const updataDataPermission = ({ attrs = [], it, checkRuleValidator, from, item = {} }) => {
+const updateDataPermission = ({ attrs = [], it, checkRuleValidator, from, item = {} }) => {
   //子表或关联记录
   const isSubList = _.includes([29, 34], item.type);
   let fieldPermission = it.fieldPermission || '111';
@@ -1380,7 +1473,7 @@ const updataDataPermission = ({ attrs = [], it, checkRuleValidator, from, item =
       required = true;
       fieldPermission = replaceStr(fieldPermission, 1, '1');
       const { errorText } = onValidator({ item: { ...it, required, fieldPermission } });
-      checkRuleValidator(it.controlId, FORM_ERROR_TYPE.RULE_REQUIRED, errorText);
+      item.type !== 34 && checkRuleValidator(it.controlId, FORM_ERROR_TYPE.RULE_REQUIRED, errorText);
     } else {
       //编辑
       if (_.includes(attrs, 3)) {
@@ -1400,14 +1493,21 @@ const updataDataPermission = ({ attrs = [], it, checkRuleValidator, from, item =
 };
 
 // 过滤不必要走（字段都删除）的业务规则
-const getAvailableFilters = (rules = [], formatData = []) => {
+const getAvailableFilters = (rules = [], formatData = [], recordId) => {
   //过滤禁用规则及单个且数组中字段全部删除情况
+  // 注意如果是记录id，data里不包含系统字段，所以必须recordId存在才生效
   let filterRules = [];
   rules.map(o => {
     if (!o.disabled) {
       let filterTrs = [];
       (o.filters || []).map(tr => {
-        if (_.some(tr.groupFilters || [], t => _.findIndex(formatData, da => da.controlId === t.controlId) > -1)) {
+        if (
+          _.some(tr.groupFilters || [], t =>
+            _.get(t, 'dynamicSource[0].cid') === 'rowid'
+              ? recordId
+              : _.findIndex(formatData, da => da.controlId === t.controlId) > -1,
+          )
+        ) {
           filterTrs = filterTrs.concat(tr);
         }
       });
@@ -1433,6 +1533,7 @@ const removeRequireError = (controls = [], checkRuleValidator = () => {}) => {
 export const updateRulesData = ({
   rules = [],
   data = [],
+  recordId,
   checkRuleValidator = () => {},
   from,
   checkAllUpdate = false,
@@ -1465,12 +1566,12 @@ export const updateRulesData = ({
   }
 
   if (rules.length > 0) {
-    const filterRules = getAvailableFilters(rules, formatData);
+    const filterRules = getAvailableFilters(rules, formatData, recordId);
 
     if (filterRules && filterRules.length > 0) {
       filterRules.map(rule => {
         rule.ruleItems.map(({ type, controls = [] }) => {
-          let { isAvailable } = checkValueAvailable(rule, formatData);
+          let { isAvailable } = checkValueAvailable(rule, formatData, recordId);
           let currentType = type;
           //显示隐藏无论满足条件与否都要操作
           if (currentType === 1) {
@@ -1498,7 +1599,7 @@ export const updateRulesData = ({
               if (!childControlIds.length) {
                 pushType('parent', controlId, currentType);
               } else {
-                childControlIds.map(child => pushType('child', child, currentType));
+                childControlIds.map(child => pushType('child', `${controlId}-${child}`, currentType));
               }
             });
           }
@@ -1507,9 +1608,11 @@ export const updateRulesData = ({
 
       formatData.forEach(it => {
         it.relationControls.forEach(re => {
-          if ((relateRuleType['child'] || {})[re.controlId]) {
-            updataDataPermission({
-              attrs: relateRuleType['child'][re.controlId],
+          // 子表会出现控件id重复的情况
+          const id = `${it.controlId}-${re.controlId}`;
+          if ((relateRuleType['child'] || {})[id]) {
+            updateDataPermission({
+              attrs: relateRuleType['child'][id],
               it: re,
               checkRuleValidator,
               from,
@@ -1518,7 +1621,7 @@ export const updateRulesData = ({
           }
         });
         if ((relateRuleType['parent'] || {})[it.controlId]) {
-          updataDataPermission({
+          updateDataPermission({
             attrs: relateRuleType['parent'][it.controlId],
             it,
             checkRuleValidator,
@@ -1529,31 +1632,49 @@ export const updateRulesData = ({
 
       //走错误提示
       filterRules.map(rule => {
-        rule.ruleItems.map(({ type, message }) => {
-          const {
-            filterControlIds = [],
-            availableControlIds = [],
-            isAvailable,
-          } = checkValueAvailable(rule, formatData, from);
-          if (_.includes([6], type)) {
-            //过滤已经塞进去的错误
-            filterControlIds.map(id => checkRuleValidator(id, FORM_ERROR_TYPE.RULE_ERROR, '', rule.ruleId));
-            if (isAvailable) {
-              availableControlIds.map(controlId => {
-                if (!relateRuleType['errorMsg'][controlId]) {
-                  //错误提示(checkAllUpdate为true全操作，否则操作变更的字段updateControlIds)
-                  if (checkAllUpdate || (updateControlIds.length > 0 && _.includes(updateControlIds, controlId))) {
-                    pushType('errorMsg', controlId, message);
-                    if (_.find(formatData, fo => fo.controlId === controlId)) {
-                      const errorMsg = relateRuleType['errorMsg'][controlId] || '';
-                      checkRuleValidator(controlId, FORM_ERROR_TYPE.RULE_ERROR, errorMsg[0], rule.ruleId);
+        // 前端校验才走
+        if (rule.checkType !== 2) {
+          rule.ruleItems.map(({ type, message, controls = [] }) => {
+            const {
+              filterControlIds = [],
+              availableControlIds = [],
+              isAvailable,
+            } = checkValueAvailable(rule, formatData, recordId, from);
+            if (_.includes([6], type)) {
+              const errorIds = controls.map(i => i.controlId);
+              const curErrorIds = rule.type === 1 && errorIds.length > 0 ? errorIds : filterControlIds;
+              //过滤已经塞进去的错误
+              (rule.type === 1 ? curErrorIds : filterControlIds).map(id =>
+                checkRuleValidator(id, FORM_ERROR_TYPE.RULE_ERROR, '', rule),
+              );
+              if (isAvailable) {
+                availableControlIds.map(controlId => {
+                  if (!relateRuleType['errorMsg'][controlId]) {
+                    //错误提示(checkAllUpdate为true全操作，
+                    // ruleType === 1 校验规则，指定字段塞错误
+                    //否则操作变更的字段updateControlIds
+
+                    const pushError = (id, msg) => {
+                      pushType('errorMsg', id, msg);
+                      if (_.find(formatData, fo => fo.controlId === id)) {
+                        const errorMsg = relateRuleType['errorMsg'][id] || [];
+                        checkRuleValidator(id, FORM_ERROR_TYPE.RULE_ERROR, errorMsg[0], rule);
+                      }
+                    };
+
+                    if (checkAllUpdate || (updateControlIds.length > 0 && _.includes(updateControlIds, controlId))) {
+                      if (rule.type === 1 && errorIds.length > 0) {
+                        errorIds.map(e => pushError(e, message));
+                      } else {
+                        pushError(controlId, message);
+                      }
                     }
                   }
-                }
-              });
+                });
+              }
             }
-          }
-        });
+          });
+        }
       });
     }
   }

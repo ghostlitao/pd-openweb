@@ -1,35 +1,97 @@
-import React, { Component, Fragment } from 'react';
-import { func, shape, arrayOf, string } from 'prop-types';
+import React, { Component } from 'react';
+import { func } from 'prop-types';
 import { Dialog, ScrollView, Checkbox, Icon } from 'ming-ui';
-import dialogContentDisplay from 'ming-ui/decorators/dialogContentDisplay';
 import StatusIcon from '../../components/StatusIcon';
 import EmptyStatus from '../../components/Empty';
-import flowNode from '../../../api/flowNode';
 import cx from 'classnames';
 import './index.less';
 import _ from 'lodash';
-
-@dialogContentDisplay
 export default class MsgTemplate extends Component {
   static propTypes = {
     closeLayer: func,
-    handleScroll: func,
-    data: arrayOf(
-      shape({
-        crateDate: string,
-        messageContent: string,
-        id: string,
-        cratedBy: string,
-      }),
-    ),
   };
   static defaultProps = {
     closeLayer: () => {},
-    handleScroll: () => {},
   };
-  state = {
-    messageTemplateIds: [],
+  constructor(props) {
+    super(props);
+    this.state = {
+      messageTemplateIds: [],
+      data: [],
+      pageIndex: 1,
+      pageSize: 20,
+      haveMoreData: true,
+    };
+  }
+  componentDidMount() {
+    this.getData();
+    this.pending = true;
+  }
+  /**
+   * 获取数据
+   */
+  getData = () => {
+    const { companyId, api } = this.props;
+    let { data, pageIndex, pageSize, haveMoreData, isAsc, sortId } = this.state;
+    const para = { companyId, pageIndex, pageSize, isAsc, sortId };
+    if (haveMoreData && !this.pending) {
+      api(para).then(res => {
+        this.pending = false;
+        data = pageIndex === 1 ? res : data.concat(res);
+        this.setState({
+          data,
+          pageIndex: pageIndex + 1,
+        });
+
+        if (res.length < pageSize) {
+          this.setState({ haveMoreData: false });
+        }
+      });
+    }
   };
+
+  /**
+   * 滚动加载数据
+   */
+  handleScroll = (e, o) => {
+    const { haveMoreData } = this.state;
+    if (o.maximum - o.position <= 30 && haveMoreData) {
+      this.getData();
+      this.pending = true;
+    }
+  };
+
+  handleSorter = params => {
+    const { pageIndex, isAsc, sortId } = params;
+    this.setState(
+      {
+        pageIndex,
+        isAsc,
+        sortId,
+      },
+      () => {
+        this.getData();
+        this.pending = false;
+      },
+    );
+  };
+
+  handleDelete = messageTemplateIds => {
+    const { deleteSMSTemplate } = this.props;
+    let { data = [] } = this.state;
+    deleteSMSTemplate({
+      messageTemplateIds,
+    }).then(res => {
+      if (res) {
+        let result = data.filter(item => !_.includes(messageTemplateIds, item.id));
+        this.setState({ data: result });
+        alert(_l('删除成功'));
+      } else {
+        alert(_l('删除失败'), 2);
+      }
+    });
+  };
+
   delTemplate = () => {
     const _this = this;
     const { messageTemplateIds = [] } = this.state;
@@ -42,14 +104,14 @@ export default class MsgTemplate extends Component {
         </span>
       ),
       onOk: () => {
-        _this.props.handleDelete(messageTemplateIds);
+        _this.handleDelete(messageTemplateIds);
         this.setState({ messageTemplateIds: [] });
       },
     });
   };
   render() {
-    const { closeLayer, data, handleScroll } = this.props;
-    let { messageTemplateIds = [], isAsc } = this.state;
+    const { closeLayer } = this.props;
+    let { messageTemplateIds = [], isAsc, data } = this.state;
     return (
       <div className="workflowMsgTemplateDialogWrap">
         <Dialog
@@ -75,13 +137,14 @@ export default class MsgTemplate extends Component {
             <ul>
               <li className="header">
                 <div className="content flex">{_l('短信内容')}</div>
+                <div className="type">{_l('类型')}</div>
                 <div className="status">{_l('审核状态')}</div>
                 <div
                   className={cx('msgTemplateCreateTime', { theneColor: !_.isUndefined(isAsc) })}
                   onClick={() => {
                     let val = _.isUndefined(isAsc) ? true : isAsc === true ? false : undefined;
                     this.setState({ isAsc: val }, () => {
-                      this.props.handleSorter({
+                      this.handleSorter({
                         isAsc: val,
                         sortId: _.isUndefined(val) ? undefined : 'createDate',
                         pageIndex: 1,
@@ -95,9 +158,9 @@ export default class MsgTemplate extends Component {
                   )}
                 </div>
               </li>
-              <ScrollView className="workflowMsgTemplateScrollView" updateEvent={handleScroll}>
+              <ScrollView className="workflowMsgTemplateScrollView" updateEvent={this.handleScroll}>
                 {data.map((template, index) => {
-                  const { companySignature, messageContent, status, createDate } = template;
+                  const { companySignature, messageContent, status, createDate, type } = template;
                   return (
                     <li key={index} className="templates">
                       <Checkbox
@@ -115,6 +178,9 @@ export default class MsgTemplate extends Component {
                       />
                       <div className="content flex">
                         [{companySignature}] {messageContent}
+                      </div>
+                      <div className="type">
+                        {type === 2 ? _l('营销推广') : type === 3 ? _l('金融交易') : _l('行业通知')}
                       </div>
                       <div className="status">
                         <StatusIcon status={status} />

@@ -9,7 +9,31 @@ import DropDownItem from './DropDownItem';
 import _ from 'lodash';
 
 const allowConfigControlTypes = [
-  2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 14, 15, 16, 19, 23, 24, 26, 27, 28, 29, 33, 36, 41, 46, 48,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  14,
+  15,
+  16,
+  19,
+  23,
+  24,
+  26,
+  27,
+  28,
+  29,
+  33,
+  36,
+  41,
+  46,
+  48,
 ];
 const recordObj = {
   text: '记录ID',
@@ -167,17 +191,21 @@ export default class ConfigControl extends Component {
         const mapping = controlMapping.find(item => item.ControlId == control.controlId);
         if (!mapping) continue;
 
-        // 模糊匹配映射字段
-        const arr = (mapping.ColumnName || '').split('-');
-        const suffix = arr[arr.length - 1].toLowerCase();
-        const item = controls.find(item => item.text.toLowerCase() == suffix);
-        if (item) {
-          control.sourceConfig = item.value;
-          mapping.sourceConfig.controlId = item.value;
-        } else if (title) {
-          // 如果没有，默认选择标题字段作为映射
-          control.sourceConfig = title.value;
-          mapping.sourceConfig.controlId = title.value;
+        if (mapping.sourceConfig.controlId) {
+          control.sourceConfig = mapping.sourceConfig.controlId;
+        } else {
+          // 模糊匹配映射字段
+          const arr = (mapping.ColumnName || '').split('-');
+          const suffix = arr[arr.length - 1].toLowerCase();
+          const item = controls.find(item => item.text.toLowerCase() == suffix);
+          if (item) {
+            control.sourceConfig = item.value;
+            mapping.sourceConfig.controlId = item.value;
+          } else if (title) {
+            // 如果没有，默认选择标题字段作为映射
+            control.sourceConfig = title.value;
+            mapping.sourceConfig.controlId = title.value;
+          }
         }
       }
 
@@ -260,8 +288,8 @@ export default class ConfigControl extends Component {
         }
 
         // 模糊匹配
-        else if (value == controlName) exact.push(cell);
-        else if (value.indexOf(controlName) > -1) like.push(cell);
+        else if (value.trim() == controlName.trim()) exact.push(cell);
+        else if (value.indexOf(controlName.trim()) > -1) like.push(cell);
       }
       const sameColumn = relations.length ? relations : exact.length ? exact : like;
 
@@ -448,8 +476,33 @@ export default class ConfigControl extends Component {
   beginImport = controlMappingFilter => {
     (async () => {
       const { isCharge } = this.props;
-      const { tigger, repeatConfig, repeatRecord, worksheetControls, edited, controlMapping, relateSource } =
-        this.state;
+      const {
+        tigger,
+        repeatConfig,
+        repeatRecord,
+        worksheetControls,
+        edited,
+        controlMapping,
+        relateSource,
+      } = this.state;
+      let columnContent;
+      let fieldContent;
+      let repeatModeContent;
+      let repeatContent;
+      let requiredFiledNoSetArray = [];
+
+      worksheetControls
+        .filter(o => o.type !== 30 && o.advancedSetting && o.advancedSetting.required === '1')
+        .map(o => {
+          if (!controlMappingFilter.find(obj => obj.ControlId === o.controlId)) {
+            requiredFiledNoSetArray.push(o.controlName);
+          }
+        });
+
+      // 必填字段未设置
+      if (requiredFiledNoSetArray.length) {
+        throw _l('请设置“%0”字段的映射关系', requiredFiledNoSetArray.join('、'));
+      }
 
       // 判断是否有匹配字段未选择 或 已删除
       for (const relateMapping of controlMappingFilter) {
@@ -497,43 +550,43 @@ export default class ConfigControl extends Component {
         ) {
           throw _l('依据字段“%0“的匹配字段仅限人员ID', repeatConfig.controlName);
         }
+
+        columnContent = `<span class="Gray Bold">【 ${
+          repeatConfig.controlId === recordObj.value
+            ? recordObj.text
+            : _.get(_.find(controlMappingFilter, item => item.ControlId === repeatConfig.controlId) || {}, 'ColumnName')
+        } 】</span>`;
+
+        fieldContent = `<span class="Gray Bold">【 ${
+          repeatConfig.controlId === recordObj.value ? recordObj.value : repeatConfig.controlName
+        } 】</span>`;
+
+        repeatModeContent = `<span class="Gray Bold">${handleEnumText[repeatConfig.handleEnum]}</span>`;
+
+        repeatContent = `<span>${
+          repeatConfig.handleEnum === 3
+            ? _l('不重复的数据不会作为新记录导入')
+            : _l('将所有不重复的数据作为新记录导入工作表')
+        }</span>`;
       }
 
       Dialog.confirm({
         title: _l('数据导入确认'),
         description: (
           <div className="Font14">
-            <div
-              className="mBottom10 Gray_75"
-              dangerouslySetInnerHTML={{
-                __html: _l(
-                  '1.导入的数据%0',
-                  `<span class="Gray Bold">${tigger ? _l('触发工作流') : _l('不会触发工作流')}</span>`,
-                ),
-              }}
-            />
+            <div className="mBottom10 Gray_75">
+              {_l('1.导入的数据')}
+              <span class="Gray Bold">{tigger ? _l('触发工作流') : _l('不会触发工作流')}</span>
+            </div>
             {repeatRecord ? (
               <div
                 dangerouslySetInnerHTML={{
                   __html: _l(
                     '2.将Excel中%0列与工作表中%1字段逐行对比，%2识别到的重复数据，%3',
-                    `<span class="Gray Bold">【 ${
-                      repeatConfig.controlId === recordObj.value
-                        ? recordObj.text
-                        : _.get(
-                            _.find(controlMappingFilter, item => item.ControlId === repeatConfig.controlId) || {},
-                            'ColumnName',
-                          )
-                    } 】</span>`,
-                    `<span class="Gray Bold">【 ${
-                      repeatConfig.controlId === recordObj.value ? recordObj.value : repeatConfig.controlName
-                    } 】</span>`,
-                    `<span class="Gray Bold">${handleEnumText[repeatConfig.handleEnum]}</span>`,
-                    `<span>${
-                      repeatConfig.handleEnum === 3
-                        ? _l('不重复的数据不会作为新记录导入')
-                        : _l('将所有不重复的数据作为新记录导入工作表')
-                    }</span>`,
+                    columnContent,
+                    fieldContent,
+                    repeatModeContent,
+                    repeatContent,
                   ),
                 }}
               />
@@ -618,14 +671,14 @@ export default class ConfigControl extends Component {
       title: _l('保存导入配置'),
       description: (
         <div className="Font14">
-          <div className="Gray_75">
+          <div className="Gray_75 WordBreak">
             {_l(
               '将当前导入配置保存为默认导入方式供所有用户使用，其中字段映射关系不会保存，若Excel列名称和字段名称相同会自动映射对应',
             )}
           </div>
           <Checkbox
             className="mTop20 Gray"
-            text={_l('不允许非系统角色修改默认配置')}
+            text={_l('不允许用户修改默认配置')}
             defaultChecked={this.state.edited}
             onClick={checked => this.setState({ edited: checked })}
           />
@@ -693,8 +746,16 @@ export default class ConfigControl extends Component {
    */
   renderFooter() {
     const { onPrevious, isCharge } = this.props;
-    const { repeatRecord, tigger, repeatConfig, fieldsList, controlMapping, edited, errorSkip, showErrorSkip } =
-      this.state;
+    const {
+      repeatRecord,
+      tigger,
+      repeatConfig,
+      fieldsList,
+      controlMapping,
+      edited,
+      errorSkip,
+      showErrorSkip,
+    } = this.state;
     const controlMappingFilter = controlMapping.filter(item => item.ColumnNum) || [];
     const skipSize = errorSkip.filter(item => item.value).length;
     const list = [
@@ -902,17 +963,24 @@ export default class ConfigControl extends Component {
    * 渲染成员、部门、关联表字段
    */
   renderRelateWorksheet(controlItem, isHiddenConfig) {
-    const { controlMapping, relateSource, userControls, departmentControls } = this.state;
+    const { controlMapping, relateSource, userControls, departmentControls, showStar } = this.state;
     const selectItem = controlMapping.find(item => item.ControlId === controlItem.controlId);
     const worksheetId = selectItem.sourceConfig.worksheetId;
 
     // 成员、部门字段
     if (_.includes([26, 27], controlItem.type)) {
       const controls = controlItem.type === 26 ? userControls : departmentControls;
+
       return (
         <div className="flexRow relateBox">
           <Icon className="Font16 Gray_9e" icon={getIconByType(controlItem.type)} />
-          <div className="mLeft10 mRight10 flex ellipsis">{controlItem.controlName}</div>
+          <div className="mLeft10 mRight10 flex ellipsis flexRow alignItemsCenter">
+            {controlItem.controlName}
+            {(showStar === controlItem.controlId ||
+              (controlItem.advancedSetting && controlItem.advancedSetting.required === '1')) && (
+              <span className="mLeft3 star">*</span>
+            )}
+          </div>
 
           {/** 提示文字 */}
           <Tooltip
@@ -962,7 +1030,13 @@ export default class ConfigControl extends Component {
       return (
         <div className="flexRow relateBox">
           <Icon className="Font16 Gray_9e" icon={getIconByType(controlItem.type)} />
-          <div className="mLeft10 mRight10 flex ellipsis">{controlItem.controlName}</div>
+          <div className="mLeft10 mRight10 flex ellipsis flexRow alignItemsCenter">
+            {controlItem.controlName}
+            {(showStar === controlItem.controlId ||
+              (controlItem.advancedSetting && controlItem.advancedSetting.required === '1')) && (
+              <span className="mLeft3 star">*</span>
+            )}
+          </div>
 
           {/** 提示文字 */}
           <Tooltip
@@ -1150,9 +1224,14 @@ export default class ConfigControl extends Component {
                           {!isMapping ? (
                             <div className="controlItem flexRow">
                               <Icon className="Font16 Gray_9e" icon={getIconByType(controlItem.type)} />
-                              <span className="mLeft10 ellipsis flex Relative">
+                              <span className="mLeft10 ellipsis flex flexRow alignItemsCenter">
                                 {controlItem.controlName}
-                                {showStar === controlItem.controlId && <span className="mLeft3 star">*</span>}
+                                {(showStar === controlItem.controlId ||
+                                  (controlItem.type !== 30 &&
+                                    controlItem.advancedSetting &&
+                                    controlItem.advancedSetting.required === '1')) && (
+                                  <span className="mLeft3 star">*</span>
+                                )}
                               </span>
 
                               {/** 单选框 */}

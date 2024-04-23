@@ -10,6 +10,7 @@ import appManagementApi from 'src/api/appManagement';
 import cx from 'classnames';
 import { Icon } from 'ming-ui';
 import SvgIcon from 'src/components/SvgIcon';
+import { getTranslateInfo } from 'src/util';
 import _ from 'lodash';
 
 const dndAccept = 'navigationGroup';
@@ -49,6 +50,9 @@ const spliceTarget = (groups, target, data) => {
       }
     });
   } else {
+    if (!target.parentId) {
+      data.parentId = undefined;
+    }
     groups.splice(data.first ? index : index + 1, 0, data);
     return groups;
   }
@@ -215,7 +219,7 @@ const Group = props => {
     <div
       ref={ref}
       data-handler-id={collectProps.handlerId}
-      className={cx({ firstGroup: isFirstGroup, [activeFirst ? 'activeFirst' : 'active']: collectProps.isOver && active && !activeGroup, Border0: hideAppSection })}
+      className={cx({ firstGroup: isFirstGroup, [activeFirst ? 'activeFirst' : 'active']: collectProps.isOver && active && !activeGroup })}
       style={{ opacity: isDragging ? 0 : 1, transform: 'translate(0px, 0px)' }}
     >
       {isFirstGroup ? (
@@ -247,7 +251,7 @@ const Group = props => {
                     }
                   }}
                 />
-              ) : name}
+              ) : getTranslateInfo(app.id, id).name || name}
             </span>
             <Tooltip title={_l('修改')} placement="bottom">
               <Icon className="Gray_9e pointer Font17 operateIcon" icon="sp_edit_white" onClick={() => setEdit(true)} />
@@ -284,7 +288,12 @@ const Group = props => {
                   <SvgIcon url={`${md.global.FileStoreConfig.pubHost}/customIcon/${data.icon || '8_4_folder'}.svg`} fill="#9e9e9e" />
                 </Fragment>
               )}
-              <span className="flex name mLeft10 ellipsis" onClick={() => !data.isAppItem && setChildrenVisible(!childrenVisible)}>{name}</span>
+              <span
+                className="flex name mLeft10 ellipsis"
+                onClick={() => !data.isAppItem && setChildrenVisible(!childrenVisible)}
+              >
+                {getTranslateInfo(app.id, id).name || name}
+              </span>
               <Trigger
                 action={['click']}
                 popupVisible={edit}
@@ -342,22 +351,22 @@ const Group = props => {
 }
 
 const Container = props => {
-  const { app, setIsChange } = props;
+  const { app } = props;
   const [loading, setLoading] = useState(true);
   const [navigationGroup, setNavigationGroup] = useState([]);
 
   const handleSetNavigationGroup = data => {
-    setIsChange(true);
     setNavigationGroup(data);
   }
 
   useEffect(() => {
-    homeAppApi.getAppInfo({
+    homeAppApi.getApp({
       appId: app.id,
+      getSection: true
     }).then(data => {
-      const { appSectionDetail } = data;
+      const { sections } = data;
       setLoading(false);
-      setNavigationGroup(appSectionDetail.map(data => {
+      setNavigationGroup(sections.map(data => {
         data.items = data.workSheetInfo.map(appItem => {
           if (appItem.type === 2) {
             const { workSheetInfo = [] } = _.find(data.childSections, { appSectionId: appItem.workSheetId }) || {};
@@ -436,7 +445,8 @@ const Container = props => {
           icon: dragData.icon,
           iconColor: app.iconColor,
           iconUrl: dragData.iconUrl,
-          workSheetName: dragData.name
+          workSheetName: dragData.name,
+          createType: dragData.createType
         }]
       }).then(result => {
         if (!result) {
@@ -462,7 +472,8 @@ const Container = props => {
             icon: dragData.icon || '8_4_folder',
             iconColor: app.iconColor,
             iconUrl: dragData.iconUrl,
-            workSheetName: dragData.name
+            workSheetName: dragData.name,
+            createType: dragData.createType
           }]
         }).then(result => {
           if (result) {
@@ -546,7 +557,7 @@ const Container = props => {
 
     homeAppApi.addAppSection({
       appId: app.id,
-      name: name.slice(0, 25),
+      name: name.slice(0, 100),
       icon,
       parentId: target ? target.id : undefined,
       rootId: target ? target.id : undefined,
@@ -655,10 +666,10 @@ const Container = props => {
   return (
     <DndProvider key="navigation" context={window} backend={HTML5Backend}>
       <div>{navigationGroup.map((item, i) => renderGroup(item, i))}</div>
-      <div className="flexRow alignItemsCenter ThemeColor bold mBottom20">
+      <div className="flexRow alignItemsCenter ThemeColor bold mBottom12">
         <div className="pointer" onClick={() => handleAddGroup()}>
           <Icon icon="add" />
-          <span>{_l('一级分组')}</span>
+          <span>{_l('分组')}</span>
         </div>
       </div>
     </DndProvider>

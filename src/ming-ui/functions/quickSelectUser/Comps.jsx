@@ -1,13 +1,13 @@
 import React, { useState, useRef, useEffect, Fragment } from 'react';
 import styled from 'styled-components';
 import { Tooltip } from 'ming-ui';
-import UserHead from 'src/pages/feed/components/userHead';
+import UserHead from 'src/components/userHead';
 import dialogSelectUser from 'src/components/dialogSelectUser/dialogSelectUser';
 import _ from 'lodash';
 
 export const Con = styled.div`
   overflow: hidden;
-  width: 280px;
+  width: 360px;
   background-color: #fff;
   border-radius: 4px;
   box-shadow: 0px 3px 6px 1px rgba(0, 0, 0, 0.16);
@@ -110,22 +110,25 @@ export const SearchUsers = styled.div`
 `;
 
 export function UserItem(props) {
-  const { className, user = {}, type, onClick } = props;
+  const { className, notShowCurrentUserName, user = {}, type, onClick, appId, projectId } = props;
   const { accountId, phone, fullname, job, department } = user;
+
   return (
     <UserItemCon className={'flexRow userItem ' + className} onClick={onClick}>
       <UserHead
         className="userHead"
-        bindBusinessCard={accountId && (accountId.length === 36 || accountId.length === 26)}
         user={{
           userHead: user.avatarSmall || user.avatar,
           accountId: accountId,
         }}
-        lazy={'false'}
+        appId={appId}
         size={28}
+        projectId={projectId}
       />
       <div className="flex flexColumn text">
-        <div className="name">{fullname}</div>
+        <div className="name ellipsis" title={fullname}>
+          {notShowCurrentUserName && accountId === md.global.Account.accountId ? _l('我自己') : fullname}
+        </div>
         <div
           className="description ellipsis"
           title={type === 'external' ? phone : [department, job].filter(_.identity).join(' | ')}
@@ -145,17 +148,33 @@ export function UserItem(props) {
 }
 
 export function UserList(props) {
-  const { keywords, activeIndex, loading, list, type, showMore, limitNum = 2, onSelect, onShowMore = () => {} } = props;
+  const {
+    notShowCurrentUserName,
+    keywords,
+    activeIndex,
+    loading,
+    list,
+    type,
+    showMore,
+    limitNum = 2,
+    onSelect,
+    onShowMore = () => {},
+    appId,
+    projectId
+  } = props;
   const [isShowMore, setIsShowMore] = useState(false);
   return (
     <UserListCon>
       {!!list.length &&
         (showMore && !isShowMore ? list.slice(0, limitNum) : list).map((user, i) => (
           <UserItem
+            notShowCurrentUserName
             className={activeIndex === i ? 'focused' : ''}
             user={user}
             type={type}
             key={i}
+            appId={appId}
+            projectId={projectId}
             onClick={() => onSelect(user)}
           />
         ))}

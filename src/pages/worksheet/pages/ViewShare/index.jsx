@@ -19,7 +19,8 @@ const Wrap = styled.div`
     background-color: #fff;
     z-index: 1;
   }
-  .header, .SingleViewHeader {
+  .header,
+  .SingleViewHeader {
     .svgWrap {
       width: 26px;
       height: 26px;
@@ -55,7 +56,16 @@ const Entry = props => {
 
   useEffect(() => {
     const clientId = sessionStorage.getItem(shareId);
-    getShareInfoByShareId({ clientId }).then(data => {
+    window.clientId = clientId;
+    getShareInfoByShareId({ clientId }).then(({ data }) => {
+      localStorage.setItem('currentProjectId', data.projectId);
+      preall(
+        { type: 'function' },
+        {
+          allownotlogin: true,
+          requestParams: { projectId: data.projectId },
+        },
+      );
       setLoading(false);
     });
   }, []);
@@ -65,7 +75,7 @@ const Entry = props => {
       const result = await sheetApi.getShareInfoByShareId({ shareId, ...data });
       const shareAuthor = _.get(result, 'data.shareAuthor');
       const clientId = _.get(result, 'data.clientId');
-      window.share = shareAuthor;
+      window.clientId = clientId;
       clientId && sessionStorage.setItem(shareId, clientId);
       setShare(result);
       resolve(result);
@@ -113,7 +123,10 @@ const Entry = props => {
     return (
       <div className="Font16 bold flexRow alignItemsCenter">
         {appIcon && (
-          <div className="svgWrap flexRow alignItemsCenter justifyContentCenter mRight10" style={{ backgroundColor: appIconColor }}>
+          <div
+            className="svgWrap flexRow alignItemsCenter justifyContentCenter mRight10"
+            style={{ backgroundColor: appIconColor }}
+          >
             <SvgIcon url={appIcon} fill="#fff" size={22} />
           </div>
         )}
@@ -148,6 +161,4 @@ const Entry = props => {
   }
 };
 
-const Comp = preall(Entry, { allownotlogin: true });
-
-ReactDom.render(<Comp />, document.getElementById('app'));
+ReactDom.render(<Entry />, document.getElementById('app'));

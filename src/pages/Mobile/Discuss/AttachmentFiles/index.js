@@ -3,9 +3,66 @@ import cx from 'classnames';
 import { Flex, Toast } from 'antd-mobile';
 import { Icon, Progress } from 'ming-ui';
 import './index.less';
-import { getRandomString, getClassNameByExt, getToken } from 'src/util';
+import { generateRandomPassword, getClassNameByExt, getToken, formatFileSize } from 'src/util';
 import { checkFileAvailable } from 'src/components/UploadFiles/utils.js';
 import previewAttachments from 'src/components/previewAttachments/previewAttachments';
+import moment from 'moment';
+import MapLoader from 'src/ming-ui/components/amap/MapLoader';
+import MapHandler from 'src/ming-ui/components/amap/MapHandler';
+
+/**
+ * 添加水印
+ * @param {file} 上传的图片文件
+ */
+async function addWaterMarker(file, textLayouts) {
+  let img = await blobToImg(file);
+  return new Promise((resolve, reject) => {
+    let canvas = document.createElement('canvas');
+    canvas.width = img.width;
+    canvas.height = img.height;
+    let ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+
+    const fontSize = Math.min(canvas.width, canvas.height) * 0.03;
+    const lineSpacing = 6;
+
+    // 绘制背景
+    const bgColoryOffset = fontSize * textLayouts.length + lineSpacing * textLayouts.length;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    ctx.fillRect(0, canvas.height - bgColoryOffset - fontSize, canvas.width, bgColoryOffset + fontSize);
+
+    // 绘制文字
+    ctx.font = `${fontSize}px 'Fira Sans'`;
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    ctx.backgroundColor = '#ccc';
+
+    textLayouts.forEach((text, index) => {
+      const i = textLayouts.length - index;
+      const xOffset = 20;
+      const yOffset = canvas.height - fontSize * i - lineSpacing * i;
+      ctx.fillText(text, xOffset, yOffset + 10);
+    });
+
+    canvas.toBlob(blob => resolve(blob));
+  });
+}
+
+/**
+ * blob转img标签
+ */
+function blobToImg(blob) {
+  return new Promise((resolve, reject) => {
+    let reader = new FileReader();
+    reader.addEventListener('load', () => {
+      let img = new Image();
+      img.src = reader.result;
+      img.addEventListener('load', () => resolve(img));
+    });
+    reader.readAsDataURL(blob);
+  });
+}
 
 const formatResponseData = (file, response) => {
   const item = {};
@@ -28,6 +85,8 @@ const formatResponseData = (file, response) => {
   return item;
 };
 
+let currentLocation = null;
+
 export class UploadFileWrapper extends Component {
   constructor(props) {
     super(props);
@@ -35,10 +94,33 @@ export class UploadFileWrapper extends Component {
       files: props.files,
     };
     this.currentFile = null;
-    this.id = `uploadFiles-${getRandomString()}`;
+    this.id = `uploadFiles-${generateRandomPassword(10)}`;
   }
   componentDidMount() {
     this.uploadFile();
+    const { advancedSetting = {} } = this.props;
+    const watermark = JSON.parse(advancedSetting.watermark || null) || [];
+    if (!currentLocation && watermark.length) {
+      currentLocation = {};
+      new MapLoader().loadJs().then(() => {
+        this._maphHandler = new MapHandler();
+        this._maphHandler.getCurrentPos((status, result) => {
+          if (status === 'complete') {
+            const { formattedAddress, position } = result;
+            currentLocation = {
+              formattedAddress,
+              position,
+            };
+          }
+        });
+      });
+    }
+  }
+  componentWillUnmount() {
+    if (this._maphHandler) {
+      this._maphHandler.destroyMap();
+      this._maphHandler = null;
+    }
   }
   componentWillReceiveProps(nextProps) {
     if (nextProps.files.length !== this.props.files.length) {
@@ -49,60 +131,112 @@ export class UploadFileWrapper extends Component {
   }
   uploadFile() {
     const self = this;
-    const { advancedSetting } = self.props;
+    const { advancedSetting = {}, projectId, appId, worksheetId } = self.props;
+
     const method = {
       FilesAdded(uploader, files) {
-        if (parseFloat(files.reduce((total, file) => total + (file.size || 0), 0) / 1024 / 1024) > md.global.SysSettings.fileUploadLimitSize) {
-          Toast.info('附件总大小超过 ' + utils.formatFileSize(md.global.SysSettings.fileUploadLimitSize * 1024 * 1024) + '，请您分批次上传');
+        if (
+          parseFloat(files.reduce((total, file) => total + (file.size || 0), 0) / 1024 / 1024) >
+          md.global.SysSettings.fileUploadLimitSize
+        ) {
+          Toast.info(
+            '附件总大小超过 ' +
+              formatFileSize(md.global.SysSettings.fileUploadLimitSize * 1024 * 1024) +
+              '，请您分批次上传',
+          );
           uploader.stop();
           uploader.splice(uploader.files.length - files.length, uploader.files.length);
           return false;
         }
 
         self.uploading = true;
-
-        if (advancedSetting) {
-          let isAvailable;
-          let tempCount = self.props.originCount || 0;
-          isAvailable = checkFileAvailable(advancedSetting, files, tempCount);
-          if (!isAvailable) {
-            self.onRemoveAll(uploader);
-            return;
+        const watermark = JSON.parse(advancedSetting.watermark || null) || [];
+        const start = () => {
+          if (advancedSetting) {
+            let isAvailable;
+            let tempCount = self.props.originCount || 0;
+            isAvailable = checkFileAvailable(advancedSetting, files, tempCount);
+            if (!isAvailable) {
+              self.onRemoveAll(uploader);
+              return;
+            }
           }
-        }
-        const tokenFiles = [];
-        files
-          .filter(item => item.name || item.type)
-          .forEach(item => {
-            const { files: fileList } = self.state;
-            const fileExt = `.${File.GetExt(item.name)}`;
-            const fileName = File.GetName(item.name);
-            const isPic = File.isPicture(fileExt);
-            const id = item.id;
-            const base = {
-              isPic,
-              fileExt,
-              fileName,
-              id,
-            };
-            const newFiles = fileList.concat({ id: item.id, progress: 0, base });
-            self.setState({
-              files: newFiles,
+          const tokenFiles = [];
+          files
+            .filter(item => item.name || item.type)
+            .forEach(item => {
+              const { files: fileList } = self.state;
+              const fileExt = `.${File.GetExt(item.name)}`;
+              const fileName = File.GetName(item.name);
+              const isPic = File.isPicture(fileExt);
+              const id = item.id;
+              const base = {
+                isPic,
+                fileExt,
+                fileName,
+                id,
+              };
+              const newFiles = fileList.concat({ id: item.id, progress: 0, base });
+              self.setState({
+                files: newFiles,
+              });
+              tokenFiles.push({ bucket: isPic ? 4 : 3, ext: fileExt });
+              self.props.onChange(newFiles);
             });
-            tokenFiles.push({ bucket: isPic ? 4 : 3, ext: fileExt });
-            self.props.onChange(newFiles);
+          getToken(tokenFiles, 0, {
+            projectId,
+            appId,
+            worksheetId,
+          }).then(res => {
+            files.forEach((item, i) => {
+              item.token = res[i].uptoken;
+              item.key = res[i].key;
+              item.serverName = res[i].serverName;
+              item.fileName = res[i].fileName;
+              item.url = res[i].url;
+            });
+            uploader.start();
           });
-        getToken(tokenFiles).then(res => {
-          files.forEach((item, i) => {
-            item.token = res[i].uptoken;
-            item.key = res[i].key;
-            item.serverName = res[i].serverName;
-            item.fileName = res[i].fileName;
-            item.url = res[i].url;
-          });
+        };
 
-          uploader.start();
-        });
+        if (watermark.length) {
+          // 添加水印
+          Promise.all(
+            files
+              .filter(file => {
+                const ext = File.GetExt(file.name);
+                return File.isPicture(`.${ext}`);
+              })
+              .map(file => {
+                return new Promise((resolve, reject) => {
+                  const nativeFile = file.getNative();
+                  const { formattedAddress, position } = currentLocation || {};
+                  const textLayouts = [];
+                  if (md.global.Account.fullname && watermark.includes('user')) {
+                    textLayouts.push(md.global.Account.fullname);
+                  }
+                  if (watermark.includes('time')) {
+                    textLayouts.push(moment().format('YYYY-MM-DD HH:mm:ss'));
+                  }
+                  if (formattedAddress && watermark.includes('address')) {
+                    textLayouts.push(formattedAddress);
+                  }
+                  if (position && watermark.includes('xy')) {
+                    textLayouts.push(`${_l('经度')}：${position.lng}  ${_l('纬度')}：${position.lat}`);
+                  }
+                  addWaterMarker(nativeFile, textLayouts).then(blob => {
+                    const newFile = new File([blob], file.name, { type: blob.type });
+                    file.getSource().setSource(newFile);
+                    resolve();
+                  });
+                });
+              }),
+          ).then(() => {
+            start();
+          });
+        } else {
+          start();
+        }
       },
       BeforeUpload(uploader, file) {
         self.currentFile = uploader;
@@ -156,45 +290,37 @@ export class UploadFileWrapper extends Component {
       },
       Error(uploader, error) {
         if (error.code === window.plupload.FILE_SIZE_ERROR) {
-          Toast.info(_l('单个文件大小超过%0，无法支持上传', utils.formatFileSize(md.global.SysSettings.fileUploadLimitSize * 1024 * 1024)));
+          Toast.info(
+            _l(
+              '单个文件大小超过%0，无法支持上传',
+              formatFileSize(md.global.SysSettings.fileUploadLimitSize * 1024 * 1024),
+            ),
+          );
         } else {
           Toast.info(_l('上传失败，请稍后再试。'));
         }
       },
       Init() {
         const ele = self.uploadContainer && self.uploadContainer.querySelector('input');
-        const { inputType, disabledGallery, advancedSetting = {} } = self.props;
+        const { inputType, advancedSetting = {}, customUploadType } = self.props;
         const { filetype } = advancedSetting;
         let type = filetype && JSON.parse(filetype).type;
-        const accept = { 1: 'image/*', 2: 'video/*', 0: !isAndroid ? '' : 'image/*,video/*,audio/*,application/*' };
-        const fileTypeObj = { 1: 'image/*', 2: !isAndroid ? '' : 'application/*', 3: 'audio/*', 4: 'video/*' };
 
-        const ua = window.navigator.userAgent.toLowerCase();
-        const isAndroid = ua.includes('android');
-        const isMiniprogram = ua.includes('miniprogram');
-        const isFeishu = ua.includes('feishu');
-        const equipment = type === 3 ? 'microphone' : type === 4 ? 'camcorder' : 'camera';
+        // inputType: 0->不限制，1->拍照，2->拍视频
+        // disabledGallery: true->禁用相册
+        // type: '1'->图片, '2'->文档 ,‘3’-> 音频 ,‘4’->视频 ,  '0'->自定义
+
+        // 上传附件
+        const accept = { 0: '*', 1: 'image/*', 2: 'video/*' };
+        const fileTypeObj = { 1: 'image/*', 2: 'application/*', 3: 'audio/*', 4: 'video/*' };
+
         if (ele) {
-          if (isAndroid && isMiniprogram) {
-            ele.removeAttribute('multiple');
-            if (disabledGallery) {
-              ele.setAttribute('accept', accept[inputType]);
-              ele.setAttribute('capture', 'camera');
-            } else if (type || inputType) {
-              ele.setAttribute('accept', accept[inputType]);
-              ele.setAttribute('capture', equipment);
-            } else {
-              ele.setAttribute('accept', 'image/*');
-            }
-            return;
-          }
-          if (inputType || disabledGallery) {
-            ele.setAttribute('accept', accept[inputType]);
-            ele.setAttribute('capture', 'camera');
-          } else if (type) {
-            ele.setAttribute('accept', fileTypeObj[type]);
-          } else if (!(isFeishu && isAndroid)) {
-            ele.setAttribute('accept', accept[inputType]);
+          // 拍照 or 拍摄
+          if (customUploadType) {
+            ele.setAttribute('accept', customUploadType === 'camara' ? 'image/*' : 'video/*');
+            ele.setAttribute('capture', 'environment');
+          } else {
+            ele.setAttribute('accept', type ? fileTypeObj[type] : inputType ? accept[inputType] : '*');
           }
         }
       },
@@ -204,6 +330,13 @@ export class UploadFileWrapper extends Component {
       file_data_name: 'file',
       multi_selection: true,
       method,
+      resize:
+        _.get(advancedSetting, 'webcompress') !== '0'
+          ? {
+              quality: 60,
+              preserve_headers: true,
+            }
+          : undefined,
       autoUpload: false,
     });
   }
@@ -215,9 +348,9 @@ export class UploadFileWrapper extends Component {
     });
   }
   render() {
-    const { children, className } = this.props;
+    const { children, className, style } = this.props;
     return (
-      <div className="Relative" ref={el => (this.uploadContainer = el)}>
+      <div className="Relative" style={style} ref={el => (this.uploadContainer = el)}>
         <span ref={el => (this.uploadFileEl = el)} id={this.id} className={className}>
           {children}
         </span>
@@ -230,7 +363,6 @@ export default class AttachmentList extends Component {
   static defaultProps = {
     width: 120,
   };
-  style: null;
   constructor(props) {
     super(props);
     this.style = { width: props.width };
@@ -270,7 +402,7 @@ export default class AttachmentList extends Component {
   }
   renderImage(item, index) {
     const isKc = item.refId ? true : false;
-    const path = item.previewUrl || item.url;
+    const path = item.previewUrl || item.viewUrl || item.url || '';
     const url = isKc
       ? `${item.middlePath + item.middleName}`
       : path.indexOf('imageView2') > -1

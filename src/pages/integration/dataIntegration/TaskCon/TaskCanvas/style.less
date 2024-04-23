@@ -39,6 +39,7 @@
     background: url('./img/union/except_all_gray.png') no-repeat center center;
     background-size: contain;
   }
+
 }
 .joinDropTriggerWrap,
 .editTaskNodes {
@@ -82,25 +83,36 @@
     background: url('./img/union/except_all.png') no-repeat center center;
     background-size: contain;
   }
+  .bgImgjoinInner {
+    background: url('./img/join/inner_bg.png') no-repeat center top;
+    background-size: contain;
+  }
+  .bgImgjoinLeft {
+    background: url('./img/join/left_bg.png') no-repeat center top;
+    background-size: contain;
+  }
+  .bgImgjoinRight {
+    background: url('./img/join/right_bg.png') no-repeat center top;
+    background-size: contain;
+  }
 }
 .dropWorksheetIntegration {
-  // position: relative;
-  ul li:first-child {
-    border-bottom: 1px solid #dddddd;
-    // position: sticky;
-    // top: 5px;
-    // background-color: #fff;
+  ul li[value='add'] {
+    // border-bottom: 1px solid #dddddd;
     height: 40px;
     line-height: 40px;
-    // &:hover {
-    //   background-color: #1e88e5 !important;
-    // }
     .Icon {
       color: #2196f3 !important;
       margin-left: 5px;
+      &.icon-add1 {
+        line-height: 40px;
+        bottom: 1;
+      }
     }
     .itemText {
       padding-left: 20px;
+      line-height: 40px;
+      vertical-align: bottom;
       color: #2196f3;
     }
     &:hover {
@@ -113,4 +125,45 @@
   ul li:last-child {
     border-bottom: 1px solid #fff;
   }
+  .disabledIcon {
+    position: initial !important;
+    vertical-align: middle !important;
+  }
+}
+.dropConditionTri {
+  .aggFuncType {
+    color: #9e9e9e;
+  }
+  .ming.Item .Item-content:not(.disabled):hover {
+    .aggFuncType {
+      color: #fff;
+    }
+  }
+}
+.flexShrink0 {
+  flex-shrink: 0;
+}
+.bgImgEXCEPT {
+  background: url('./img/union/tips/EXCEPT.png') no-repeat center center;
+  background-size: contain;
+}
+.bgImgEXCEPTALL {
+  background: url('./img/union/tips/EXCEPTALL.png') no-repeat center center;
+  background-size: contain;
+}
+.bgImgINTERSECT {
+  background: url('./img/union/tips/INTERSECT.png') no-repeat center center;
+  background-size: contain;
+}
+.bgImgINTERSECTALL {
+  background: url('./img/union/tips/INTERSECTALL.png') no-repeat center center;
+  background-size: contain;
+}
+.bgImgUNION {
+  background: url('./img/union/tips/UNION.png') no-repeat center center;
+  background-size: contain;
+}
+.bgImgUNIONALL {
+  background: url('./img/union/tips/UNIONALL.png') no-repeat center center;
+  background-size: contain;
 }

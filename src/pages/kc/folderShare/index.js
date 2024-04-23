@@ -2,7 +2,7 @@
 import './css/style.less';
 import shareajax from 'src/api/share';
 import qs from 'query-string';
-import doT from '@mdfe/dot';
+import doT from 'dot';
 import { downloadFile } from 'src/util';
 import frameTplHtml from './tpl/frame.html';
 import fileItemHtml from './tpl/fileItem.html';
@@ -14,6 +14,7 @@ import shareFolderAjax from 'src/api/shareFolder';
 import saveToKnowledge from 'src/components/saveToKnowledge/saveToKnowledge';
 import { browserIsMobile, getClassNameByExt } from 'src/util';
 import _ from 'lodash';
+import Dialog from 'ming-ui/components/Dialog';
 
 var ShareFolder = function (options) {
   var SF = this;
@@ -284,6 +285,8 @@ ShareFolder.prototype = {
       }),
     );
     this.$fileList = this.$container.find('.fileList');
+    const $logo = this.$container.find('.header .logo');
+    $logo.html(`<img src="${_.get(md, 'global.SysSettings.brandLogoUrl') || _.get(md, 'global.Config.Logo')}" />`);
   },
   renderList: function (nodes) {
     var SF = this;
@@ -432,34 +435,30 @@ ShareFolder.prototype = {
       });
   },
   handleLogin() {
-    import('src/components/mdDialog/dialog').then(() => {
-      const dialog = $.DialogLayer({
-        container: {
-          header: _l('保存到'),
-          content: _l('请先登录'),
-          yesText: _l('登录'),
-          yesFn: () => {
-            if (location.href.indexOf('.mingdao.net') > -1) {
-              var newUrl =
-                'https://www.mingdao.com/login.htm?ReturnUrl=' +
-                encodeURIComponent(window.location.href.replace(window.location.origin, 'https://www.mingdao.com'));
-              window.location = newUrl;
-            } else {
-              window.location = '/login.htm?ReturnUrl=' + encodeURIComponent(window.location.href);
-            }
-          },
-        },
-      });
+    Dialog.confirm({
+      title: _l('保存到'),
+      children: <div>{_l('请先登录')}</div>,
+      okText: _l('登录'),
+      onOk: () => {
+        if (location.href.indexOf('.mingdao.net') > -1) {
+          var newUrl =
+            'https://www.mingdao.com/login?ReturnUrl=' +
+            encodeURIComponent(window.location.href.replace(window.location.origin, 'https://www.mingdao.com'));
+          window.location = newUrl;
+        } else {
+          window.location = '/login?ReturnUrl=' + encodeURIComponent(window.location.href);
+        }
+      },
     });
   },
   login() {
     if (location.href.indexOf('.mingdao.net') > -1) {
       var newUrl =
-        'https://www.mingdao.com/login.htm?ReturnUrl=' +
+        'https://www.mingdao.com/login?ReturnUrl=' +
         encodeURIComponent(window.location.href.replace(window.location.origin, 'https://www.mingdao.com'));
       window.location = newUrl;
     } else {
-      window.location = '/login.htm?ReturnUrl=' + encodeURIComponent(window.location.href);
+      window.location = '/login?ReturnUrl=' + encodeURIComponent(window.location.href);
     }
   },
   alert: function (str, time) {
@@ -480,15 +479,6 @@ ShareFolder.prototype = {
   },
 };
 
-preall(
-  { type: 'function' },
-  {
-    allownotlogin: true,
-    transfertoken: true,
-    preloadcb: () => {
-      window.hello = new ShareFolder();
-    },
-  },
-);
-
+preall({ type: 'function' }, { allownotlogin: true });
+window.hello = new ShareFolder();
 md.global.Config.disableKf5 = true;

@@ -1,8 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Button, Checkbox } from 'ming-ui';
+import { Button, Skeleton } from 'ming-ui';
 import styled from 'styled-components';
 import worksheetAjax from 'src/api/worksheet';
-import Skeleton from 'src/router/Application/Skeleton';
 import saveTemplateConfirm from 'src/pages/Print/components/saveTemplateConfirm';
 import FilterDetailName from 'worksheet/common/WorkSheetFilter/components/FilterDetailName';
 import Sider from './Sider';
@@ -26,6 +25,7 @@ import {
 } from './util';
 import { generatePdf } from '.';
 import _ from 'lodash';
+import { addBehaviorLog } from 'src/util';
 
 const Con = styled.div`
   height: 100vh
@@ -79,6 +79,7 @@ function getDefaultConfig(printType) {
     printType: 1,
     codeFaultTolerance: CODE_FAULT_TOLERANCE.L,
     showControlName: true,
+    showBarValue: true,
     firstIsBold: true,
     layout:
       {
@@ -140,13 +141,14 @@ export default function PrintQrBarCode(props) {
     ].filter(_.identity),
   });
   let labelObject;
-  if (printType === PRINT_TYPE.QR) {
+  if (config.printType === PRINT_TYPE.QR || config.printType === PRINT_TYPE.A4) {
     labelObject = createQrLabeObjectFromConfig(
       config,
       getCodeContent({
         printType: config.printType,
         sourceType: config.sourceType,
         sourceControlId: config.sourceControlId,
+        fontSize: config.fontSize,
         row: previewRow,
         controls,
         urls: [
@@ -170,7 +172,7 @@ export default function PrintQrBarCode(props) {
         isPreview: true,
       },
     );
-  } else if (printType === PRINT_TYPE.BAR) {
+  } else if (config.printType === PRINT_TYPE.BAR) {
     labelObject = createBarLabeObjectFromConfig(
       config,
       getCodeContent({
@@ -197,6 +199,9 @@ export default function PrintQrBarCode(props) {
   }
   const maxLineNumber = (labelObject || {}).maxLineNumber || 0;
   function handlePrint() {
+    const printTypeObj = { 1: 'printQRCode', 3: 'printBarCode' };
+    addBehaviorLog(printTypeObj[config.printType], worksheetId, { msg: [allowLoadMore ? count : selectedRows.length] }); // 埋点
+
     generatePdf({
       config,
       name: base.name,
@@ -230,6 +235,8 @@ export default function PrintQrBarCode(props) {
         .then(data => {
           setPreviewRowPublicUrl(data[recordId]);
         });
+    } else {
+      setPreviewRowPublicUrl('https://mingdao.com');
     }
   }
   useEffect(() => {
@@ -368,7 +375,10 @@ export default function PrintQrBarCode(props) {
             <Sider
               config={config}
               maxLineNumber={maxLineNumber}
-              controls={controls.filter(FILTER[2])}
+              controls={controls.filter(
+                c =>
+                  FILTER[2]({ ...c, type: c.type === 30 ? c.sourceControlType : c.type }) || _.includes([37], c.type),
+              )}
               onUpdate={changes => {
                 setChanged(true);
                 setConfig(oldConfig => ({ ...oldConfig, ...changes }));

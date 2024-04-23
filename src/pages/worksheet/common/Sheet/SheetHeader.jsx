@@ -14,7 +14,7 @@ import SelectIcon from 'worksheet/common/SelectIcon';
 import Statistics from 'statistics';
 import Discussion from 'worksheet/common/Discussion';
 import SearchInput from 'worksheet/components/SearchInput';
-import { emitter } from 'worksheet/util';
+import { emitter, needHideViewFilters } from 'worksheet/util';
 import { VIEW_DISPLAY_TYPE } from 'worksheet/constants/enum';
 import {
   addNewRecord,
@@ -29,7 +29,7 @@ import { updateSheetList, deleteSheet, updateSheetListAppItem } from 'worksheet/
 import SheetMoreOperate from './SheetMoreOperate';
 import { isOpenPermit } from 'src/pages/FormSet/util.js';
 import { permitList } from 'src/pages/FormSet/config.js';
-import { getAppFeaturesVisible } from 'src/util';
+import { getAppFeaturesVisible, getTranslateInfo } from 'src/util';
 import { BatchOperate } from 'worksheet/common';
 import WorksheetDraft from 'src/pages/worksheet/common/WorksheetDraft';
 import { findSheet } from 'worksheet/util';
@@ -97,9 +97,10 @@ function SheetHeader(props) {
     clearSelect,
     loadDraftDataCount = () => {},
   } = props;
-  const { pageSize } = sheetFetchParams;
+  const { pageSize, sortControls } = sheetFetchParams;
   const updateFiltersWithView = args => updateFilters(args, view);
-  const { worksheetId, name, desc, projectId, allowAdd, entityName, roleType, advancedSetting = {} } = worksheetInfo;
+  const { worksheetId, desc, projectId, allowAdd, entityName, roleType, advancedSetting = {} } = worksheetInfo;
+  const name = getTranslateInfo(appId, worksheetId).name || worksheetInfo.name || '';
   const [sheetDescVisible, setSheetDescVisible] = useState();
   const [statisticsVisible, setStatisticsVisible] = useState();
   const [discussionVisible, setDiscussionVisible] = useState();
@@ -135,6 +136,7 @@ function SheetHeader(props) {
       pageSize={pageSize}
       navGroupFilters={navGroupFilters}
       filtersGroup={filtersGroup}
+      sortControls={sortControls}
       worksheetInfo={worksheetInfo}
       permission={(permission || {})[viewId]}
       allWorksheetIsSelected={allWorksheetIsSelected}
@@ -180,7 +182,7 @@ function SheetHeader(props) {
               <Tooltip
                 text={
                   <span>
-                    {_l('退出')} ({navigator.userAgent.toLocaleLowerCase().includes('mac os') ? '⌘ + E' : 'Ctrl + E'})
+                    {_l('退出')} ({navigator.userAgent.toLocaleLowerCase().includes('mac os') ? '⌘ + E' : 'Shift + E'})
                   </span>
                 }
                 popupPlacement="bottom"
@@ -199,7 +201,7 @@ function SheetHeader(props) {
                 text={
                   <span>
                     {inFull ? _l('退出') : _l('展开')} (
-                    {navigator.userAgent.toLocaleLowerCase().includes('mac os') ? '⌘ + E' : 'Ctrl + E'})
+                    {navigator.userAgent.toLocaleLowerCase().includes('mac os') ? '⌘ + E' : 'Shift + E'})
                   </span>
                 }
                 popupPlacement="bottom"
@@ -232,7 +234,7 @@ function SheetHeader(props) {
               overlayClassName="sheetDescPopoverOverlay"
               content={
                 <div className="popoverContent">
-                  <RichText data={desc || ''} disabled={true} />
+                  <RichText data={getTranslateInfo(appId, worksheetId).description || desc || ''} disabled={true} />
                 </div>
               }
             >
@@ -254,12 +256,13 @@ function SheetHeader(props) {
             visible={sheetDescVisible}
             worksheetId={worksheetId}
             isEditing={descIsEditing}
-            desc={desc || ''}
+            setDescIsEditing={setDescIsEditing}
+            desc={descIsEditing ? desc || '' : getTranslateInfo(appId, worksheetId).description || desc || ''}
             onClose={() => {
               setSheetDescVisible(false);
             }}
             onSave={value => {
-              setSheetDescVisible(false);
+              // setSheetDescVisible(false);
               updateWorksheetInfo({ desc: value });
             }}
           />
@@ -296,7 +299,7 @@ function SheetHeader(props) {
               projectId={projectId}
               className="sheetSelectIconWrap"
               isActive={true}
-              name={name}
+              name={worksheetInfo.name}
               appItem={sheet}
               icon={sheet.icon}
               appId={appId}
@@ -315,19 +318,21 @@ function SheetHeader(props) {
         </div>
         {viewId && (
           <VerticalCenter>
-            {(String(view.viewType) === VIEW_DISPLAY_TYPE.structure && _.includes([0, 1], Number(view.childType))) ||
-            String(view.viewType) === VIEW_DISPLAY_TYPE.gunter ? null : (
+            {needHideViewFilters(view) ? null : (
               <Fragment>
-                <SearchInput
-                  viewId={viewId}
-                  className="queryInput worksheetQueryInput"
-                  onOk={value => {
-                    updateFiltersWithView({ keyWords: (value || '').trim() });
-                  }}
-                  onClear={() => {
-                    updateFiltersWithView({ keyWords: '' });
-                  }}
-                />
+                {String(view.viewType) !== VIEW_DISPLAY_TYPE.map && (
+                  <SearchInput
+                    keyWords={filters.keyWords}
+                    viewId={viewId}
+                    className="queryInput worksheetQueryInput"
+                    onOk={value => {
+                      updateFiltersWithView({ keyWords: (value || '').trim() });
+                    }}
+                    onClear={() => {
+                      updateFiltersWithView({ keyWords: '' });
+                    }}
+                  />
+                )}
                 {chartId ? (
                   <span className={cx('worksheetFilterBtn ThemeColor3 ThemeBGColor6 active')}>
                     <i className="icon icon-worksheet_filter" />
@@ -394,11 +399,11 @@ function SheetHeader(props) {
                 </Tooltip>
               )}
             {/* 草稿箱入口 */}
-            {canNewRecord && advancedSetting.closedrafts !== '1' && (
+            {advancedSetting.closedrafts !== '1' && (
               <WorksheetDraft
                 showFillNext={true}
                 appId={appId}
-                viewId={viewId}
+                view={view}
                 worksheetInfo={worksheetInfo}
                 sheetSwitchPermit={sheetSwitchPermit}
                 isCharge={isCharge}
@@ -406,17 +411,18 @@ function SheetHeader(props) {
                 draftDataCount={draftDataCount}
                 addNewRecord={props.addNewRecord}
                 allowAdd={canNewRecord}
+                setHighLightOfRows={setHighLightOfRows}
               />
             )}
             {/* 显示创建按钮 */}
-            {canNewRecord && (
+            {canNewRecord && !worksheetInfo.isRequestingRelationControls && (
               <span
                 style={{ backgroundColor: appPkg.iconColor || '#2196f3' }}
                 className="addRow"
                 onClick={openNewRecord}
               >
                 <span className="Icon icon icon-plus Font13 mRight5 White" />
-                <span className="White bold">{entityName}</span>
+                <span className="White bold">{getTranslateInfo(appId, worksheetId).recordName || entityName}</span>
               </span>
             )}
           </VerticalCenter>
@@ -425,7 +431,7 @@ function SheetHeader(props) {
       <CSSTransitionGroup transitionName="Discussion" transitionEnterTimeout={500} transitionLeaveTimeout={300}>
         {discussionVisible && (
           <Discussion
-            title={name}
+            title={worksheetInfo.name}
             appId={appId}
             appSectionId={groupId}
             viewId={viewId}
@@ -446,6 +452,7 @@ function SheetHeader(props) {
             projectId={projectId}
             roleType={roleType}
             isCharge={isCharge}
+            themeColor={_.get(appPkg, 'iconColor')}
             isLock={_.get(appPkg, 'isLock')}
             permissionType={_.get(appPkg, 'permissionType')}
             onClose={() => setStatisticsVisible(false)}
@@ -507,7 +514,7 @@ export default connect(
           'updateControlOfRow',
           'refresh',
           'saveSheetLayout',
-          'resetSehetLayout',
+          'resetSheetLayout',
           'clearSelect',
         ]),
         updateSheetList,

@@ -1,21 +1,75 @@
 import React, { Component, Fragment } from 'react';
-import { Dialog, Dropdown, Menu, MenuItem, LoadDiv, Tooltip } from 'ming-ui';
+import { Dialog, Dropdown, Menu, MenuItem, LoadDiv, Tooltip, RadioGroup } from 'ming-ui';
 import Trigger from 'rc-trigger';
 import { SearchWorksheetWrap, WorksheetListWrap } from '../DynamicDefaultValue/styled';
 import { SettingItem } from 'src/pages/widgetConfig/styled';
 import { handleAdvancedSettingChange } from 'src/pages/widgetConfig/util/setting';
-import SingleFilter from 'src/pages/worksheet/common/WorkSheetFilter/common/SingleFilter';
+import FilterConfig from 'src/pages/worksheet/common/WorkSheetFilter/common/FilterConfig';
 import { checkConditionCanSave } from 'src/pages/FormSet/components/columnRules/config';
 import SelectWorksheet from './SelectWorksheet';
 import homeAppAjax from 'src/api/homeApp';
 import worksheetAjax from 'src/api/worksheet';
 import SelectControl from '../SelectControl';
 import { getControls } from '../DynamicDefaultValue/util';
+import InputValue from 'src/pages/widgetConfig/widgetSetting/components/WidgetVerify/InputValue';
+import SortConditions from 'src/pages/worksheet/common/ViewConfig/components/SortConditions';
+import { SYS_CONTROLS, FORM_HIDDEN_CONTROL_IDS } from 'src/pages/widgetConfig/config/widget.js';
 import '../DynamicDefaultValue/inputTypes/SubSheet/style.less';
 import cx from 'classnames';
 import _ from 'lodash';
 
 const rowControl = [{ controlId: 'rowid', type: 2, controlName: _l('记录ID') }];
+const RadioDisplay = [
+  {
+    text: _l('获取第一条'),
+    value: 0,
+  },
+  {
+    text: _l('不获取'),
+    value: 1,
+  },
+];
+
+export const getDefaultCount = (data = {}, value = 0) => {
+  value = parseInt(value);
+  if (value) {
+    // 下拉框50，卡片200，列表500
+    if (data.type === 29 && _.get(data, 'advancedSetting.showtype') === '3') {
+      value = value > 50 ? 50 : value;
+    } else if (data.type === 29 && _.get(data, 'advancedSetting.showtype') === '1') {
+      value = value > 200 ? 200 : value;
+    } else if (value > 500) {
+      value = 500;
+    }
+  } else {
+    if (data.type === 29 && _.get(data, 'advancedSetting.showtype') === '3') {
+      value = 50;
+    } else if (data.type === 29 && _.get(data, 'advancedSetting.showtype') === '1') {
+      value = 200;
+    } else {
+      value = 500;
+    }
+  }
+  return value;
+};
+
+// 关联记录、子表等他表字段需要处理controls
+const dealRelationControls = (controls = []) => {
+  return controls.map((control = {}) => {
+    if (control.type === 30) {
+      const currentItemRelate = _.find(controls, c => (control.dataSource || '').includes(c.controlId)) || {};
+      const currentItem = _.find(
+        currentItemRelate.relationControls || [],
+        r => r.controlId === control.sourceControlId,
+      );
+      return currentItem && _.includes([9, 10, 11], currentItem.type)
+        ? { ...control, dataSource: currentItem.dataSource }
+        : control;
+    } else {
+      return control;
+    }
+  });
+};
 
 export default class SearchWorksheetDialog extends Component {
   constructor(props) {
@@ -35,10 +89,15 @@ export default class SearchWorksheetDialog extends Component {
       controls: [],
       configs: [], //选择字段
       items: [],
+      moreType: 0, // 获取第一条
+      moreSort: [], // 排序
+      queryCount: '', // 查询数量
       visible: false,
       showMenu: false,
       controlVisible: false,
       relationControls: relationControls,
+      sheetSwitchPermit: [],
+      views: [],
       loading: true,
     };
   }
@@ -65,6 +124,12 @@ export default class SearchWorksheetDialog extends Component {
           sheetId: sourceId || (this.relateField() ? data.dataSource : ''),
           sheetName: this.relateField() ? data.sourceEntityName : '',
           controls: this.relateField() ? this.state.relationControls : [],
+          sheetSwitchPermit: this.relateField()
+            ? _.get(window.subListSheetConfig, `${data.controlId}.sheetInfo.switches`)
+            : [],
+          views: this.relateField()
+            ? _.get(window.subListSheetConfig, `${data.controlId}.sheetInfo.switches.views`)
+            : [],
           loading: !!id,
         },
         () => {
@@ -72,6 +137,9 @@ export default class SearchWorksheetDialog extends Component {
             this.setState({
               items: queryConfig.items,
               configs: queryConfig.configs,
+              moreType: queryConfig.moreType || 0,
+              moreSort: queryConfig.moreSort,
+              queryCount: queryConfig.queryCount,
               controls: queryConfig.templates ? _.get(queryConfig.templates[0] || {}, 'controls') : [],
               sheetName: sourceName,
               isSheetDelete: !(_.get(queryConfig, 'templates[0].controls') || []).length,
@@ -92,28 +160,56 @@ export default class SearchWorksheetDialog extends Component {
   setControls = () => {
     const { sheetId, appId } = this.state;
     if (!sheetId) return;
-    worksheetAjax.getWorksheetInfo({ worksheetId: sheetId, getTemplate: true, appId }).then(res => {
-      const { controls = [] } = res.template || {};
-      this.setState({ controls: controls, sheetName: res.name, isSheetDelete: !controls.length });
-    });
+    worksheetAjax
+      .getWorksheetInfo({ worksheetId: sheetId, getTemplate: true, getSwitchPermit: true, appId, getViews: true })
+      .then(res => {
+        const { controls = [] } = res.template || {};
+        this.setState({
+          controls: controls,
+          sheetName: res.name,
+          isSheetDelete: !controls.length,
+          sheetSwitchPermit: res.switches,
+          views: res.views,
+        });
+      });
   };
 
   renderSearchCom = () => {
     return (
-      <React.Fragment>
+      <span
+        onClick={e => {
+          if (!this.state.sheetId) {
+            alert(_l('请选择工作表'), 3);
+            return;
+          }
+        }}
+      >
         <i className="icon icon-add"></i>
         {_l('查询条件')}
-      </React.Fragment>
+      </span>
     );
   };
 
   handleSubmit = () => {
     const { globalSheetInfo = {}, from, subListSheetId, data = {}, onChange, onClose, updateQueryConfigs } = this.props;
-    const { id = '', sheetId, sheetName, items = [], configs = [], controls = [], appName } = this.state;
+    const {
+      id = '',
+      sheetId,
+      appId,
+      sheetName,
+      items = [],
+      configs = [],
+      controls = [],
+      appName,
+      moreSort,
+      moreType,
+      queryCount,
+    } = this.state;
     const worksheetId = from === 'subList' ? subListSheetId : globalSheetInfo.worksheetId;
     const sourceType = from === 'subList' || worksheetId === sheetId ? 1 : 2;
     let params = {
-      id: id && id.indexOf('new') > -1 ? '' : id,
+      id: id && id.includes('-') ? '' : id,
+      appId,
       worksheetId,
       controlId: data.controlId,
       sourceId: sheetId,
@@ -121,6 +217,9 @@ export default class SearchWorksheetDialog extends Component {
       sourceType,
       items,
       configs,
+      moreType,
+      moreSort,
+      queryCount,
     };
     worksheetAjax.saveQuery(params).then(res => {
       const value = {
@@ -157,17 +256,21 @@ export default class SearchWorksheetDialog extends Component {
       if ((control.type === 29 && control.dataSource === this.state.sheetId) || _.includes([2, 32], control.type))
         filterControls = rowControl.concat(filterControls);
     }
-    return filterControls.map(({ controlId: value, controlName: text }) => ({ text, value }));
+    return filterControls.map(({ controlId: value, controlName: text, dataSource }) => {
+      if (_.includes([9, 10, 11], control.type) && dataSource && control.dataSource === dataSource) {
+        return { text, value, isEqualSource: true };
+      }
+      return { text, value };
+    });
   };
 
   // 过滤已经选中的映射字段
   filterSelectControls = (controls = []) => {
     const { configs = [] } = this.state;
-    controls = controls.filter(i => !_.includes(['wfftime', 'rowid'], i.controlId));
+    controls = controls.filter(i => !_.includes([...SYS_CONTROLS, ...FORM_HIDDEN_CONTROL_IDS], i.controlId));
     controls = controls.filter(co => {
       return (
-        _.includes([2, 3, 4, 5, 6, 8, 15, 16, 19, 23, 24, 26, 27, 28, 36, 46, 48], co.type) ||
-        (_.includes([9, 10, 11], co.type) && co.dataSource) ||
+        _.includes([2, 3, 4, 5, 6, 8, 9, 10, 11, 15, 16, 19, 23, 24, 26, 27, 28, 36, 46, 48], co.type) ||
         (co.type === 29 && (co.advancedSetting || {}).showtype !== '2')
       );
     });
@@ -255,35 +358,40 @@ export default class SearchWorksheetDialog extends Component {
       controlVisible,
       loading = false,
       isSheetDelete,
+      moreType,
+      moreSort,
+      queryCount,
+      sheetSwitchPermit,
+      views = [],
     } = this.state;
-    const {
-      from,
-      onClose,
-      data = {},
-      globalSheetInfo = {},
-      fromCondition, //筛选作用的控件
-      allControls = [],
-      queryControls = [],
-    } = this.props;
+    const { from, onClose, data = {}, globalSheetInfo = {}, allControls = [], queryControls = [] } = this.props;
     const totalControls = from === 'subList' ? queryControls : allControls;
-    //普通字段
-    const normalField = !_.includes([29, 34], data.type);
+    // 同源级联
+    const selfCascader = data.type === 35 && data.dataSource === sheetId;
     //关联单条、多条（卡片、下拉框）
     const relateField = this.relateField();
     //空白子表、关联类型子表
     const subField = _.includes([34], data.type);
+    //普通字段
+    const normalField = !(selfCascader || relateField || subField);
+    // 关联本表
+    const selfRelate = selfCascader || relateField;
 
-    const checkFilters = _.isEmpty(items) || !checkConditionCanSave(items);
+    const viewId = _.get(views, '0.viewId');
+
+    const checkFilters = _.isEmpty(items) || !checkConditionCanSave(items, true);
     const checkConfigs = _.isEmpty(configs) || !_.every(configs, con => !!con.cid);
     const okDisabled = normalField
       ? !sheetId || checkFilters || _.isEmpty(configs)
-      : relateField
+      : selfRelate
       ? checkFilters
       : !sheetId || checkFilters || checkConfigs;
 
     const isDelete =
       _.get(configs[0] || {}, 'subCid') &&
       !_.find(controls, con => con.controlId === _.get(configs[0] || {}, 'subCid'));
+
+    const filterItems = JSON.parse(JSON.stringify(items).replace(/"rcid":"parent"/g, '"rcid":""'));
 
     return (
       <Dialog
@@ -303,7 +411,7 @@ export default class SearchWorksheetDialog extends Component {
           <React.Fragment>
             <SearchWorksheetWrap>
               <SettingItem className="mTop8">
-                <div className="settingItemTitle">{relateField ? _l('从关联表') : _l('从工作表')}</div>
+                <div className="settingItemTitle">{_l('工作表')}</div>
                 <Trigger
                   action={['click']}
                   popupVisible={showMenu}
@@ -344,17 +452,20 @@ export default class SearchWorksheetDialog extends Component {
                             sheetList.map(item => {
                               return (
                                 <MenuItem
-                                  onClick={() =>
+                                  onClick={() => {
+                                    if (item.sheetId === sheetId) return;
                                     this.setState(
                                       {
                                         sheetId: item.sheetId,
-                                        items: item.sheetId === sheetId ? items : [],
+                                        items: [],
                                         configs: [],
+                                        moreSort: [],
+                                        moreType: 0,
                                         showMenu: false,
                                       },
                                       this.setControls,
-                                    )
-                                  }
+                                    );
+                                  }}
                                 >
                                   {item.sheetName}
                                 </MenuItem>
@@ -387,7 +498,7 @@ export default class SearchWorksheetDialog extends Component {
                       {sheetName ? (
                         <span className={cx(isSheetDelete ? 'Red' : 'Gray')}>
                           {isSheetDelete ? _l('工作表已删除') : sheetName}
-                          {appName && <span>{_l('（%0）', appName)}</span>}
+                          {appName && <span>（{appName}）</span>}
                         </span>
                       ) : (
                         <span className="Gray_bd">{_l('选择工作表')}</span>
@@ -400,47 +511,89 @@ export default class SearchWorksheetDialog extends Component {
                 </Trigger>
               </SettingItem>
               <SettingItem>
-                <div className="settingItemTitle">{_l('查询满足以下条件的记录')}</div>
+                <div className="settingItemTitle">{_l('查询条件')}</div>
                 {sheetId ? (
-                  <SingleFilter
-                    canEdit
-                    feOnly
-                    id={sheetId}
-                    projectId={globalSheetInfo.projectId}
-                    appId={globalSheetInfo.appId}
-                    showSystemControls
-                    columns={controls}
-                    conditions={items}
-                    from={fromCondition}
-                    globalSheetControls={totalControls}
-                    onConditionsChange={conditions => {
-                      const newConditions = conditions.map(item => {
-                        return item.isDynamicsource ? { ...item, values: [], value: '' } : item;
-                      });
-                      this.setState({ items: newConditions });
-                    }}
-                    comp={this.renderSearchCom}
-                  />
-                ) : (
-                  <div className="addFilterCondition pointer">
-                    <span
-                      onClick={e => {
-                        if (!sheetId) {
-                          alert(_l('请选择工作表'), 3);
-                          return;
-                        }
+                  <div className="searchWorksheetFilter">
+                    <FilterConfig
+                      canEdit
+                      feOnly
+                      version={sheetId}
+                      projectId={globalSheetInfo.projectId}
+                      appId={globalSheetInfo.appId}
+                      columns={dealRelationControls(controls)}
+                      conditions={filterItems}
+                      sheetSwitchPermit={sheetSwitchPermit}
+                      viewId={viewId}
+                      from="relateSheet"
+                      filterResigned={false}
+                      showCustom={true}
+                      currentColumns={totalControls}
+                      onConditionsChange={conditions => {
+                        this.setState({ items: conditions });
                       }}
-                    >
-                      {this.renderSearchCom()}
-                    </span>
+                    />
                   </div>
+                ) : (
+                  <div className="addFilterIcon pointer">{this.renderSearchCom()}</div>
                 )}
               </SettingItem>
+
+              {/**普通、关联单条、级联 */}
+              {(normalField || (data.type === 29 && data.enumDefault === 1) || selfCascader) && (
+                <SettingItem className="mTop12">
+                  <div className="settingItemTitle">{_l('查询到多条时')}</div>
+                  <RadioGroup
+                    size="middle"
+                    checkedValue={moreType}
+                    data={RadioDisplay}
+                    onChange={value => this.setState({ moreType: value })}
+                  />
+                </SettingItem>
+              )}
+
               <SettingItem className="mTop12">
-                <div className="settingItemTitle">{_l('查询到记录后')}</div>
+                <div className="settingItemTitle">{_l('排序规则')}</div>
+                <SortConditions
+                  className="searchWorksheetSort"
+                  helperClass="zIndex99999"
+                  columns={controls.filter(o => ![22, 43, 45, 49, 51, 52, 10010].includes(o.type))}
+                  sortConditions={moreSort}
+                  showSystemControls
+                  onChange={value =>
+                    this.setState({
+                      moreSort: value.map(i => ({
+                        ...i,
+                        dataType: _.get(
+                          _.find(controls, c => c.controlId === i.controlId),
+                          'type',
+                        ),
+                      })),
+                    })
+                  }
+                />
+              </SettingItem>
+
+              {/**关联多条、子表 */}
+              {(data.type === 34 || (data.type === 29 && data.enumDefault === 2)) && (
+                <SettingItem className="mTop12">
+                  <div className="settingItemTitle">{_l('查询数量')}</div>
+                  <InputValue
+                    className="w100"
+                    type={2}
+                    placeholder={getDefaultCount(data)}
+                    value={queryCount ? queryCount.toString() : undefined}
+                    onChange={value => this.setState({ queryCount: value })}
+                    onBlur={value => {
+                      this.setState({ queryCount: getDefaultCount(data, value) });
+                    }}
+                  />
+                </SettingItem>
+              )}
+
+              <SettingItem className="mTop12">
+                <div className="settingItemTitle">{_l('赋值')}</div>
                 {normalField && (
                   <Fragment>
-                    <div className="Gray_75 mBottom12">{_l('如果查询到多条，取最新创建的一条')}</div>
                     <div>
                       {_l('将')}
                       <Dropdown
@@ -462,26 +615,27 @@ export default class SearchWorksheetDialog extends Component {
                         disabled={!sheetId}
                         value={isDelete ? undefined : _.get(configs[0] || {}, 'subCid')}
                         data={this.getDropData(controls, data)}
+                        renderItem={(selectData = {}) => {
+                          return (
+                            <span>
+                              {selectData.text}
+                              {selectData.isEqualSource && (
+                                <span className="Gray_9e subText">（{_l('相同选项集')}）</span>
+                              )}
+                            </span>
+                          );
+                        }}
                         onChange={controlId => this.setState({ configs: [{ cid: data.controlId, subCid: controlId }] })}
                       />
                       {_l('的值写入当前字段')}
                     </div>
                   </Fragment>
                 )}
-                {relateField && (
-                  <div>
-                    {_l(
-                      '将查询到的%0记录关联到当前字段',
-                      data.enumDefault === 1
-                        ? _l('最新一条')
-                        : _l('最多%0条', _.get(data.advancedSetting || {}, 'showtype') !== '2' ? 50 : 200),
-                    )}
-                  </div>
-                )}
+                {selfRelate && <div>{_l('将获取到的记录写入到当前字段')}</div>}
                 {subField && (
                   <div>
                     <div className="Gray_75 mBottom12">
-                      {_l('将查询到的最多200条记录字段写入子表字段，每行记录添加为一行子表明细')}
+                      {_l('查询到的每行记录添加为一行子表明细。请选择需要写入的字段。')}
                     </div>
                     {this.renderMapping()}
                     <Trigger
@@ -513,7 +667,7 @@ export default class SearchWorksheetDialog extends Component {
                         },
                       }}
                     >
-                      <div className="addFilterCondition pointer">
+                      <div className="addFilterIcon pointer">
                         <span
                           onClick={() => {
                             if (!sheetId) {

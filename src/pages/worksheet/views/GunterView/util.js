@@ -7,13 +7,14 @@ import moment from 'moment';
 /**
  * 修改当前视图配置
  */
-export const changeViewConfig = (value = PERIOD_TYPE.day, viewConfig) => {
-  const { minDayWidth, defaultMinDayWidth } = _.find(PERIODS, { value });
-  const count = getPeriodCount(value, minDayWidth, viewConfig);
+export const changeViewConfig = (value, viewConfig) => {
+  const periodType = value || PERIOD_TYPE.day;
+  const { minDayWidth, defaultMinDayWidth } = _.find(PERIODS, { value: periodType });
+  const count = getPeriodCount(periodType, minDayWidth, viewConfig);
   return Object.assign(viewConfig, {
     periodCount: count,
     minDayWidth,
-    periodType: value
+    periodType
   });
 }
 
@@ -528,10 +529,10 @@ export const fillRecordsTimeBlockColor = (grouping, colorControl) => {
 export const fillRecordTimeBlockColor = (record, colorControl = {}) => {
   const { controlId, options } = colorControl;
   const defaultColor = '#2196F3';
-  if (record[controlId]) {
+  if (record[controlId] && colorControl.enumDefault2 === 1) {
     const value = JSON.parse(record[controlId]);
     const colorId = _.isArray(value) ? value[0] : null;
-    const { color } = _.find(options, { key: colorId }) || {};
+    const { color } = _.find(options, { key: colorId && colorId.startsWith('other') ? 'other' : colorId }) || {};
     record.color = color || defaultColor;
   } else {
     record.color = defaultColor;

@@ -54,6 +54,7 @@ export default class RecordCardListDialog extends Component {
     coverCid: PropTypes.string, // 封面字段 id
     showControls: PropTypes.arrayOf(PropTypes.string), // 显示在卡片里的字段 id 数组
     filterRowIds: PropTypes.arrayOf(PropTypes.string), // 过滤的记录
+    ignoreRowIds: PropTypes.arrayOf(PropTypes.string), // 给卡片用的，传后后端过滤已关联时会忽略这些记录
     filterRelatesheetControlIds: PropTypes.arrayOf(PropTypes.string), // 过滤的关联表控件对应控件id
     defaultRelatedSheet: PropTypes.shape({}),
     singleConfirm: PropTypes.bool, // 单选需要确认
@@ -64,6 +65,7 @@ export default class RecordCardListDialog extends Component {
     onOk: PropTypes.func, // 确定回掉
     onText: PropTypes.string,
     formData: PropTypes.arrayOf(PropTypes.shape({})),
+    pageSize: PropTypes.number,
   };
   static defaultProps = {
     allowNewRecord: true,
@@ -74,6 +76,7 @@ export default class RecordCardListDialog extends Component {
     onOk: () => {},
     formData: [],
     singleConfirm: false,
+    pageSize: 50,
   };
   conRef = React.createRef();
   listRef = React.createRef();
@@ -96,10 +99,17 @@ export default class RecordCardListDialog extends Component {
     this.handleSearch = _.debounce(this.handleSearch, 500);
   }
   componentDidMount() {
-    const { control } = this.props;
+    const { control, parentWorksheetId } = this.props;
     if (control) {
-      (window.isPublicWorksheet ? publicWorksheetAjax : sheetAjax)
-        .getWorksheetInfo({ worksheetId: control.dataSource, getTemplate: true })
+      (window.isPublicWorksheet && !_.get(window, 'shareState.isPublicWorkflowRecord')
+        ? publicWorksheetAjax
+        : sheetAjax
+      )
+        .getWorksheetInfo({
+          worksheetId: control.dataSource,
+          getTemplate: true,
+          relationWorksheetId: parentWorksheetId,
+        })
         .then(data => {
           window.worksheetControlsCache = {};
           data.template.controls.forEach(c => {
@@ -109,7 +119,7 @@ export default class RecordCardListDialog extends Component {
           });
           this.setState(
             {
-              allowAdd: data.allowAdd,
+              allowAdd: _.get(window, 'shareState.isPublicFormPreview') ? false : data.allowAdd,
               worksheetInfo: data,
             },
             this.loadRecord,
@@ -183,12 +193,13 @@ export default class RecordCardListDialog extends Component {
       viewId,
       relateSheetId,
       filterRowIds,
+      ignoreRowIds,
       parentWorksheetId,
       recordId,
       controlId,
       control,
       formData,
-      multiple,
+      pageSize,
     } = this.props;
     const {
       pageIndex,
@@ -199,8 +210,9 @@ export default class RecordCardListDialog extends Component {
       filterForControlSearch,
       worksheetInfo,
     } = this.state;
+    const searchConfig = control ? getSearchConfig(control) : {};
+    const { searchControl } = searchConfig;
     let getFilterRowsPromise, args;
-    const pageSize = 50;
     let filterControls;
     if (control && control.advancedSetting.filters) {
       if (worksheetInfo) {
@@ -249,26 +261,33 @@ export default class RecordCardListDialog extends Component {
       getFilterRowsPromise = sheetAjax.getFilterRows;
     } else {
       getFilterRowsPromise = publicWorksheetAjax.getRelationRows;
-      if (window.recordShareLinkId) {
-        args.linkId = window.recordShareLinkId;
-      }
-      args.formId = window.publicWorksheetShareId;
+      args.shareId = window.publicWorksheetShareId;
     }
-    if (parentWorksheetId && controlId) {
+    if (parentWorksheetId && controlId && _.get(parentWorksheetId, 'length') === 24) {
       args.relationWorksheetId = parentWorksheetId;
       args.rowId = recordId;
       args.controlId = controlId;
+      if (ignoreRowIds) {
+        args.requestParams = {
+          _system_excluderowids: JSON.stringify(ignoreRowIds),
+        };
+      }
     }
     this.searchAjax = getFilterRowsPromise(args);
     this.searchAjax.then(res => {
       if (res.resultCode === 1) {
-        const filteredList = _.uniqBy(
+        let filteredList = _.uniqBy(
           list.concat(res.data.filter(record => !_.find(filterRowIds, fid => record.rowid === fid))),
           'rowid',
         );
+        const needSort =
+          keyWords && pageIndex === 1 && _.get(control, 'advancedSetting.searchcontrol') && searchControl;
+        if (needSort && _.get(control, 'advancedSetting.searchtype') !== '1') {
+          filteredList = filteredList.sort((a, b) => (b[searchControl.controlId] === keyWords ? 1 : -1));
+        }
         this.setState(
           {
-            focusIndex: -1,
+            focusIndex: needSort && filteredList[0] && filteredList[0][searchControl.controlId] === keyWords ? 0 : -1,
             list: filteredList,
             loading: false,
             loadouted: res.data.length < pageSize,
@@ -395,7 +414,7 @@ export default class RecordCardListDialog extends Component {
     const titleControl = _.find(controls, c => c.attribute === 1);
     const allControls = [
       { controlId: 'ownerid', controlName: _l('拥有者'), type: 26 },
-      { controlId: 'caid', controlName: _l('创建者'), type: 26 },
+      { controlId: 'caid', controlName: _l('创建人'), type: 26 },
       { controlId: 'ctime', controlName: _l('创建时间'), type: 16 },
       { controlId: 'utime', controlName: _l('最近修改时间'), type: 16 },
     ].concat(controls);
@@ -476,6 +495,7 @@ export default class RecordCardListDialog extends Component {
             <Header
               entityName={worksheet.entityName}
               projectId={worksheet.projectId}
+              appId={worksheet.appId}
               control={control}
               searchConfig={searchConfig}
               controls={controls}
@@ -536,6 +556,7 @@ export default class RecordCardListDialog extends Component {
                           coverCid={coverCid}
                           isCharge={isCharge}
                           projectId={worksheet.projectId}
+                          worksheetId={relateSheetId}
                           showControls={cardControls.map(c => c.controlId)}
                           controls={controls}
                           data={record}
@@ -562,7 +583,11 @@ export default class RecordCardListDialog extends Component {
                             </p>
                           ) : (
                             <p className="emptyTip">
-                              {keyWords ? _l('无匹配的结果') : _l('暂无%0', worksheet.entityName || _l('记录'))}
+                              {keyWords
+                                ? _l('无匹配的结果')
+                                : worksheet.entityName
+                                ? _l('暂无%0', worksheet.entityName)
+                                : _l('暂无记录')}
                             </p>
                           )}
                         </div>

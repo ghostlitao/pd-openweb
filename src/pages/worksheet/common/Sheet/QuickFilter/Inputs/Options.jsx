@@ -56,6 +56,7 @@ const Con = styled.div`
       }
     }
     .isEmpty {
+      color: inherit !important;
       margin-left: 0px !important;
       padding-left: 0px !important;
       .icon-close {
@@ -99,7 +100,7 @@ function pickOptions(options, navfilters) {
   }
 }
 export default function Options(props) {
-  const { isMultiple, values = [], control, advancedSetting = {}, onChange = () => {} } = props;
+  const { filterType, isMultiple, values = [], control, advancedSetting = {}, onChange = () => {} } = props;
   const { allowitem, direction, navshow, navfilters, shownullitem, nullitemname } = advancedSetting;
   let { options } = control;
   if (String(navshow) === '2') {
@@ -127,7 +128,7 @@ export default function Options(props) {
           .filter(o => !o.isDeleted)
           .map((o, i) => (
             <Option
-              className={cx('ellipsis', { checked: _.includes(values, o.key) })}
+              className={cx({ multiple, checked: _.includes(values, o.key) })}
               title={o.value}
               key={i}
               onClick={() => {
@@ -142,7 +143,8 @@ export default function Options(props) {
                 }
               }}
             >
-              {o.value}
+              {multiple && _.includes(values, o.key) && <span className="icon-hr_ok selectedIcon"></span>}
+              <div className="ellipsis">{o.value}</div>
             </Option>
           ))}
       </FullLineCon>

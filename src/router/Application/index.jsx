@@ -1,12 +1,12 @@
 import React, { Component } from 'react';
 import { Switch } from 'react-router-dom';
 import genRouteComponent from '../genRouteComponent';
-import ROUTE_CONFIG from './config';
-import PORTAL_ROUTE_CONFIG from './portalConfig';
+import { ROUTE_CONFIG, PORTAL_ROUTE_CONFIG } from './config';
 import ajaxRequest from 'src/api/homeApp';
 import { LoadDiv } from 'ming-ui';
-import UnusualContent from './UnusualContent';
-import FixedContent from './FixedContent';
+import UnusualContent from 'src/components/UnusualContent';
+import FixedContent from 'src/components/FixedContent';
+import UpgradeContent from 'src/components/UpgradeContent';
 import { getIds } from '../../pages/PageHeader/util';
 import { connect } from 'react-redux';
 import { setAppStatus } from '../../pages/PageHeader/redux/action';
@@ -39,7 +39,10 @@ export default class Application extends Component {
   }
 
   componentWillReceiveProps(nextProps) {
-    if (nextProps.match.params.appId !== this.props.match.params.appId || location.href.indexOf('from=system') > -1) {
+    if (
+      nextProps.match.params.appId !== this.props.match.params.appId ||
+      (window.redirected && location.href.indexOf('from=system') > -1)
+    ) {
       this.checkApp(nextProps.match.params.appId);
     }
   }
@@ -77,7 +80,7 @@ export default class Application extends Component {
         }
       })
       .fail(() => {
-        this.setState({ status: 3 });
+        this.setState({ status: 6 });
       });
   }
 
@@ -91,17 +94,25 @@ export default class Application extends Component {
     if (md.global.Account.isPortal) {
       appId = md.global.Account.appId;
     }
-    const { permissionType, fixed, pcDisplay } = appPkg;
+    const { permissionType, fixed, pcDisplay, appStatus } = appPkg;
     const isAuthorityApp = canEditApp(permissionType);
+
     if (status === 0) {
       return <LoadDiv />;
     }
+
+    if (appStatus === 10) {
+      return <UpgradeContent appPkg={appPkg} />;
+    }
+
     if ((pcDisplay || fixed) && !isAuthorityApp && !_.includes(pathname, 'role')) {
       return <FixedContent appPkg={appPkg} isNoPublish={pcDisplay} />;
     }
+
     if (_.includes([1], status) || (status === 5 && _.includes(pathname, 'role'))) {
       return <Switch>{this.genRouteComponent(md.global.Account.isPortal ? PORTAL_ROUTE_CONFIG : ROUTE_CONFIG)}</Switch>;
     }
-    return <UnusualContent status={status} appId={appId} />;
+
+    return <UnusualContent appPkg={appPkg} status={status} appId={appId} />;
   }
 }

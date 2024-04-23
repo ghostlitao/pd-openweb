@@ -75,7 +75,7 @@ export default class Widgets extends Component {
     }
     value = this.formatValueToMoment(value);
     const timeinterval = advancedSetting.timeinterval || '1';
-    const lang = getCookie('i18n_langtag') || getNavigatorLang();
+    const lang = getCookie('i18n_langtag') || md.global.Config.DefaultLang;
     let minDate;
     let maxDate;
 
@@ -222,7 +222,7 @@ export default class Widgets extends Component {
               if (current && minDate) {
                 for (let i = 0; i < 60; i++) {
                   if (
-                    moment(current).hour() === this.formatValueToMoment(minDate).hour() &&
+                    selectHours === this.formatValueToMoment(minDate).hour() &&
                     i < this.formatValueToMoment(minDate).minute()
                   ) {
                     result.push(i);
@@ -233,7 +233,7 @@ export default class Widgets extends Component {
               if (current && maxDate) {
                 for (let i = 0; i < 60; i++) {
                   if (
-                    moment(current).hour() === this.formatValueToMoment(maxDate).hour() &&
+                    selectHours === this.formatValueToMoment(maxDate).hour() &&
                     i > this.formatValueToMoment(maxDate).minute()
                   ) {
                     result.push(i);
@@ -249,7 +249,9 @@ export default class Widgets extends Component {
         onOpenChange={open => {
           if (open && parseInt(timeArr[0]) === 0 && parseInt(timeArr[1]) === 24) {
             setTimeout(() => {
-              $(`.customAntPicker_${controlId}`).find('.ant-picker-time-panel-column:first').scrollTop(220);
+              $(`.customAntPicker_${controlId}`)
+                .find('.ant-picker-time-panel-column:first')
+                .scrollTop(220);
             }, 200);
           }
         }}

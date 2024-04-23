@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal } from 'antd-mobile';
 import { Icon } from 'ming-ui';
 import { canEditApp, canEditData } from 'src/pages/worksheet/redux/actions/util.js';
+import appManagementApi from 'src/api/appManagement';
 import styled from 'styled-components';
 import cx from 'classnames';
 
@@ -53,6 +54,20 @@ export default function MoreAction(props) {
     navigateTo = () => {},
     dealViewHideNavi = () => {},
   } = props;
+  const [roleEntryVisible, setRoleEntryVisible] = useState(true);
+
+  useEffect(() => {
+    if (!canEditData(detail.permissionType) && !canEditApp(detail.permissionType, detail.isLock)) {
+      appManagementApi
+        .getAppRoleSetting({
+          appId: detail.id,
+        })
+        .then(data => {
+          const { appSettingsEnum } = data;
+          setRoleEntryVisible(appSettingsEnum === 1);
+        });
+    }
+  }, []);
 
   return (
     <ModalWrap popup animationType="slide-up" visible={visible} className="appMoreActionWrap" onClose={() => onClose}>
@@ -66,18 +81,20 @@ export default function MoreAction(props) {
         {!window.isPublicApp && (
           <div onClick={() => dealMarked(!detail.isMarked ? true : false)}>
             <Icon icon="star_3" className={cx('Gray_9e mRight24 Font20 TxtMiddle', { active: detail.isMarked })} />
-            <span>{detail.isMarked ? _l('取消标星') : _l('标星')}</span>
+            <span>{detail.isMarked ? _l('取消收藏') : _l('收藏应用')}</span>
           </div>
         )}
-        <div
-          onClick={() => {
-            window.mobileNavigateTo(`/mobile/members/${detail.id}`);
-            onClose();
-          }}
-        >
-          <Icon icon="group" className="Gray_9e mRight24 Font20 TxtMiddle" />
-          <span>{_l('人员管理')}</span>
-        </div>
+        {roleEntryVisible && (
+          <div
+            onClick={() => {
+              window.mobileNavigateTo(`/mobile/members/${detail.id}`);
+              onClose();
+            }}
+          >
+            <Icon icon="group" className="Gray_9e mRight24 Font20 TxtMiddle" />
+            <span>{_l('人员管理')}</span>
+          </div>
+        )}
         {(canEditApp(detail.permissionType, detail.isLock) || canEditData(detail.permissionType)) && (
           <div
             onClick={() => {
@@ -89,7 +106,7 @@ export default function MoreAction(props) {
               icon={viewHideNavi ? 'public-folder-hidden' : 'visibility'}
               className={'Gray_9e mRight24 Font20 TxtMiddle'}
             />
-            <span>{viewHideNavi ? _l('不显示应用隐藏项') : _l('显示应用隐藏项')}</span>
+            <span>{viewHideNavi ? _l('不显示隐藏的应用项') : _l('显示隐藏的应用项')}</span>
           </div>
         )}
       </div>

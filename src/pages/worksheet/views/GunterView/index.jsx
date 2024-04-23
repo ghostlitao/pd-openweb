@@ -36,9 +36,9 @@ const isGunterExport = location.href.includes('gunterExport');
 export default class Gunter extends Component {
   constructor(props) {
     super(props);
-    const gunterDirectoryWidth = localStorage.getItem('gunterDirectoryWidth');
+    const { view } = props;
     this.state = {
-      directoryWidth: isGunterExport ? 570 : gunterDirectoryWidth ? Number(gunterDirectoryWidth) : 210,
+      directoryWidth: this.getDirectoryWidth(view.viewId),
       dragMaskVisible: false,
       maxWidth: 0,
     };
@@ -71,9 +71,13 @@ export default class Gunter extends Component {
     if (
       view.viewId !== this.props.view.viewId ||
       view.advancedSetting.navshow !== this.props.view.advancedSetting.navshow || //显示项设置 更新数据
-      view.advancedSetting.navfilters !== this.props.view.advancedSetting.navfilters
+      view.advancedSetting.navfilters !== this.props.view.advancedSetting.navfilters ||
+      view.moreSort !== this.props.view.moreSort // 排序
     ) {
       this.props.resetLoadGunterView();
+      this.setState({
+        directoryWidth: this.getDirectoryWidth(view.viewId),
+      });
     }
     if (view.advancedSetting.calendartype !== this.props.view.advancedSetting.calendartype) {
       const type = view.advancedSetting.calendartype ? Number(view.advancedSetting.calendartype) : PERIOD_TYPE.day;
@@ -87,6 +91,9 @@ export default class Gunter extends Component {
       this.props.updateViewConfig();
       this.props.updateRecordTimeBlockColor();
     }
+    if (view.advancedSetting.clicktype !== this.props.view.advancedSetting.clicktype) {
+      this.props.updateViewConfig();
+    }
     if (
       view.viewControl !== this.props.view.viewControl ||
       view.advancedSetting.milepost !== this.props.view.advancedSetting.milepost ||
@@ -96,6 +103,19 @@ export default class Gunter extends Component {
       this.props.updateViewConfig();
       this.props.fetchRows();
     }
+    if (!_.isEqual(view.displayControls, this.props.view.displayControls)) {
+      // 等待 Worksheet/SaveWorksheetView 接口更新 displayControls 后再重新请求
+      setTimeout(() => {
+        this.props.updateViewConfig();
+        this.props.fetchRows();
+      }, 200);
+    }
+  }
+  getDirectoryWidth(viewId) {
+    const gunterDirectoryWidth = localStorage.getItem(`gunterDirectoryWidth-${viewId}`);
+    const worksheetContentBoxEl = document.querySelector('.worksheetSheet');
+    const contentBoxWidth = worksheetContentBoxEl ? worksheetContentBoxEl.clientWidth / 3 : 210;
+    return isGunterExport ? 570 : gunterDirectoryWidth ? Number(gunterDirectoryWidth) : contentBoxWidth;
   }
   render() {
     const { view, loading, groupingVisible, layoutType } = this.props;
@@ -114,7 +134,7 @@ export default class Gunter extends Component {
                 onChange={value => {
                   const { chartScroll, groupingScroll } = this.props;
                   this.setState({ dragMaskVisible: false, directoryWidth: value });
-                  safeLocalStorageSetItem('gunterDirectoryWidth', value);
+                  safeLocalStorageSetItem(`gunterDirectoryWidth-${view.viewId}`, value);
                   chartScroll.refresh();
                   chartScroll._execEvent('scroll');
                   groupingScroll.refresh();

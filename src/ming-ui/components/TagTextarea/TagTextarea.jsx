@@ -27,6 +27,8 @@ export default class TagTextarea extends React.Component {
     onChange: PropTypes.func,
     onFocus: PropTypes.func,
     onBlur: PropTypes.func,
+    codeMirrorMode: PropTypes.string,
+    lineNumbers: PropTypes.bool,
   };
 
   static defaultProps = {
@@ -35,6 +37,7 @@ export default class TagTextarea extends React.Component {
     operatorsSetMargin: false,
     defaultValue: '',
     noCursor: false,
+    lineNumbers: false,
     getRef: () => {},
     onAddClick: () => {},
     onChange: () => {},
@@ -50,13 +53,26 @@ export default class TagTextarea extends React.Component {
   }
 
   componentDidMount() {
-    const { defaultValue, height, onFocus, onBlur, getRef, readonly, noCursor, placeholder } = this.props;
+    const {
+      defaultValue,
+      height,
+      onFocus,
+      onBlur,
+      getRef,
+      readonly,
+      noCursor,
+      placeholder,
+      codeMirrorMode,
+      lineNumbers,
+    } = this.props;
     getRef(this);
     if (this.cmcon) {
       this.cmObj = CodeMirror(this.cmcon, {
         value: defaultValue,
-        mode: null,
+        mode: codeMirrorMode || null,
+        lineNumbers,
         lineWrapping: true,
+        readOnly: readonly,
         cursorHeight: noCursor || readonly ? 0 : 1,
         placeholder: placeholder || null,
       });
@@ -74,11 +90,10 @@ export default class TagTextarea extends React.Component {
         }
         // 事件内，mode只能从每次this.props取，不然取不到最新
         if (
-          this.props.readonly ||
-          (this.props.mode === MODE.ONLYTAG &&
-            obj.origin !== '+delete' &&
-            obj.origin !== 'inserttag' &&
-            obj.origin !== 'setValue')
+          this.props.mode === MODE.ONLYTAG &&
+          obj.origin !== '+delete' &&
+          obj.origin !== 'inserttag' &&
+          obj.origin !== 'setValue'
         ) {
           obj.cancel();
         }

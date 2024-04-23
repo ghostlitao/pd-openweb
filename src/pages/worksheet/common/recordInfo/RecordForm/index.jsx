@@ -1,23 +1,21 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useContext } from 'react';
 import PropTypes from 'prop-types';
 import cx from 'classnames';
 import styled from 'styled-components';
-import { ScrollView } from 'ming-ui';
+import { ScrollView, Skeleton } from 'ming-ui';
 import DocumentTitle from 'react-document-title';
-import Skeleton from 'src/router/Application/Skeleton';
-import { isRelateRecordTableControl, replaceByIndex } from 'worksheet/util';
+import ViewContext from 'worksheet/views/ViewContext';
 import { RECORD_INFO_FROM } from 'worksheet/constants/enum';
 import CustomFields from 'src/components/newCustomFields';
 import DragMask from 'worksheet/common/DragMask';
-import { controlState } from 'src/components/newCustomFields/tools/utils';
+import { controlState, getControlsByTab } from 'src/components/newCustomFields/tools/utils';
 import { updateRulesData } from 'src/components/newCustomFields/tools/filterFn';
 import FormHeader from './FormHeader';
 import FormCover from './FormCover';
 import Abnormal from './Abnormal';
-import RelateRecordTableNav from './RelateRecordTableNav';
-import RelateRecordBlock from './RelateRecordBlock';
+import SectionTableNav from '../../../../../components/newCustomFields/components/SectionTableNav';
 import { browserIsMobile } from 'src/util';
-import _ from 'lodash';
+import _, { get } from 'lodash';
 
 const ShadowCon = styled.div`
   width: 100%;
@@ -28,6 +26,7 @@ const ShadowCon = styled.div`
 `;
 
 const HIDDEN_CONTROL_IDS = ['rowid'];
+const NOT_LOGIN_HIDDEN_TYPES = [26, 27, 21, 48];
 
 const Shadow = styled.div`
   margin-top: 6px;
@@ -107,14 +106,13 @@ export default function RecordForm(props) {
     relateRecordData,
     view = {},
     showError,
-    iseditting,
     sheetSwitchPermit,
     mountRef,
-    addRefreshEvents,
     updateRecordDialogOwner,
     updateRows,
     updateRelateRecordNum = () => {},
     onRelateRecordsChange = () => {},
+    updateWorksheetControls,
     registerCell = () => {},
     onChange,
     onCancel,
@@ -142,6 +140,7 @@ export default function RecordForm(props) {
     });
   });
   const { isSmall, isSubList, worksheetId, recordId, recordTitle, allowEdit, viewId = '' } = recordbase;
+  const viewContext = useContext(ViewContext);
   if (loading) {
     return (
       <div className="contentBox flexColumn" style={{ width: formWidth }}>
@@ -171,32 +170,40 @@ export default function RecordForm(props) {
       </div>
     );
   }
-  const relateRecordTableControls = _.sortBy(
-    updateRulesData({
-      from: recordId && from !== 21 ? 3 : 2,
-      rules: recordinfo.rules,
-      data: formdata,
-    })
-      .filter(
-        control =>
-          isRelateRecordTableControl(control) && controlState(control, recordId && from !== 21 ? 3 : 2).visible,
-      )
-      .map(c => (!ignoreLock && isLock ? { ...c, disabled: true } : c)),
-    'row',
-  ).filter(c => !c.hidden);
+  const dealFrom = recordId && from !== 21 ? 3 : 2;
+  const getRulesData = updateRulesData({
+    from: dealFrom,
+    rules: recordinfo.rules,
+    data: formdata,
+    recordId,
+  })
+    .filter(control => controlState(control, dealFrom).visible)
+    .map(c =>
+      Object.assign(!ignoreLock && isLock ? { ...c, disabled: true } : c, {
+        isDraft: from === RECORD_INFO_FROM.DRAFT,
+      }),
+    )
+    .filter(c => !c.hidden);
+  const { commonData = [], tabData = [] } = getControlsByTab(getRulesData);
+  // 标签页下无可见字段，隐藏标签页
+  const tabControls = tabData.filter(tab => {
+    if (tab.type === 52) {
+      const childWidgets = getRulesData.filter(i => i.sectionId === tab.controlId);
+      return !_.every(childWidgets, c => !(controlState(c, dealFrom).visible && !c.hidden));
+    }
+    return true;
+  });
   const scrollRef = useRef();
   const customwidget = useRef();
   const recordForm = useRef();
   const nav = useRef();
   const [isSplit, setIsSplit] = useState(
-    Boolean(localStorage.getItem('recordinfoSplitHeight')) && recordId && relateRecordTableControls.length,
+    Boolean(localStorage.getItem('recordinfoSplitHeight')) && recordId && tabControls.length,
   );
   const [formHeight, setFormHeight] = useState(0);
   const [topHeight, setTopHeight] = useState(getTopHeight());
   const [dragVisible, setDragVisible] = useState();
-  const [navScrollLeft, setNavScrollLeft] = useState(0);
   const [relateNumOfControl, setRelateNumOfControl] = useState({});
-  const [activeRelateRecordControlId, setActiveRelateRecordControlId] = useState();
   const systemControlData = [
     {
       controlId: 'caid',
@@ -238,7 +245,7 @@ export default function RecordForm(props) {
     }
   }
   function setNavVisible() {
-    if (!relateRecordTableControls.length || type !== 'edit' || !recordForm.current || !nav.current) {
+    if (!tabControls.length || type !== 'edit' || !recordForm.current || !nav.current) {
       return;
     }
     if (_.get(scrollRef, 'current.triggerNanoScroller')) {
@@ -250,12 +257,14 @@ export default function RecordForm(props) {
     const visible =
       scrollContentElement.scrollTop + scrollConElement.clientHeight <
       formElement.clientHeight + formElement.offsetTop + 58 + 26 + 1;
-    nav.current.style.zIndex = visible ? 1 : -1;
+    nav.current.style.zIndex = visible ? 3 : -1;
   }
-  function setStickyBarVisible() {
-    const scrollContentElement = recordForm.current.querySelector('.recordInfoFormScroll > .nano-content');
-    const stickyBar = recordForm.current.querySelector('.recordInfoFormScroll .stickyBar');
-    const recordTitle = recordForm.current.querySelector('.recordInfoFormScroll .recordTitle');
+  function setStickyBarVisible({ isSplit } = {}) {
+    const scrollContentElement = recordForm.current.querySelector(
+      isSplit ? '.topCon' : '.recordInfoFormScroll > .nano-content',
+    );
+    const stickyBar = recordForm.current.querySelector('.topCon .stickyBar');
+    const recordTitle = recordForm.current.querySelector('.topCon .recordTitle');
     const visible = scrollContentElement.scrollTop > recordTitle.offsetTop + recordTitle.offsetHeight;
     stickyBar.id = visible ? 'stickyBarActive' : '';
   }
@@ -300,9 +309,25 @@ export default function RecordForm(props) {
                 }
               : {})}
           >
-            <div className="topCon" style={isSplit ? { height: topHeight || 300 } : {}}>
+            <div
+              className="topCon"
+              style={isSplit ? { height: topHeight || 300 } : {}}
+              onScroll={
+                isSplit
+                  ? () => {
+                      setStickyBarVisible({ isSplit: true });
+                    }
+                  : () => {}
+              }
+            >
               {type === 'edit' && !isSubList && (
-                <FormCover flag={formFlag} formData={formdata} widgetStyle={widgetStyle} />
+                <FormCover
+                  flag={formFlag}
+                  formData={formdata}
+                  widgetStyle={widgetStyle}
+                  worksheetId={worksheetId}
+                  recordId={recordId}
+                />
               )}
               {type === 'edit' && (
                 <StickyBar
@@ -340,7 +365,11 @@ export default function RecordForm(props) {
                   flag={formFlag}
                   widgetStyle={widgetStyle}
                   controlProps={controlProps}
-                  data={formdata.filter(c => !_.includes(HIDDEN_CONTROL_IDS, c.controlId))}
+                  data={formdata.filter(
+                    c =>
+                      !_.includes(HIDDEN_CONTROL_IDS, c.controlId) &&
+                      !(_.get(window, 'shareState.isPublicForm') && _.includes(NOT_LOGIN_HIDDEN_TYPES, c.type)),
+                  )}
                   systemControlData={systemControlData}
                   rules={recordinfo.rules}
                   isWorksheetQuery={recordinfo.isWorksheetQuery}
@@ -358,8 +387,9 @@ export default function RecordForm(props) {
                   onError={onError}
                   sheetSwitchPermit={sheetSwitchPermit}
                   viewId={viewId}
+                  showSplitIcon={type === 'edit' && commonData.length > 0}
                   appId={recordinfo.appId}
-                  isCharge={recordbase.isCharge}
+                  isCharge={get(viewContext, 'isCharge') || recordbase.isCharge}
                   onFormDataReady={dataFormat => {
                     setNavVisible();
                     if (!recordId) {
@@ -367,71 +397,58 @@ export default function RecordForm(props) {
                     }
                   }}
                   onWidgetChange={onWidgetChange}
+                  // 关联列表拆进去补充参数
+                  tabControlProp={{
+                    formdata,
+                    isSplit,
+                    setSplit,
+                    formWidth,
+                    scrollToTable,
+                    beginDrag: () => setDragVisible(true),
+                    updateRelateRecordNum,
+                    recordbase: { ...recordbase, allowEdit: isLock ? false : recordbase.allowEdit },
+                    // 新建记录更新
+                    relateRecordData,
+                    setNavVisible,
+                    splitTabDom: recordForm.current && recordForm.current.querySelector('#newCustomTabSectionWrap'),
+                    setRelateNumOfControl: (value, controlId, updatedControl) => {
+                      const num = value;
+                      const changes = { [controlId]: num };
+                      setRelateNumOfControl({ ...relateNumOfControl, ...changes });
+                      updateRows([recordId], changes, changes);
+                      updateRelateRecordNum(controlId, num);
+                    },
+                    onRelateRecordsChange,
+                    updateWorksheetControls,
+                  }}
                 />
               </div>
             </div>
-            <div className={cx('relateRecordBlockCon', { flex: isSplit })}>
-              {!isMobile && !!relateRecordTableControls.length && (
-                <RelateRecordBlock
-                  from={from}
-                  formWidth={formWidth}
-                  sideVisible={controlProps.sideVisible}
-                  isSplit={isSplit}
-                  setSplit={setSplit}
-                  formdata={formdata.concat(systemControlData)}
-                  beginDrag={() => setDragVisible(true)}
-                  relateNumOfControl={relateNumOfControl}
-                  navScrollLeft={navScrollLeft}
-                  activeId={activeRelateRecordControlId || relateRecordTableControls[0].controlId}
-                  recordbase={{ ...recordbase, allowEdit: isLock ? false : recordbase.allowEdit }}
-                  recordinfo={recordinfo}
-                  controls={relateRecordTableControls}
-                  relateRecordData={relateRecordData}
-                  sheetSwitchPermit={sheetSwitchPermit}
-                  addRefreshEvents={addRefreshEvents}
-                  setRelateNumOfControl={(value, controlId, updatedControl) => {
-                    const num = value;
-                    const changes = { [controlId]: num };
-                    setRelateNumOfControl({ ...relateNumOfControl, ...changes });
-                    updateRows([recordId], changes, changes);
-                    updateRelateRecordNum(controlId, num);
-                  }}
-                  onRelateRecordsChange={onRelateRecordsChange}
-                  onActiveIdChange={controlId => {
-                    setActiveRelateRecordControlId(controlId);
-                  }}
-                  onScrollLeftChange={value => {
-                    setNavScrollLeft(value);
-                  }}
-                  scrollToBottom={scrollToTable}
-                />
-              )}
-            </div>
             {type === 'edit' && !isSplit && <Bottom />}
           </Con>
-          {!isSplit && type === 'edit' && !!relateRecordTableControls.length && (
+          <div id="newCustomTabSectionWrap" className={cx('relateRecordBlockCon', { flex: isSplit })}></div>
+          {!isSplit && type === 'edit' && !!tabControls.length && (
             <FixedCon ref={nav}>
               <ShadowCon>
                 <Shadow />
               </ShadowCon>
-              <RelateRecordTableNav
+              <SectionTableNav
                 sideVisible={controlProps.sideVisible}
-                showSplitIcon={!!recordId}
+                showSplitIcon={!!recordId && commonData.length > 0}
+                widgetStyle={widgetStyle}
                 setSplit={setSplit}
                 isSplit={isSplit}
-                scrollLeft={navScrollLeft}
                 controls={
                   recordId
-                    ? relateRecordTableControls.map(c =>
+                    ? tabControls.map(c =>
                         !_.isUndefined(relateNumOfControl[c.controlId])
                           ? { ...c, value: relateNumOfControl[c.controlId] }
                           : c,
                       )
-                    : relateRecordTableControls
+                    : tabControls
                 }
-                onScrollLeftChange={setNavScrollLeft}
                 onClick={controlId => {
-                  setActiveRelateRecordControlId(controlId);
+                  customwidget.current.setActiveTabControlId(controlId);
                   scrollToTable();
                 }}
               />
@@ -450,14 +467,13 @@ RecordForm.propTypes = {
   type: PropTypes.string,
   loading: PropTypes.bool,
   showError: PropTypes.bool,
-  formFlag: PropTypes.string,
+  formFlag: PropTypes.any,
   abnormal: PropTypes.bool,
   controlProps: PropTypes.shape({}),
   view: PropTypes.shape({}),
   recordbase: PropTypes.shape({}),
   recordinfo: PropTypes.shape({}),
   from: PropTypes.number,
-  iseditting: PropTypes.bool,
   formdata: PropTypes.arrayOf(PropTypes.shape({})),
   relateRecordData: PropTypes.shape({}),
   mountRef: PropTypes.func,
@@ -471,4 +487,5 @@ RecordForm.propTypes = {
   addRefreshEvents: PropTypes.func,
   reloadRecord: PropTypes.func,
   registerCell: PropTypes.func,
+  updateWorksheetControls: PropTypes.func,
 };

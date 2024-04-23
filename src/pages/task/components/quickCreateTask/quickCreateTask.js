@@ -1,15 +1,18 @@
-﻿import './css/quickCreateTask.less';
-import doT from '@mdfe/dot';
+import './css/quickCreateTask.less';
+import doT from 'dot';
 import ajaxRequest from 'src/api/taskCenter';
 import 'src/components/mdDatePicker/mdDatePicker';
-import 'src/components/mdBusinessCard/mdBusinessCard';
 import quickSelectUser from 'ming-ui/functions/quickSelectUser';
 import dialogSelectUser from 'src/components/dialogSelectUser/dialogSelectUser';
-import { expireDialogAsync } from 'src/components/common/function';
+import { expireDialogAsync } from 'src/util';
 import quickCreateTask from './tpl/quickCreateTask.html';
 import { errorMessage, checkIsProject } from '../../utils/utils';
 import Store from 'redux/configureStore';
 import { addTask } from 'src/pages/task/redux/actions';
+import { DateTimeRange } from 'ming-ui/components/NewDateTimePicker';
+import React from 'react';
+import ReactDom from 'react-dom';
+import UserHead from 'src/components/userHead';
 
 class QuickCreateTask {
   init(settings) {
@@ -35,6 +38,7 @@ class QuickCreateTask {
         $('#taskList').append(doT.template(quickCreateTask)());
       }
 
+
       // 事件绑定
       this.bindCreateSinlgeTaskEvent();
 
@@ -51,6 +55,54 @@ class QuickCreateTask {
     });
   }
 
+  renderReactUserCard() {
+    const _this = this;
+    $('.createNewSingle')
+      .find('.chargeImgWrapQuick[data-id]')
+      .each((index, ele) => {
+        let $ele = $(ele);
+        if ($ele.data('hasbusinesscard')) return;
+        let avatar = $ele.data('avatar');
+        let accountId = $ele.data('id');
+        $ele.data('hasbusinesscard', true);
+
+        ReactDom.render(
+          <UserHead
+            className="circle"
+            user={{
+              userHead: avatar,
+              accountId: accountId,
+            }}
+            size={26}
+            operation={
+              <span
+                className="quickCreateBtn ThemeColor3"
+                onClick={() => {
+                  dialogSelectUser({
+                    sourceId: _this.settings.folderId,
+                    showMoreInvite: false,
+                    fromType: 2,
+                    SelectUserSettings: {
+                      includeUndefinedAndMySelf: true,
+                      filterAccountIds: [accountId],
+                      projectId: checkIsProject(_this.settings.projectId) ? _this.settings.projectId : '',
+                      unique: true,
+                      callback: users => {
+                        _this.updateCharge(users[0].accountId, users[0].avatar);
+                      },
+                    },
+                  });
+                }}
+              >
+                {_l('将任务托付给他人')}
+              </span>
+            }
+          />,
+          ele,
+        );
+      });
+  }
+
   // 列表无任务是绑定创建单个任务
   bindCreateSinlgeTaskEvent() {
     const _this = this;
@@ -62,29 +114,46 @@ class QuickCreateTask {
       }
     });
 
-    const $createSingleDate = $('.createNewSingle  .createSingleDate');
-    $createSingleDate.on('click', () => {
+    const $createSingleDate = $('.createNewSingle .createSingleDate');
+    const bindDate = () => {
       const { start: defaultStart, end: defaultEnd } = $createSingleDate.data();
-      $createSingleDate.reactTaskCalendarRangePickerClick({
-        props: {
-          selectedValue: [defaultStart, defaultEnd],
-          onClear() {
-            delete $createSingleDate.data().start;
-            delete $createSingleDate.data().end;
-            this.destroy();
-          },
-        },
-        publicMethods: {
-          submit(selectedValue) {
+
+      ReactDom.render(
+        <DateTimeRange
+          selectedValue={[defaultStart, defaultEnd]}
+          mode="task"
+          timePicker
+          separator={_l('至')}
+          timeMode="hour"
+          placeholder={_l('未指定起止时间')}
+          onOk={selectedValue => {
             let [start, end] = selectedValue;
+
+            if (start && end && start >= end) {
+              alert(_l('结束时间不能早于或等于开始时间'), 2);
+              return false;
+            }
+
             start = start ? start.format('YYYY-MM-DD HH:00') : '';
             end = end ? end.format('YYYY-MM-DD HH:00') : '';
             $createSingleDate.data('start', start);
             $createSingleDate.data('end', end);
-          },
-        },
-      });
-    });
+          }}
+          onClear={() => {
+            delete $createSingleDate.data().start;
+            delete $createSingleDate.data().end;
+
+            ReactDom.unmountComponentAtNode($createSingleDate[0]);
+            bindDate();
+          }}
+        >
+          <span class="icon-bellSchedule"></span>
+        </DateTimeRange>,
+        $createSingleDate[0],
+      );
+    };
+
+    bindDate();
 
     // 文本框
     $('.createNewSingle  .txtSingleName').on('keyup', event => {
@@ -139,11 +208,10 @@ class QuickCreateTask {
       });
 
     // 点击切换负责人
-    $('.createNewSingle .chargeImg').on('click', function () {
+    $('.createNewSingle .chargeImgWrapQuick').on('click', function () {
       const $this = $(this);
       const callback = function (users) {
         _this.updateCharge(users[0].accountId, users[0].avatar);
-        $this.data('hasbusinesscard', false).mdBusinessCard('destroy');
       };
 
       quickSelectUser($this[0], {
@@ -164,46 +232,7 @@ class QuickCreateTask {
     });
 
     // hover出用户层
-    $('.createNewSingle').on(
-      {
-        mouseover() {
-          const $this = $(this);
-          const accountId = $this.data('id');
-
-          if (!$this.data('hasbusinesscard')) {
-            $this.mdBusinessCard({
-              id: 'quickCreateTaskCharge',
-              accountId,
-              opHtml: "<span class='quickCreateBtn ThemeColor3'>" + _l('将任务托付给他人') + '</span>',
-              readyFn() {
-                $('#quickCreateTaskCharge_' + accountId + ' .quickCreateBtn').on('click', function () {
-                  const that = $(this);
-                  const callback = function (users) {
-                    _this.updateCharge(users[0].accountId, users[0].avatar);
-                    $this.data('hasbusinesscard', false).mdBusinessCard('destroy');
-                  };
-
-                  dialogSelectUser({
-                    sourceId: _this.settings.folderId,
-                    showMoreInvite: false,
-                    fromType: 2,
-                    SelectUserSettings: {
-                      includeUndefinedAndMySelf: true,
-                      filterAccountIds: [accountId],
-                      projectId: checkIsProject(_this.settings.projectId) ? _this.settings.projectId : '',
-                      unique: true,
-                      callback,
-                    },
-                  });
-                });
-              },
-            });
-            $this.data('hasbusinesscard', true).mouseenter();
-          }
-        },
-      },
-      '.chargeImg',
-    );
+    _this.renderReactUserCard();
 
     // document事件
     $(document)
@@ -225,10 +254,6 @@ class QuickCreateTask {
         }
 
         if ($('.md_dialog:visible').length > 0) {
-          return;
-        }
-        // 头像层
-        if ($target.closest('.businessCardSite').length > 0) {
           return;
         }
         // 日历层
@@ -316,7 +341,9 @@ class QuickCreateTask {
 
   // 更换负责人
   updateCharge(uid, uHead) {
-    $('.createNewSingle .chargeImg').attr('src', uHead).data('id', uid);
+    let accountId = $('.createNewSingle .chargeImgWrapQuick').data('id');
+    $('.createNewSingle .chargeImgWrapQuick').data('avatar', uHead).data('id', uid).data('hasbusinesscard', false);
+    this.renderReactUserCard();
   }
 
   // 快速创建任务
@@ -337,8 +364,8 @@ class QuickCreateTask {
       // 设置为创建中
       $('#taskList .createNewSingle').data('create', 1);
       const favorite = $('.createNewSingle .taskStar').hasClass('icon-task-star');
-      const $chargeImg = $('.createNewSingle .chargeImg');
-      const avatar = $chargeImg.attr('src');
+      const $chargeImg = $('.createNewSingle .chargeImgWrapQuick');
+      const avatar = $chargeImg.data('avatar');
       const accountID = $chargeImg.data('id');
 
       ajaxRequest

@@ -8,6 +8,9 @@ import Drag from './Drag';
 import styled from 'styled-components';
 import _ from 'lodash';
 import { canEditData, canEditApp } from 'src/pages/worksheet/redux/actions/util';
+import { transferValue } from 'src/pages/widgetConfig/widgetSetting/components/DynamicDefaultValue/util';
+import { getEmbedValue } from 'src/components/newCustomFields/tools/utils.js';
+import { addBehaviorLog, getTranslateInfo } from 'src/util';
 
 const Wrap = styled.div`
   &.active .name::before {
@@ -57,16 +60,84 @@ export default class WorkSheetItem extends Component {
         .viewId || '';
     let url = `/app/${appId}/${groupId}/${workSheetId}${viewId ? `/${viewId}` : ''}`;
     if (isActive) {
-      url += `?flag=${new Date().getTime()}`;
+      url += `?flag=${this.state.flag || Date.now()}`;
     }
     return url;
   }
   render() {
-    const { appId, groupId, appItem, activeSheetId, className, isCharge, appPkg, sheetListVisible, disableTooltip } =
-      this.props;
-    const { workSheetId, workSheetName, icon, iconUrl, status, parentStatus, type } = appItem;
+    const {
+      projectId,
+      appId,
+      groupId,
+      appItem,
+      activeSheetId,
+      className,
+      isCharge,
+      appPkg,
+      sheetListVisible,
+      disableTooltip,
+    } = this.props;
+    const { workSheetId, icon, iconUrl, status, parentStatus, type, configuration = {}, urlTemplate } = appItem;
+    const workSheetName = getTranslateInfo(appId, workSheetId).name || appItem.workSheetName;
     const isActive = activeSheetId === workSheetId;
     const { iconColor, currentPcNaviStyle, themeType } = appPkg;
+    const isNewOpen = configuration.openType == '2';
+    const url = this.getNavigateUrl(isActive);
+    const handleNewOpen = () => {
+      const dataSource = transferValue(urlTemplate);
+      const urlList = [];
+      dataSource.map(o => {
+        if (!!o.staticValue) {
+          urlList.push(o.staticValue);
+        } else {
+          urlList.push(
+            getEmbedValue(
+              {
+                projectId,
+                appId,
+                groupId,
+                worksheetId: workSheetId,
+              },
+              o.cid,
+            ),
+          );
+        }
+      });
+      window.open(urlList.join(''));
+    };
+    const Content = (
+      <Fragment>
+        <div className="iconWrap">
+          <SvgIcon url={iconUrl} fill={this.svgColor(isActive)} size={22} />
+        </div>
+        <span
+          className={cx('name ellipsis Font14 mLeft10 mRight10', { bold: isActive })}
+          title={workSheetName}
+          style={{ color: this.textColor(isActive) }}
+        >
+          {workSheetName}
+        </span>
+        {isNewOpen && (
+          <Tooltip popupPlacement="bottom" text={<span>{_l('新页面打开')}</span>}>
+            <Icon className="Font16 mRight10 mTop2 openIcon" icon="launch" />
+          </Tooltip>
+        )}
+        {(status === 2 || parentStatus === 2) && (
+          <Tooltip
+            popupPlacement="right"
+            text={
+              <span>{_l('仅系统角色在导航中可见（包含管理员、运营者、开发者），应用项权限依然遵循角色权限原则')}</span>
+            }
+          >
+            <Icon
+              className="Font16 mRight10"
+              icon="visibility_off"
+              style={{ color: currentPcNaviStyle === 1 && themeType === 'theme' ? '#FCD8D3' : '#ee6f09' }}
+            />
+          </Tooltip>
+        )}
+      </Fragment>
+    );
     return (
       <Drag appItem={appItem} appPkg={appPkg} isCharge={isCharge}>
         <Tooltip
@@ -85,39 +156,35 @@ export default class WorkSheetItem extends Component {
             })}
             data-id={workSheetId}
           >
-            <MdLink className="NoUnderline valignWrapper h100 nameWrap" to={this.getNavigateUrl(isActive)}>
-              <Fragment>
-                <div className="iconWrap">
-                  <SvgIcon url={iconUrl} fill={this.svgColor(isActive)} size={22} />
-                </div>
-                <span
-                  className={cx('name ellipsis Font14 mLeft10 mRight10', { bold: isActive })}
-                  title={workSheetName}
-                  style={{ color: this.textColor(isActive) }}
-                >
-                  {workSheetName}
-                </span>
-                {(status === 2 || parentStatus === 2) && (
-                  <Tooltip
-                    popupPlacement="bottom"
-                    text={<span>{_l('仅系统角色可见（包含管理员、运营者、开发者）')}</span>}
-                  >
-                    <Icon
-                      className="Font16 mRight10"
-                      icon="visibility_off"
-                      style={{ color: currentPcNaviStyle === 1 && themeType === 'theme' ? '#FCD8D3' : '#ee6f09' }}
-                    />
-                  </Tooltip>
-                )}
-              </Fragment>
-            </MdLink>
-            {(canEditApp(_.get(appPkg, ['permissionType'])) || canEditData(_.get(appPkg, ['permissionType']))) && (
-              <MoreOperation {...this.props}>
-                <div className="rightArea moreBtn">
-                  <Icon icon="more_horiz" className="Font18 moreIcon" />
-                </div>
-              </MoreOperation>
+            {isNewOpen ? (
+              <div className="NoUnderline valignWrapper h100 nameWrap" onClick={handleNewOpen}>
+                {Content}
+              </div>
+            ) : (
+              <MdLink
+                className="NoUnderline valignWrapper h100 nameWrap"
+                to={url}
+                onClick={() => {
+                  if (type == 0) {
+                    //浏览工作表埋点
+                    addBehaviorLog('worksheet', workSheetId);
+                  }
+                  if (type == 1) {
+                    //浏览自定义页面埋点
+                    addBehaviorLog('customPage', workSheetId);
+                  }
+                  this.setState({ flag: Date.now() });
+                }}
+              >
+                {Content}
+              </MdLink>
             )}
+
+            <MoreOperation {...this.props}>
+              <div className="rightArea moreBtn">
+                <Icon icon="more_horiz" className="Font18 moreIcon" />
+              </div>
+            </MoreOperation>
           </Wrap>
         </Tooltip>
       </Drag>

@@ -51,7 +51,10 @@ export default class CreateRecordAndTask extends Component {
     const { showOtherWorksheet, isBatch } = this.state;
     const { data, updateSource } = this.props;
     const selectAppItem = data.appList.find(({ id }) => id === data.appId);
-    const fields = [].concat(data.fields.filter(v => v.type !== 29), data.fields.filter(v => v.type === 29));
+    const fields = [].concat(
+      data.fields.filter(v => v.type !== 29),
+      data.fields.filter(v => v.type === 29),
+    );
     const otherWorksheet = [
       {
         text: _l('其它应用下的工作表'),
@@ -64,7 +67,9 @@ export default class CreateRecordAndTask extends Component {
       <Fragment>
         {data.appType === APP_TYPE.EXTERNAL_USER && (
           <div className="Font14 Gray_75 workflowDetailDesc mBottom20">
-            {_l(
+            {md.global.Config.IsPlatformLocal ? _l(
+              '向指定手机号发送短信邀请用户注册外部门户，并在外部门户下自动创建一条对应的用户数据（成员状态为“未激活”）。短信0.05元/条，自动从企业账务中心扣费。',
+            ) : _l(
               '向指定手机号发送短信邀请用户注册外部门户，并在外部门户下自动创建一条对应的用户数据（成员状态为“未激活”）。',
             )}
           </div>
@@ -184,7 +189,7 @@ export default class CreateRecordAndTask extends Component {
               <div className="flexRow alignItemsCenter mTop15">
                 <div className="ellipsis Font13 flex mRight20">
                   {controlName}
-                  {(singleObj.required || _.includes(['portal_mobile', 'portal_role'], item.fieldId)) && (
+                  {(singleObj.required || _.includes(['portal_role'], item.fieldId)) && (
                     <span className="mLeft5 red">*</span>
                   )}
                   {singleObj.type === 29 && (
@@ -201,10 +206,11 @@ export default class CreateRecordAndTask extends Component {
                 )}
               </div>
               {item.fieldId === 'portal_mobile' && (
-                <div className="Gray_9e mTop5">{_l('根据此字段发送邀请短信')}</div>
+                <div className="Gray_9e mTop5">{md.global.Config.IsPlatformLocal ? _l('根据此字段发送邀请短信，短信0.05元/条') : _l('根据此字段发送邀请短信')}</div>
               )}
               <SingleControlValue
                 companyId={this.props.companyId}
+                relationId={this.props.relationId}
                 processId={this.props.processId}
                 selectNodeId={this.props.selectNodeId}
                 sourceNodeId={data.selectNodeId}

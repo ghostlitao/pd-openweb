@@ -1,9 +1,7 @@
 import React, { Fragment, useState } from 'react';
 import styled from 'styled-components';
 import { Icon } from 'ming-ui';
-import { ConfigProvider, Button, Tooltip } from 'antd';
-import Dialog from 'rc-dialog';
-import 'rc-dialog/assets/index.css';
+import { ConfigProvider, Button, Tooltip, Modal } from 'antd';
 import { Dropdown, Input } from 'antd';
 import { FlexCenter, genUrl, parseLink } from '../../util';
 import PreviewWraper from '../previewContent';
@@ -75,7 +73,16 @@ function EmbedUrl({ onClose, onEdit, widget = {}, info }) {
     onEdit({ value: url, param: paras, config });
   };
   return (
-    <Dialog className="editWidgetDialogWrap" visible onClose={onClose}>
+    <Modal
+      className="editWidgetDialogWrap"
+      visible
+      transitionName=""
+      maskTransitionName=""
+      width="100%"
+      footer={null}
+      centered={true}
+      onCancel={onClose}
+    >
       <ConfigProvider autoInsertSpaceInButton={false}>
         <Header>
           <div className="typeName">{_l('嵌入url')}</div>
@@ -102,6 +109,7 @@ function EmbedUrl({ onClose, onEdit, widget = {}, info }) {
               <Input.TextArea
                 className="urlInput"
                 autoSize={{ minRows: 4, maxRows: 30 }}
+                placeholder={_l('请输入完整链接，以 http:// 或 https:// 开头')}
                 value={url}
                 onChange={e => {
                   const value = e.target.value;
@@ -124,7 +132,7 @@ function EmbedUrl({ onClose, onEdit, widget = {}, info }) {
           </div>
         </ContentWrap>
       </ConfigProvider>
-    </Dialog>
+    </Modal>
   );
 }
 export default connect(({ sheet, appPkg, customPage }) => ({

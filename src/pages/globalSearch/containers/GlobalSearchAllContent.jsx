@@ -1,27 +1,26 @@
 import React, { Component } from 'react';
-import { withRouter } from 'react-router-dom';
-import './GlobalSearchAllContent.less';
 import _ from 'lodash';
-import withClickAway from 'ming-ui/decorators/withClickAway';
-import createDecoratedComponent from 'ming-ui/decorators/createDecoratedComponent';
+import cx from 'classnames';
 import { Skeleton } from 'antd';
 import { Checkbox, ScrollView, LoadDiv } from 'ming-ui';
-import cx from 'classnames';
+import withClickAway from 'ming-ui/decorators/withClickAway';
+import createDecoratedComponent from 'ming-ui/decorators/createDecoratedComponent';
 import smartSearchCtrl from 'src/api/smartSearch';
 import CommonAjax from 'src/api/addressBook';
 import homeAppAjax from 'src/api/homeApp';
+import { getFeatureStatus, getCurrentProject } from 'src/util';
+import { VersionProductType } from 'src/util/enum';
 import UserList from '../components/UserList';
 import GlobalSearchEmpty from '../components/GlobalSearchEmpty';
+import FilterPosition from '../components/FilterPosition';
 import List from '../components/List';
 import AppList from '../components/AppList';
 import OrgSelect from '../components/OrgSelect';
 import { getCurrentProjectId } from '../utils';
-import { getFeatureStatus } from 'src/util';
-import { GLOBAL_SEARCH_FEATURE_ID } from '../enum';
+import './GlobalSearchAllContent.less';
 
 const ClickAwayable = createDecoratedComponent(withClickAway);
 
-// @withRouter
 export default class GlobalSearchAllContent extends Component {
   constructor(props) {
     super(props);
@@ -41,11 +40,13 @@ export default class GlobalSearchAllContent extends Component {
       highlightType: '',
       onlyTitle: true,
       appInfo: undefined,
+      filterCount: undefined,
     };
   }
 
   componentDidMount() {
     this.requestDebounce(this.props.searchKeyword);
+    this.getFilterCount();
 
     if (this.props.match.params.appId) {
       this.getAppDetail();
@@ -59,8 +60,28 @@ export default class GlobalSearchAllContent extends Component {
     }
   }
 
+  getFilterCount = () => {
+    const { recordProjectId } = this.state;
+    const proObj = getCurrentProject(recordProjectId, true);
+
+    if (getFeatureStatus(recordProjectId, VersionProductType.globalSearch) !== '1' || proObj.licenseType === 2) {
+      this.setState({ filterCount: 0 });
+      return;
+    }
+
+    smartSearchCtrl
+      .getFilterCount({
+        projectId: recordProjectId,
+      })
+      .then(res => {
+        this.setState({
+          filterCount: res,
+        });
+      });
+  };
+
   getAppDetail = () => {
-    homeAppAjax.getAppDetail({ appId: this.props.match.params.appId }).then(res => {
+    homeAppAjax.getApp({ appId: this.props.match.params.appId }).then(res => {
       this.setState({ appInfo: res });
     });
   };
@@ -171,13 +192,11 @@ export default class GlobalSearchAllContent extends Component {
       }
     }
 
-    const proObj = _.find(md.global.Account.projects || [], {
-      projectId: param.projectId,
-    });
+    const proObj = getCurrentProject(param.projectId, true);
 
     if (
       type === 8 &&
-      (getFeatureStatus(recordProjectId, GLOBAL_SEARCH_FEATURE_ID) === '2' || proObj.licenseType === 2)
+      (getFeatureStatus(recordProjectId, VersionProductType.globalSearch) === '2' || proObj.licenseType === 2)
     ) {
       this.setState({ loadAppData: false, recordData: { list: [], resultCode: 3 } });
       return;
@@ -321,6 +340,7 @@ export default class GlobalSearchAllContent extends Component {
       isApp,
       highlightType,
       onlyTitle,
+      filterCount,
     } = this.state;
 
     if (leftLoading || loadAppData) {
@@ -363,6 +383,7 @@ export default class GlobalSearchAllContent extends Component {
       <React.Fragment>
         {appData && (
           <AppList
+            currentProjectId={appProjectId}
             title={searchScope === 'record' ? _l('应用项') : undefined}
             isApp={isApp}
             data={appData}
@@ -395,6 +416,7 @@ export default class GlobalSearchAllContent extends Component {
           <AppList
             data={recordData}
             dataKey={'record'}
+            currentProjectId={recordProjectId}
             searchKeyword={searchKeyword}
             currentProjectName={_.find(md.global.Account.projects, { projectId: recordProjectId }).companyName}
             needTitle={true}
@@ -414,31 +436,66 @@ export default class GlobalSearchAllContent extends Component {
                       currentProjectId={recordProjectId}
                       needAll={false}
                       onChange={projectId =>
-                        this.setState({ recordProjectId: projectId, loadAppData: true }, () =>
-                          this.getAppData({ type: 8 }),
-                        )
+                        this.setState({ recordProjectId: projectId, loadAppData: true }, () => {
+                          this.getAppData({ type: 8 });
+                          this.getFilterCount();
+                        })
                       }
                     />,
-                    <Checkbox
-                      text={_l('只搜索记录标题')}
-                      className="Gray_9e mLeftAuto"
-                      checked={onlyTitle}
-                      onClick={value => {
-                        this.setState({ onlyTitle: !onlyTitle, loadAppData: true }, () => this.getAppData({ type: 8 }));
-                      }}
-                    />,
+                    <div className="mLeftAuto valignWrapper">
+                      <FilterPosition
+                        className="mRight20"
+                        projectId={recordProjectId}
+                        count={filterCount}
+                        update={() => this.getAppData({ type: 8 })}
+                        onChangeCount={count =>
+                          this.setState({
+                            filterCount: count,
+                          })
+                        }
+                      />
+                      <Checkbox
+                        text={_l('只搜索记录标题')}
+                        className="Gray_9e"
+                        checked={onlyTitle}
+                        onClick={value => {
+                          this.setState({ onlyTitle: !onlyTitle, loadAppData: true }, () =>
+                            this.getAppData({ type: 8 }),
+                          );
+                        }}
+                      />
+                    </div>,
                   ]
                 : [
-                    <Checkbox
-                      text={_l('只搜索记录标题')}
-                      className="Gray_9e mLeftAuto"
-                      checked={onlyTitle}
-                      onClick={value => {
-                        this.setState({ onlyTitle: !onlyTitle, loadAppData: true }, () => this.getAppData({ type: 8 }));
-                      }}
-                    />,
+                    <div className="mLeftAuto valignWrapper">
+                      <FilterPosition
+                        className="mRight20"
+                        projectId={recordProjectId}
+                        count={filterCount}
+                        update={() => this.getAppData({ type: 8 })}
+                        onChangeCount={count =>
+                          this.setState({
+                            filterCount: count,
+                          })
+                        }
+                      />
+                      <Checkbox
+                        text={_l('只搜索记录标题')}
+                        className="Gray_9e"
+                        checked={onlyTitle}
+                        onClick={value => {
+                          this.setState({ onlyTitle: !onlyTitle, loadAppData: true }, () =>
+                            this.getAppData({ type: 8 }),
+                          );
+                        }}
+                      />
+                    </div>,
                   ]
             }
+            update={() => {
+              this.getFilterCount();
+              this.getAppData({ type: 8 });
+            }}
           />
         }
         {content}
@@ -494,7 +551,10 @@ export default class GlobalSearchAllContent extends Component {
 
     this.setState(
       { searchScope: type, appProjectId: getCurrentProjectId(), recordProjectId: getCurrentProjectId() },
-      this.getAppData,
+      () => {
+        this.getAppData();
+        this.getFilterCount();
+      },
     );
     safeLocalStorageSetItem('GLOBAL_SEARCH_SCOPE_MING', type);
   };

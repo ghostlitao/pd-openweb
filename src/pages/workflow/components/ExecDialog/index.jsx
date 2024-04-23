@@ -169,12 +169,14 @@ export default class ExecDialog extends Component {
             <ScrollView className="flex">
               <ul className="pAll20 pTop0">
                 <Steps
+                  projectId={projectId}
                   currentWork={currentWork}
                   rowId={rowId}
                   currentType={(currentWorkItem || {}).type}
                   worksheetId={worksheetId}
                   works={works}
                   status={data.status}
+                  currents={data.currentWorkIds}
                 />
               </ul>
             </ScrollView>

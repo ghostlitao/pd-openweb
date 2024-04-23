@@ -7,7 +7,7 @@
   &::after {
     content: '';
     width: 16px;
-    height: 43px;
+    height: 36px;
     position: absolute;
     top: 0;
     z-index: 1;
@@ -37,7 +37,7 @@
 
 .workSheetViewItem,
 .workSheetSortableViewItem {
-  height: 37px;
+  height: 36px;
   justify-content: center;
   position: relative;
   max-width: 200px;
@@ -48,8 +48,13 @@
   }
   .name {
     white-space: nowrap;
-    padding: 0 20px;
+    padding: 0 15px;
     font-weight: 500;
+    .developIcon {
+      font-size: 14px;
+      margin: 0 6px 0 -6px;
+      color: #ff9300;
+    }
   }
   .deit {
     border: none;
@@ -72,7 +77,7 @@
     &::after {
       content: '';
       position: absolute;
-      bottom: 0;
+      bottom: -1px;
       left: 0;
       width: 100%;
       height: 3px;
@@ -93,9 +98,6 @@
   }
 }
 
-.workSheetSortableViewItem .name {
-  padding: 0 19px;
-}
 
 .workSheetViewsMenu {
   max-height: 400px;
@@ -185,14 +187,31 @@
     &:hover {
       background: rgba(0, 0, 0, 0.05);
     }
+
+    .ant-menu-title-content {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
     span.viewName {
       margin-left: 12px;
       color: #333;
     }
+    .newIcon {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 24px;
+      height: 16px;
+      margin-right: 12px;
+      border-radius: 2px 2px 2px 2px;
+      background: rgba(33, 150, 243, 0.12);
+    }
   }
 }
 .drawerWorksheetHidden {
-  z-index: 9;
   .ant-drawer-body {
     padding: 6px 8px;
   }
@@ -369,9 +388,11 @@
   .addViewIcon:hover,
   .allVieListwIcon:hover,
   .sheetHeader .icon-back-02:hover,
-  .sheetHeader .moreOperate>.icon:hover,
-  .sheetHeader div:last-child >  span > i.icon:hover,
+  .sheetHeader .moreOperate > .icon:hover,
   .sheetHeader .searchInputComp.queryInput.default .icon-search:hover,
+  .sheetHeader .openStatisticsBtn:hover,
+  .sheetHeader .icon-discussion:hover,
+  .sheetHeader .icon-drafts_approval:hover,
   .sheetHeader .fullRotate:hover {
     color: #2196f3 !important;
   }
@@ -385,6 +406,13 @@
   }
   .hoverGray:hover {
     background: #f5f5f5;
+  }
+  .menuVisible {
+    background: #f5f5f5;
+    color: #2196f3 !important;
+  }
+  .currentIsHide {
+    color: #2196f3 !important;
   }
 }
 

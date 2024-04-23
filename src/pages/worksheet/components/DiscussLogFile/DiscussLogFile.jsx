@@ -30,12 +30,18 @@ class DiscussLogFile extends Component {
     this.getShowTabs(props);
     this.state = {
       loading: false,
-      status: this.showTabs.length && this.showTabs[0].id, // 日志讨论  1 日志  2讨论
+      status: this.getActive(props),
+      doNotLoadAtDidMount: props.isOpenNewAddedRecord,
     };
   }
 
   componentDidMount() {
     emitter.addListener('RELOAD_RECORD_INFO_LOG', this.reloadLog);
+    setTimeout(() => {
+      if (this.state.doNotLoadAtDidMount) {
+        this.setState({ doNotLoadAtDidMount: false });
+      }
+    }, 1000);
   }
 
   componentWillReceiveProps(nextProps) {
@@ -46,6 +52,16 @@ class DiscussLogFile extends Component {
 
   componentWillUnmount() {
     emitter.removeListener('RELOAD_RECORD_INFO_LOG', this.reloadLog);
+  }
+
+  getActive(props = {}) {
+    if (_.find(this.showTabs, { name: 'approval' }) && !(props.workflowStatus || '').startsWith('["other')) {
+      const activeTab = this.showTabs.filter(tab => tab.name !== 'approval')[0];
+      if (activeTab) {
+        return activeTab.id;
+      }
+    }
+    return this.showTabs.length && this.showTabs[0].id; // 日志讨论  1 日志  2讨论
   }
 
   @autobind
@@ -66,8 +82,8 @@ class DiscussLogFile extends Component {
   };
 
   render() {
-    const { workflow, approval, forReacordDiscussion } = this.props;
-    const { status, loading } = this.state;
+    const { workflowStatus, configLoading, workflow, approval, forReacordDiscussion } = this.props;
+    const { status, loading, doNotLoadAtDidMount } = this.state;
     return (
       <div className="discussLogFile flexRow">
         <div className="header">
@@ -104,9 +120,9 @@ class DiscussLogFile extends Component {
           <div className="body flex">
             {status === -1 && approval}
             {status === 0 && workflow}
-            {(status === 1 || status === 4) && (
+            {(status === 1 || status === 4) && !configLoading && (
               <div className="talkBox">
-                <WorkSheetComment status={status} {...this.props} />
+                <WorkSheetComment status={status} {...this.props} doNotLoadAtDidMount={doNotLoadAtDidMount} />
               </div>
             )}
             {status === 2 &&

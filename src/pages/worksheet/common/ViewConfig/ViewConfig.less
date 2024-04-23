@@ -1,5 +1,5 @@
 // @containerWidth: 360px;
-@containerWidth: 640px;
+@containerWidth: 720px;
 @transitionTime: 0.25s;
 @blue: #2196f3;
 
@@ -40,12 +40,25 @@
   }
 
   .allCanSelectFields {
-    font-weight: 500;
+    // font-weight: 500;
     background-color: rgba(33, 150, 243, 0.2);
     border-radius: 4px;
 
     .Dropdown--border {
-      border: 1px solid rgba(33, 150, 243, 0.3);
+      // border: 1px solid rgba(33, 150, 243, 0.3);
+    }
+
+    .Item-content {
+      padding-left: 32px !important;
+    }
+  }
+
+  .dropdownSelectFields {
+    font-weight: 500;
+    border-radius: 4px;
+
+    .Dropdown--border {
+      // border: 1px solid rgba(33, 150, 243, 0.3);
     }
 
     .Item-content {
@@ -70,7 +83,7 @@
       > li {
         display: inline-block;
         width: ~'calc(50% - 6px)';
-        height: 86px;
+        height: 106px;
         border-radius: 3px;
         position: relative;
         vertical-align: top;
@@ -104,7 +117,7 @@
         }
 
         &:last-child {
-          height: 70px;
+          height: 88px;
 
           &::before {
             background-image: url('./components/mobileSet/img/line3.png');
@@ -131,6 +144,13 @@
       cursor: pointer;
       font-size: 13px;
       color: #2196f3;
+    }
+
+    .showControlsColumnCheckItem .switchIcon {
+      height: 32px;
+    }
+    .flexShrink0 {
+      flex-shrink: 0;
     }
   }
 
@@ -205,7 +225,6 @@
     overflow: auto;
     width: 200px;
     font-size: 13px;
-    // display: flex;
     align-items: center;
     justify-content: center;
     border-bottom: 1px solid #eaeaea;
@@ -264,8 +283,6 @@
       .fontText {
         vertical-align: middle;
         width: 115px;
-        display: inline-block;
-
         .numText {
           float: right;
         }
@@ -290,16 +307,12 @@
   }
 
   .viewConfigWrap {
-    padding: 32px 0 0;
+    padding: 24px 0 0;
     .groupSelectStartOrEnd .selectStartOrEndCon {
       .dropCon {
-        width: 133px !important;
+        flex: 1;
+        flex-shrink: 0;
       }
-    }
-
-    .cardAppearanceWrap {
-      // padding: 0 20px 20px 20px;
-      // margin-top: -20px;
     }
 
     .dataSetting {
@@ -323,14 +336,23 @@
   }
 
   .viewContent {
+    &.contentCon {
+      .viewContentCon {
+        overflow-y: auto;
+        max-height: 100%;
+        min-height: 100%;
+        height: 100%;
+      }
+    }
     .viewContentCon {
       padding: 0 40px 32px;
-      // height: 100%;
-      .sortColumnWrap {
-        // padding-bottom: 40px;
+      &.H100 {
+        height: 100%;
+        padding: 0;
       }
       .sortColumnWrap .Dropdown--input {
-        padding: 0 5px 0 12px;
+        padding: 0 10px 0 12px;
+        border-color: #ddd;
       }
 
       .viewSetText {
@@ -352,19 +374,6 @@
         ul {
           .itemText {
             padding-left: 20px;
-          }
-
-          li:first-child {
-            .itemText {
-              padding-left: 0;
-              color: #2196f3;
-            }
-
-            &:hover {
-              .itemText {
-                color: #fff;
-              }
-            }
           }
         }
       }
@@ -391,9 +400,6 @@
 
       &.exist {
         border-radius: 0;
-        // background-color: #fafafa;
-        // border-top: 1px solid #eaeaea;
-        // border-bottom: 1px solid #eaeaea;
       }
     }
   }
@@ -549,5 +555,17 @@
   .tipsIcon {
     left: -38px;
     line-height: 36px;
+  }
+}
+.textCopyCon {
+  padding: 17px 20px;
+  background: #333333;
+  border-radius: 8px 8px 8px 8px;
+  color: #fff;
+  .icon {
+    color: #9e9e9e;
+    &:hover {
+      color: #fff;
+    }
   }
 }

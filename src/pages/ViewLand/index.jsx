@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import worksheet from 'src/api/worksheet';
-import homeApp from 'src/api/homeApp';
 import { LoadDiv } from 'ming-ui';
 import SingleView from 'worksheet/common/SingleView';
-import _ from 'lodash';
+import MobileSingleView from 'mobile/components/SingleView';
 import { browserIsMobile } from 'src/util';
+import cx from 'classnames';
+import _ from 'lodash';
 
 const Con = styled.div`
   height: 100%;
@@ -25,24 +26,26 @@ const Con = styled.div`
 `;
 
 export default function ViewLand(props) {
+  $('body').addClass('fixedScreen');
   const { appId, worksheetId, viewId } = _.get(props, 'match.params') || {};
   const [loading, setLoading] = useState(false);
+  const [showHeader, setShowHeader] = useState(true);
   const [worksheetInfo, setWorksheetInfo] = useState();
+  const isMobile = browserIsMobile();
+  const Component = isMobile ? MobileSingleView : SingleView;
+
   useEffect(() => {
-    if (browserIsMobile()) {
-      setLoading(true);
-      homeApp.getAppSimpleInfo({ workSheetId: worksheetId }).then(data => {
-        const { appSectionId } = data;
-        location.href = `/mobile/recordList/${appId}/${appSectionId}/${worksheetId}/${viewId}`;
-      });
-      return;
-    }
+    setLoading(true);
     window.hideColumnHeadFilter = true;
     worksheet.getWorksheetInfo({ worksheetId, getViews: true }).then(worksheetInfo => {
+      const view = _.find(worksheetInfo.views, v => v.viewId === viewId) || {};
+      const isSingleRecordDetailView = _.get(view, 'viewType') === 6 && String(_.get(view, 'childType')) === '1';
+      setShowHeader(isMobile ? true : !isSingleRecordDetailView);
       setWorksheetInfo({
         worksheetName: worksheetInfo.name,
-        viewName: (_.find(worksheetInfo.views, v => v.viewId === viewId) || {}).name || '',
+        viewName: view.name || '',
       });
+      setLoading(false);
     });
     return () => {
       window.hideColumnHeadFilter = false;
@@ -50,19 +53,17 @@ export default function ViewLand(props) {
   }, []);
 
   if (loading) {
-    return (
-      <LoadDiv />
-    );
+    return <LoadDiv />;
   }
 
   return (
     <Con>
-      <SingleView
+      <Component
         showPageTitle
-        showHeader
+        showHeader={showHeader}
         headerLeft={
           !!worksheetInfo && (
-            <div className="mLeft24 Font16 bold flexRow alignItemsCenter">
+            <div className={cx('Font16 bold flexRow alignItemsCenter', { mLeft24: !isMobile })}>
               {`${worksheetInfo.worksheetName}-${worksheetInfo.viewName}`}
             </div>
           )

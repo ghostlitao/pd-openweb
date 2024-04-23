@@ -4,7 +4,6 @@ import './index.less';
 import { Checkbox, DatePicker } from 'ming-ui';
 import cx from 'classnames';
 import moment from 'moment';
-import RegExp from 'src/util/expression';
 import fixedDataAjax from 'src/api/fixedData.js';
 import _ from 'lodash';
 
@@ -27,8 +26,9 @@ export default class AddOrEditItem extends React.Component {
       title: '',
       isSoFar: false,
     };
+    const baseInfo = _.isArray(this.props.item) ? originItem : this.props.item;
     this.state = {
-      baseInfo: _.isArray(this.props.item) ? originItem : this.props.item,
+      baseInfo: { ...baseInfo, isSoFar: moment().format('YYYY-MM-DD') === baseInfo.endDate },
       errorList,
     };
   }
@@ -81,7 +81,7 @@ export default class AddOrEditItem extends React.Component {
     const { type } = this.props;
     if (!baseInfo.title) {
       return type === 1 ? _l('请输入职位') : _l('请输入专业和学历');
-    } else if (!RegExp.isUnSymbols($.trim(baseInfo.title))) {
+    } else if (!/^[A-Za-z0-9\u0391-\uFFE5 \.,()，。（）\-]+$/.exec($.trim(baseInfo.title))) {
       return type === 1 ? _l('职位名称不能含特殊字符') : _l('专业和学历不能含特殊字符');
     }
   }
@@ -105,27 +105,28 @@ export default class AddOrEditItem extends React.Component {
       this.updateError([key], isError);
     });
     if (!isError && !errorSentry.name && !errorSentry.title) {
-      Promise.all([fixedDataAjax.checkSensitive({ content: baseInfo.name }), fixedDataAjax.checkSensitive({ content: baseInfo.title })]).then(
-        results => {
-          if (!results.find(result => result)) {
-            const resParams = { ...baseInfo, isSoFar: baseInfo.isSoFar ? 0 : 1, type: this.props.type };
-            account
-              .editAccountDetail(resParams)
-              .then(data => {
-                if (data) {
-                  alert(_l('操作成功'), 1);
-                  this.props.updateValue();
-                  this.props.closeDialog();
-                } else {
-                  alert(_l('操作失败'), 2);
-                }
-              })
-              .fail();
-          } else {
-            alert(_l('输入内容包含敏感词，请重新填写'), 3);
-          }
-        },
-      );
+      Promise.all([
+        fixedDataAjax.checkSensitive({ content: baseInfo.name }),
+        fixedDataAjax.checkSensitive({ content: baseInfo.title }),
+      ]).then(results => {
+        if (!results.find(result => result)) {
+          const resParams = { ...baseInfo, isSoFar: baseInfo.isSoFar ? 0 : 1, type: this.props.type };
+          account
+            .editAccountDetail(resParams)
+            .then(data => {
+              if (data) {
+                alert(_l('操作成功'), 1);
+                this.props.updateValue();
+                this.props.closeDialog();
+              } else {
+                alert(_l('操作失败'), 2);
+              }
+            })
+            .fail();
+        } else {
+          alert(_l('输入内容包含敏感词，请重新填写'), 3);
+        }
+      });
     }
   }
 
@@ -239,7 +240,7 @@ export default class AddOrEditItem extends React.Component {
                 className={cx('formControl', { error: !baseInfo.isSoFar && errorList.endDate })}
                 placeholder={_l('结束时间')}
                 disabled={baseInfo.isSoFar}
-                value={baseInfo.endDate}
+                value={baseInfo.isSoFar ? _l('至今') : baseInfo.endDate}
                 onBlur={() => this.updateError('endDate', !baseInfo.endDate)}
                 onFocus={() => this.updateError('endDate', false)}
               />
@@ -262,7 +263,7 @@ export default class AddOrEditItem extends React.Component {
         >
           {type === 1 ? _l('还在这里工作') : _l('还在这里学习')}
         </Checkbox>
-        <div className="mTop20 flexEnd mBottom24">
+        <div className="mTop20 flexEnd">
           <button
             type="button"
             className="ming Button Button--link Gray_9e mRight30"

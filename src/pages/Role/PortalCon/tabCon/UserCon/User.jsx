@@ -3,7 +3,7 @@ import styled from 'styled-components';
 import { connect } from 'react-redux';
 import { bindActionCreators } from 'redux';
 import * as actions from '../../redux/actions';
-import { Icon, MenuItem, Dialog, Dropdown, Tooltip } from 'ming-ui';
+import { Icon, MenuItem, Dialog, Dropdown } from 'ming-ui';
 import Table from 'src/pages/Role/component/Table';
 import PortalBar from '../portalComponent/PortalBar';
 import cx from 'classnames';
@@ -16,13 +16,13 @@ import AddUserByTelDialog from 'src/pages/Role/PortalCon/components/AddUserByTel
 import UserInfoWrap from 'src/pages/Role/PortalCon/components/UserInfoWrap';
 import DropOption from 'src/pages/Role/PortalCon/components/DropOption';
 import { formatControlToServer } from 'src/components/newCustomFields/tools/utils.js';
-import { pageSize, renderText } from '../util';
-import _, { includes } from 'lodash';
+import { pageSize, renderText, formatPortalData } from '../util';
+import _ from 'lodash';
 
 const Wrap = styled.div(
   ({ len }) => `
   .toRole {
-    color: #9E9E9E;
+    color: #5a5a5a;
     &:hover {
       color: #2196f3;
     }
@@ -67,6 +67,17 @@ const Wrap = styled.div(
             }
           }
         }
+      }
+    }
+    .toRole {
+      border-radius: 3px 3px 3px 3px;
+      padding: 0 12px;
+      border: 1px solid #dddddd;
+      line-height: 32px;
+      display: inline-block;
+      &:hover {
+        border: 1px solid #2196f3;
+        color: #2196f3;
       }
     }
     .addUser {
@@ -199,6 +210,8 @@ function User(props) {
     commonCount,
     portalSetModel,
     setQuickTag,
+    canEditApp,
+    roleId,
   } = props;
   const {
     roleList = [],
@@ -313,13 +326,13 @@ function User(props) {
           columns.push({
             ...o,
             id: o.controlId,
-            name: '手机号',
+            name: _l('手机号'),
           });
         } else if (o.controlId === 'portal_email') {
           columns.push({
             ...o,
             id: o.controlId,
-            name: '邮箱',
+            name: _l('邮箱'),
             render: (text, data, index) => {
               return (
                 <div className="flex overflowHidden">
@@ -334,7 +347,7 @@ function User(props) {
           columns.push({
             ...o,
             id: o.controlId,
-            name: '角色',
+            name: _l('角色'),
             render: (text, data, index) => {
               let role = '';
               try {
@@ -350,7 +363,7 @@ function User(props) {
           columns.push({
             ...o,
             id: o.controlId,
-            name: '状态',
+            name: _l('状态'),
             renderHeader: () => {
               return (
                 <React.Fragment>
@@ -581,15 +594,6 @@ function User(props) {
       },
     });
   };
-  const portalBaseControl = [
-    'portal_name',
-    'portal_mobile',
-    'portal_email',
-    'partal_regtime',
-    'portal_openid',
-    'portal_status',
-    'portal_role',
-  ];
   return (
     <Wrap className="flex flexColumn overflowHidden" len={showControls.length}>
       <div className="topAct">
@@ -679,48 +683,60 @@ function User(props) {
             appId={appId}
             comp={() => {
               return (
-                <div className="addUser InlineBlock Hand Bold">
-                  <span
-                    className="lAdd"
-                    onClick={() => {
-                      setAddUserByTelDialog(true);
-                    }}
-                  >
-                    {_l('邀请用户')}
-                  </span>
-                  |
-                  <Trigger
-                    popupVisible={popupVisible}
-                    action={['click']}
-                    onPopupVisibleChange={popupVisible => {
-                      setPopupVisible(popupVisible);
-                    }}
-                    popup={
-                      <WrapPop className="Hand InlineBlock mTop6 uploadUser">
-                        <MenuItem
-                          className=""
-                          onClick={evt => {
-                            setAddUserDialog(true);
-                            setPopupVisible(false);
-                          }}
-                        >
-                          <Icon className="Font18 TxtMiddle mRight6" type="new_excel" />
-                          <span className=""> {_l('从Excel导入数据')}</span>
-                        </MenuItem>
-                      </WrapPop>
-                    }
-                    popupAlign={{ points: ['tr', 'br'], offset: [8, 0] }}
-                  >
-                    <span
-                      className="rAdd hand"
+                <React.Fragment>
+                  {roleId !== 'all' && canEditApp && (
+                    <div
+                      className="toRole Hand mRight14 TxtTop Bold"
                       onClick={() => {
-                        setPopupVisible(!popupVisible);
+                        setQuickTag({ roleId: roleId, tab: 'roleSet' });
                       }}
                     >
-                      <Icon className="TxtMiddle mLeft6 " type="arrow-down" />
+                      {_l('编辑角色')}
+                    </div>
+                  )}
+                  <div className="addUser InlineBlock Hand Bold">
+                    <span
+                      className="lAdd"
+                      onClick={() => {
+                        setAddUserByTelDialog(true);
+                      }}
+                    >
+                      {_l('邀请用户')}
                     </span>
-                  </Trigger>
-                </div>
+                    |
+                    <Trigger
+                      popupVisible={popupVisible}
+                      action={['click']}
+                      onPopupVisibleChange={popupVisible => {
+                        setPopupVisible(popupVisible);
+                      }}
+                      popup={
+                        <WrapPop className="Hand InlineBlock mTop6 uploadUser">
+                          <MenuItem
+                            className=""
+                            onClick={evt => {
+                              setAddUserDialog(true);
+                              setPopupVisible(false);
+                            }}
+                          >
+                            <Icon className="Font18 TxtMiddle mRight6" type="new_excel" />
+                            <span className=""> {_l('从Excel导入数据')}</span>
+                          </MenuItem>
+                        </WrapPop>
+                      }
+                      popupAlign={{ points: ['tr', 'br'], offset: [8, 0] }}
+                    >
+                      <span
+                        className="rAdd hand"
+                        onClick={() => {
+                          setPopupVisible(!popupVisible);
+                        }}
+                      >
+                        <Icon className="TxtMiddle mLeft6 " type="arrow-down" />
+                      </span>
+                    </Trigger>
+                  </div>
+                </React.Fragment>
               );
             }}
             refresh={() => {
@@ -810,35 +826,10 @@ function User(props) {
       {showUserInfoDialog && (
         <UserInfoWrap
           show={showUserInfoDialog}
+          showClose={true}
           appId={appId}
-          currentData={currentData
-            .filter(o => portalBaseControl.includes(o.controlId))
-            .concat(...currentData.filter(o => !portalBaseControl.includes(o.controlId)))
-            .filter(o => !['portal_avatar'].includes(o.controlId)) //详情不显示
-            .map((o, i) => {
-              if (portalBaseControl.includes(o.controlId) && !['portal_status', 'portal_role'].includes(o.controlId)) {
-                return { ...o, row: i, disabled: true, fieldPermission: '' };
-              } else if (['portal_status', 'portal_role'].includes(o.controlId)) {
-                let da = {
-                  ...o,
-                  row: i,
-                  fieldPermission: '',
-                };
-                if ('portal_status' === o.controlId) {
-                  return {
-                    ...da,
-                    options: !safeParseArray(o.value).includes('5')
-                      ? o.options.filter(it => it.key !== '5')
-                      : o.options,
-                    disabled: safeParseArray(o.value).includes('5'),
-                  };
-                } else {
-                  return da;
-                }
-              } else {
-                return { ...o, row: i, fieldPermission: '' };
-              }
-            })}
+          width={'640px'}
+          currentData={formatPortalData(currentData)}
           setShow={setShowUserInfoDialog}
           onOk={(data, ids) => {
             let newCell = data.filter(o => ids.includes(o.controlId)).map(formatControlToServer);
@@ -850,20 +841,8 @@ function User(props) {
                 newCell,
               })
               .then(res => {
-                if (['portal_role']) {
-                  getUserList();
-                  getCount(appId);
-                } else {
-                  setList(
-                    list.map(o => {
-                      if (o.rowid === currentId) {
-                        return { ...o, ...res.data };
-                      } else {
-                        return o;
-                      }
-                    }),
-                  );
-                }
+                getUserList();
+                getCount(appId);
                 setCurrentData([]);
                 setCurrentId('');
                 alert(_l('更新成功'));

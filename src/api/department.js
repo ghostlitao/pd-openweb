@@ -58,20 +58,6 @@ export default {
      return $.api('Department', 'DeleteDepartments', args, options);
    },
   /**
-  * 检测部门名称是否存在（Admin）
-  * @param {Object} args 请求参数
-  * @param {string} args.projectId 网络id
-  * @param {string} args.departmentId 部门id，有代表编辑，没有代表创建
-  * @param {string} args.departmentName 部门名称
-  * @param {Object} options 配置参数
-  * @param {Boolean} options.silent 是否禁止错误弹层
-  * @returns {Promise<Boolean, ErrorModel>}
-  **/
-   checkDepartmentNameExists: function (args, options = {}) {
-     
-     return $.api('Department', 'CheckDepartmentNameExists', args, options);
-   },
-  /**
   * 网络管理 - 根据部门父Id获取子部门,departmentId为null表示父部门是网络（Admin）
   * @param {Object} args 请求参数
   * @param {string} args.projectId 网络id
@@ -145,6 +131,8 @@ export default {
   * @param {string} args.projectId 网络id
   * @param {string} args.keywords 关键词
   * @param {array} args.filterAccountIds 过滤哪些账号id
+  * @param {integer} args.pageIndex 页码
+  * @param {integer} args.pageSize 页大小（默认200）
   * @param {Object} options 配置参数
   * @param {Boolean} options.silent 是否禁止错误弹层
   * @returns {Promise<Boolean, ErrorModel>}
@@ -169,12 +157,12 @@ export default {
   /**
   * 网络管理 - 查询部门并且没有关键字
   * @param {Object} args 请求参数
-  * @param {integer} args.pageIndex
-  * @param {integer} args.pageSize
   * @param {string} args.projectId 网络id
   * @param {string} args.departmentId 部门id
   * @param {string} args.keywords 关键词
   * @param {boolean} args.returnCount 是否返回用户数量
+  * @param {integer} args.pageIndex 页码
+  * @param {integer} args.pageSize 每页条数
   * @param {Object} options 配置参数
   * @param {Boolean} options.silent 是否禁止错误弹层
   * @returns {Promise<Boolean, ErrorModel>}
@@ -201,11 +189,11 @@ export default {
   /**
   * 导入部门
   * @param {Object} args 请求参数
-  * @param {string} args.projectId 网络id
-  * @param {string} args.fileName 文件名
   * @param {string} args.ticket 验证码返票据
   * @param {string} args.randStr 票据随机字符串
-  * @param {} args.captchaType 验证码类型（默认腾讯云）
+  * @param {} args.captchaType
+  * @param {string} args.projectId 网络id
+  * @param {string} args.fileName 文件名
   * @param {Object} options 配置参数
   * @param {Boolean} options.silent 是否禁止错误弹层
   * @returns {Promise<Boolean, ErrorModel>}
@@ -279,21 +267,6 @@ export default {
      return $.api('Department', 'MoveDepartment', args, options);
    },
   /**
-  * 获取部门列表（平铺）
-  * @param {Object} args 请求参数
-  * @param {string} args.projectId 网络id
-  * @param {integer} args.pageIndex
-  * @param {integer} args.pageSize
-  * @param {string} args.kewword
-  * @param {Object} options 配置参数
-  * @param {Boolean} options.silent 是否禁止错误弹层
-  * @returns {Promise<Boolean, ErrorModel>}
-  **/
-   getProjectDepartments: function (args, options = {}) {
-     
-     return $.api('Department', 'GetProjectDepartments', args, options);
-   },
-  /**
   * 根据部门Id 获取完整的部门路径
   * @param {Object} args 请求参数
   * @param {Object} options 配置参数
@@ -320,11 +293,11 @@ export default {
   /**
   * 根据部门父Id获取子部门,departmentId为null表示父部门是网络
   * @param {Object} args 请求参数
-  * @param {integer} args.pageIndex
-  * @param {integer} args.pageSize
   * @param {string} args.projectId 网络id
   * @param {string} args.departmentId 部门id
   * @param {boolean} args.returnCount 是否返回用户数量
+  * @param {integer} args.pageIndex
+  * @param {integer} args.pageSize
   * @param {Object} options 配置参数
   * @param {Boolean} options.silent 是否禁止错误弹层
   * @returns {Promise<Boolean, ErrorModel>}
@@ -334,13 +307,30 @@ export default {
      return $.api('Department', 'GetProjectSubDepartmentByDepartmentId', args, options);
    },
   /**
+  * 获取 成员及下级部门
+  * @param {Object} args 请求参数
+  * @param {string} args.projectId
+  * @param {integer} args.pageIndex
+  * @param {integer} args.pageSize
+  * @param {boolean} args.onlyMyJoin
+  * @param {array} args.filterAccountIds
+  * @param {string} args.departmentId 可空（空时 仅返回 用户可见的  最顶级部门）
+  * @param {Object} options 配置参数
+  * @param {Boolean} options.silent 是否禁止错误弹层
+  * @returns {Promise<Boolean, ErrorModel>}
+  **/
+   getMembersAndSubs: function (args, options = {}) {
+     
+     return $.api('Department', 'GetMembersAndSubs', args, options);
+   },
+  /**
   * 分页获取部门列表
   * @param {Object} args 请求参数
   * @param {string} args.projectId 网络id
   * @param {integer} args.pageIndex 页码
   * @param {integer} args.pageSize 页大小
-  * @param {} args.sortField 排序字段
-  * @param {} args.sortType 排序类型
+  * @param {} args.sortField
+  * @param {} args.sortType
   * @param {string} args.keywords 关键词
   * @param {boolean} args.onlyMyJoin 是否仅看自己的部门
   * @param {Object} options 配置参数
@@ -350,18 +340,6 @@ export default {
    getProjectDepartmentByPage: function (args, options = {}) {
      
      return $.api('Department', 'GetProjectDepartmentByPage', args, options);
-   },
-  /**
-  * 获取 部门所有下级（树结构，可取全网络）
-  * @param {Object} args 请求参数
-  * @param {string} args.projectId 网络id
-  * @param {Object} options 配置参数
-  * @param {Boolean} options.silent 是否禁止错误弹层
-  * @returns {Promise<Boolean, ErrorModel>}
-  **/
-   getDepartmentTrees: function (args, options = {}) {
-     
-     return $.api('Department', 'GetDepartmentTrees', args, options);
    },
   /**
   * 获取 部门所有下级（树结构，可取全网络）
@@ -403,6 +381,8 @@ export default {
   * @param {string} args.projectId 网络id
   * @param {string} args.keywords 关键词
   * @param {array} args.filterAccountIds 过滤哪些账号id
+  * @param {integer} args.pageIndex 页码
+  * @param {integer} args.pageSize 页大小（默认200）
   * @param {Object} options 配置参数
   * @param {Boolean} options.silent 是否禁止错误弹层
   * @returns {Promise<Boolean, ErrorModel>}
@@ -474,14 +454,32 @@ export default {
      return $.api('Department', 'SearchDepartment', args, options);
    },
   /**
-  * 查询部门（分页）
+  * 通过组织code加入组织验证Token 获取部门架构
   * @param {Object} args 请求参数
-  * @param {integer} args.pageIndex
-  * @param {integer} args.pageSize
   * @param {string} args.projectId 网络id
   * @param {string} args.departmentId 部门id
   * @param {string} args.keywords 关键词
   * @param {boolean} args.returnCount 是否返回用户数量
+  * @param {integer} args.pageIndex 页码
+  * @param {integer} args.pageSize 每页条数
+  * @param {string} args.token 接口返回的校验Token(必填)
+  * @param {Object} options 配置参数
+  * @param {Boolean} options.silent 是否禁止错误弹层
+  * @returns {Promise<Boolean, ErrorModel>}
+  **/
+   getDepartmentByJoinProject: function (args, options = {}) {
+     
+     return $.api('Department', 'GetDepartmentByJoinProject', args, options);
+   },
+  /**
+  * 查询部门（分页）
+  * @param {Object} args 请求参数
+  * @param {string} args.projectId 网络id
+  * @param {string} args.departmentId 部门id
+  * @param {string} args.keywords 关键词
+  * @param {boolean} args.returnCount 是否返回用户数量
+  * @param {integer} args.pageIndex 页码
+  * @param {integer} args.pageSize 每页条数
   * @param {Object} options 配置参数
   * @param {Boolean} options.silent 是否禁止错误弹层
   * @returns {Promise<Boolean, ErrorModel>}

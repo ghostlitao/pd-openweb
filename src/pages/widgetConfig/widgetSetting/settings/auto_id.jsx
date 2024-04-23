@@ -6,12 +6,14 @@ import { isEmpty } from 'lodash';
 import { Dropdown } from 'antd';
 import { useSetState } from 'react-use';
 import { Menu, MenuItem } from 'ming-ui';
-import Icon from 'src/components/Icon';
+import WidgetComponents from '../../components';
 import { SettingItem, InfoWrap, DropdownPlaceholder } from '../../styled';
 import { getControlByControlId, getIconByType } from '../../util';
 import { getAdvanceSetting, handleAdvancedSettingChange, isAutoNumberSelectableControl } from '../../util/setting';
 import Components from '../components';
 import AutoIdComponent from '../components/autoId';
+
+const Icon = WidgetComponents.Icon;
 
 const RuleInfo = styled.li`
   display: flex;
@@ -210,6 +212,7 @@ const SortableItem = SortableElement(({ index, rule, allControls, deleteRule, up
       return (
         <Dropdown
           trigger="click"
+          className="mTop0"
           overlay={
             <Components.SelectControlWithRelate
               {...rest}
@@ -233,6 +236,7 @@ const SortableItem = SortableElement(({ index, rule, allControls, deleteRule, up
       return (
         <Dropdown
           trigger="click"
+          className="mTop0"
           overlay={
             <Menu width={'100%'}>
               {TIME_MODE.map(({ value, text }) => (
@@ -361,6 +365,7 @@ export default function AutoId({ data, onChange, ...rest }) {
         <div className="settingItemTitle">{_l('编号规则')}</div>
         <SortableRules
           {...rest}
+          helperClass="zIndex99999"
           distance={5}
           rules={rules}
           onSortEnd={({ oldIndex, newIndex }) => {

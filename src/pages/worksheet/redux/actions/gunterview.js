@@ -16,8 +16,10 @@ import {
   formatWeekDay,
   sortGrouping,
 } from 'src/pages/worksheet/views/GunterView/util';
-import { formatQuickFilter } from 'worksheet/util';
+import { getDynamicValue } from 'src/components/newCustomFields/tools/DataFormat';
+import { formatQuickFilter, getFilledRequestParams, handleRecordError } from 'worksheet/util';
 import { PERIOD_TYPE } from 'src/pages/worksheet/views/GunterView/config';
+import { controlState } from 'src/components/newCustomFields/tools/utils';
 import { getRequest } from 'src/util';
 import _ from 'lodash';
 import moment from 'moment';
@@ -63,14 +65,14 @@ export const fetchRows = () => {
     dispatch({ type: 'CHANGE_GUNTER_LOADINNG', data: true });
     sheetAjax
       .getFilterRows(
-        {
+        getFilledRequestParams({
           appId: base.appId,
           viewId: base.viewId,
           worksheetId: base.worksheetId,
           relationWorksheetId: selectControl && selectControl.type === 29 ? selectControl.dataSource : null,
           ...filters,
           fastFilters: formatQuickFilter(quickFilter),
-        },
+        }),
         access_token ? { headersConfig } : {},
       )
       .then(({ data, count, resultCode }) => {
@@ -252,11 +254,18 @@ export const updataPeriodType = (value, time) => {
 export const updateViewConfig = view => {
   return (dispatch, getState) => {
     const { base, views, gunterView, controls } = getState().sheet;
-    const { advancedSetting, viewControl } = base.viewId ? _.find(views, { viewId: base.viewId }) : views[0];
-    const { unweekday, begindate, enddate, colorid, calendartype, milepost } = advancedSetting;
+    const { advancedSetting, viewControl, displayControls } = base.viewId
+      ? _.find(views, { viewId: base.viewId })
+      : views[0];
+    const { unweekday, begindate, enddate, colorid, calendartype, milepost, clicktype } = advancedSetting;
     const titleControl = _.find(controls, { attribute: 1 }) || {};
     const startControl = _.find(controls, { controlId: begindate }) || {};
     const endControl = _.find(controls, { controlId: enddate }) || {};
+    if (_.get(window, 'shareState.shareId')) {
+      startControl.disabled = true;
+      endControl.disabled = true;
+      titleControl.disabled = true;
+    }
     const newConfig = {
       ...gunterView.viewConfig,
       periodType: calendartype ? Number(calendartype) : PERIOD_TYPE.day,
@@ -266,15 +275,17 @@ export const updateViewConfig = view => {
       startId: begindate,
       endId: enddate,
       viewControl,
+      displayControls: displayControls.map(c => _.find(controls, { controlId: c })).filter(_ => _),
       colorId: colorid,
       startFormat: startControl.type === 16 ? 'YYYY-MM-DD HH:mm' : 'YYYY-MM-DD',
       endFormat: endControl.type === 16 ? 'YYYY-MM-DD HH:mm' : 'YYYY-MM-DD',
       endZeroFormat: endControl.type === 16 ? 'YYYY-MM-DD 00:00' : 'YYYY-MM-DD',
       startType: startControl.type,
       endType: endControl.type,
-      startDisable: (startControl.fieldPermission || '').split('')[1] === '0' || begindate.includes('time'),
-      endDisable: (endControl.fieldPermission || '').split('')[1] === '0' || enddate.includes('time'),
-      titleDisable: (titleControl.fieldPermission || '').split('')[1] === '0',
+      startDisable: startControl.disabled || !controlState(startControl, 3).editable,
+      endDisable: endControl.disabled || !controlState(endControl, 3).editable,
+      titleDisable: titleControl.disabled || !controlState(titleControl, 3).editable,
+      clickType: clicktype || '0',
     };
     dispatch({ type: 'CHANGE_GUNTER_VIEW_CONFIG', data: newConfig });
   };
@@ -380,6 +391,19 @@ export const addRecord = (cell, row) => {
     }
 
     dispatch(updateGroupingRow({ [cell.controlId]: cell.value }, row.rowid));
+
+    controls.forEach(c => {
+      if (c.advancedSetting && c.advancedSetting.defsource && c.type !== 30) {
+        const value =  getDynamicValue(row, c);
+        receiveControls.push({
+          controlId: c.controlId,
+          controlName: c.controlName,
+          dot: c.dot,
+          type: c.type,
+          value
+        });
+      }
+    });
 
     sheetAjax
       .addWorksheetRow({
@@ -605,11 +629,7 @@ export const updateRecordTitle = (control, record) => {
       })
       .then(({ data, resultCode }) => {
         if (!data) {
-          if (resultCode === 11) {
-            alert(_l('编辑失败，%0不允许重复', control.controlName || ''), 3);
-          } else {
-            alert(_l('编辑失败'), 3);
-          }
+          handleRecordError(data.resultCode, control);
           dispatch(
             updateGroupingRow(
               {

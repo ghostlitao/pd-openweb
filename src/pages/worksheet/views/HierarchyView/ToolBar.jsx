@@ -69,7 +69,7 @@ const ToolBarWrap = styled(FlexCenter)`
 `;
 
 const SelectWrap = styled(Select)`
-  width: 80px;
+  width: 96px;
   .ant-select-selection-item {
     text-align: center;
   }
@@ -145,7 +145,7 @@ export default class ToolBar extends Component {
         </div> */}
         <div className="toolItem adjustScale">
           {!browserIsMobile() ? <div className="scale">{`${scale}%`}</div> : null}
-          <Tooltip text={<span>{_l('缩小')}</span>}>
+          <Tooltip text={browserIsMobile() ? null : <span>{_l('缩小')}</span>}>
             <Icon
               className={cx('Font19 Gray_75 pointer mRight12 mLeft12', {
                 disableAdjustSize: scale <= SCALE_LIMIT.min,
@@ -154,7 +154,7 @@ export default class ToolBar extends Component {
               onClick={() => scale > SCALE_LIMIT.min && this.adjustSize('shrink')}
             />
           </Tooltip>
-          <Tooltip text={<span>{_l('放大')}</span>}>
+          <Tooltip text={browserIsMobile() ? null : <span>{_l('放大')}</span>}>
             <Icon
               className={cx('Font19 Gray_75 pointer mLeft6', {
                 disableAdjustSize: scale >= SCALE_LIMIT.max,

@@ -31,6 +31,8 @@ export function worksheetInfo(state = {}, action) {
       return action.value;
     case 'WORKSHEET_UPDATE_WORKSHEETINFO':
       return { ...state, ...action.info };
+    case 'WORKSHEET_UPDATE_IS_REQUESTING_RELATION_CONTROLS':
+      return { ...state, isRequestingRelationControls: action.value };
     case 'WORKSHEET_UPDATE_SOME_CONTROLS':
       try {
         newState = {
@@ -122,6 +124,7 @@ export function filters(state = initialFiltersState, action) {
     case 'WORKSHEET_UPDATE_FILTERS':
       return { ...state, ...action.filters };
     case 'WORKSHEET_INIT':
+    case 'WORKSHEET_CLEAR_FILTERS':
       return initialFiltersState;
     case 'WORKSHEET_UPDATE_BASE':
       return { ...state, keyWords: '' };

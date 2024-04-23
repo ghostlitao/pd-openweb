@@ -1,7 +1,7 @@
-import React, { Component } from 'react';
+import React, { Component, Fragment } from 'react';
 import { connect } from 'react-redux';
 import { bindActionCreators } from 'redux';
-import { Icon, LoadDiv, Support, WaterMark, Tooltip, Dialog } from 'ming-ui';
+import { Icon, LoadDiv, Support, WaterMark, Tooltip, Dialog, Switch } from 'ming-ui';
 import SvgIcon from 'src/components/SvgIcon';
 import DocumentTitle from 'react-document-title';
 import cx from 'classnames';
@@ -16,8 +16,12 @@ import Portal from 'src/pages/Role/PortalCon/index';
 import openImg from './img/open.gif';
 import externalPortalAjax from 'src/api/externalPortal';
 import AppRoleCon from 'src/pages/Role/AppRoleCon';
-import { getFeatureStatus, buriedUpgradeVersionDialog } from 'src/util';
+import { getFeatureStatus, buriedUpgradeVersionDialog, setFavicon } from 'src/util';
+import { VersionProductType } from 'src/util/enum';
 import _ from 'lodash';
+import { sysRoleType } from './config';
+import AppManagementAjax from 'src/api/appManagement';
+
 const EDITTYLE_CONFIG = [_l('常规'), _l('外部门户')];
 const RoleWrapper = styled.div`
   height: 100%;
@@ -64,13 +68,12 @@ const Wrap = styled.div`
   & > span {
     padding: 0 12px;
     margin: 0 10px;
-    // color: #757575;
     line-height: 48px;
     display: inline-block;
     box-sizing: border-box;
-    // &:hover {
-    //   color: #2196f3;
-    // }
+    line-height: 44px;
+    border-top: 3px solid transparent;
+    border-bottom: 3px solid transparent;
     &.current {
       position: relative;
       color: #2196f3;
@@ -148,6 +151,31 @@ const WrapPop = styled.div`
     }
   }
 `;
+
+const RoleDebugSwitch = styled(Switch)`
+  width: 23px !important;
+  height: 14px !important;
+  border-radius: 7px !important;
+  &.ming.Switch.small .dot {
+    width: 10px;
+    height: 10px;
+  }
+  &.ming.Switch--off .dot {
+    left: 2px;
+  }
+  &.ming.Switch--on.small .dot {
+    left: 11px;
+  }
+`;
+
+const DividerVertical = styled.div`
+  width: 1px;
+  height: 25px;
+  opacity: 1;
+  border: none;
+  background: #eaeaea;
+`;
+
 class AppRole extends Component {
   state = {
     applyList: undefined,
@@ -166,11 +194,13 @@ class AppRole extends Component {
     showPortalRoleSetting: false,
     portalBaseSet: {},
     hasGetIsOpen: false,
+    roleDebug: false,
   };
 
   componentDidMount() {
     this.ids = getIds(this.props);
     this.fetchPortalInfo();
+    this.getSetting();
     $('html').addClass('roleBody');
   }
 
@@ -213,9 +243,10 @@ class AppRole extends Component {
       },
     } = props;
 
-    HomeAjax.getAppDetail({
+    HomeAjax.getApp({
       appId,
     }).then(appDetail => {
+      setFavicon(appDetail.iconUrl, appDetail.iconColor);
       this.setState({ appDetail, loading: false });
       const {
         match: {
@@ -266,9 +297,21 @@ class AppRole extends Component {
       });
   };
 
+  getSetting = () => {
+    const {
+      match: {
+        params: { appId },
+      },
+    } = this.props;
+
+    AppManagementAjax.getAppRoleSetting({ appId }).then(data => {
+      this.setState({ roleDebug: data.isDebug });
+    });
+  };
+
   handleChangePage = callback => {
     if (this.child && this.child.state.hasChange) {
-      let isNew = !this.child.props.roleId;
+      let isNew = !this.child.props.roleId || this.child.props.roleId === 'new';
       return Dialog.confirm({
         title: isNew ? _l('创建当前新增的角色？') : _l('保存当前角色权限配置 ？'),
         okText: isNew ? _l('创建') : _l('保存'),
@@ -296,7 +339,15 @@ class AppRole extends Component {
   };
 
   render() {
-    const { appDetail = {}, loading, openLoading, editType, showPortalRoleSetting, isOpenPortal } = this.state;
+    const {
+      appDetail = {},
+      loading,
+      openLoading,
+      editType,
+      showPortalRoleSetting,
+      isOpenPortal,
+      roleDebug,
+    } = this.state;
     const { projectId = '' } = appDetail;
     const {
       match: {
@@ -312,7 +363,7 @@ class AppRole extends Component {
     if (loading) {
       return <LoadDiv />;
     }
-    const featureType = canEndterPortal ? getFeatureStatus(projectId, 11) : false;
+    const featureType = canEndterPortal ? getFeatureStatus(projectId, VersionProductType.externalPortal) : false;
 
     return (
       <WaterMark projectId={projectId}>
@@ -375,7 +426,7 @@ class AppRole extends Component {
                           this.handleChangePage(() => {
                             if (o === 1) {
                               if (featureType === '2') {
-                                buriedUpgradeVersionDialog(projectId, 11);
+                                buriedUpgradeVersionDialog(projectId, VersionProductType.externalPortal);
                                 return;
                               }
                               navigateTo(`/app/${appId}/role/external`);
@@ -439,7 +490,7 @@ class AppRole extends Component {
                         {openLoading ? _l('开启中...') : _l('启用外部门户')}
                       </div>
                       <Support
-                        href="https://help.mingdao.com/zh/external.html"
+                        href="https://help.mingdao.com/external"
                         type={3}
                         className="helpPortal"
                         text={_l('了解更多')}
@@ -458,6 +509,37 @@ class AppRole extends Component {
                 </WrapOpenPortalBtn>
               </Trigger>
             )}
+            {sysRoleType.concat(200).includes(appDetail.permissionType) && editType !== 1 && (
+              <Fragment>
+                {editApp && !isOpenPortal && featureType && <DividerVertical className="mLeft24" />}
+                <Tooltip
+                  popupPlacement="bottomLeft"
+                  text={
+                    <span>
+                      {_l(
+                        '开启后，应用的管理员、运营者、开发者可以使用不同的角色身份访问应用。请注意，该操作不会改变开发者角色的数据权限，开发者始终无法看到业务数据。',
+                      )}
+                    </span>
+                  }
+                >
+                  <div className="mLeft24 valignWrapper">
+                    <RoleDebugSwitch
+                      checked={roleDebug}
+                      size="small"
+                      onClick={checked => {
+                        AppManagementAjax.updateAppDebugModel({
+                          appId,
+                          isDebug: !checked,
+                        }).then(res => {
+                          res && this.setState({ roleDebug: !checked });
+                        });
+                      }}
+                    />
+                    <span className="mLeft8">{_l('角色调试')}</span>
+                  </div>
+                </Tooltip>
+              </Fragment>
+            )}
           </TopBar>
           {editType === 0 ? (
             <AppRoleCon
@@ -474,6 +556,7 @@ class AppRole extends Component {
               }}
               appDetail={appDetail}
               handleChangePage={this.handleChangePage}
+              editType={editType}
             />
           ) : (
             <Portal
@@ -489,6 +572,7 @@ class AppRole extends Component {
               appDetail={appDetail}
               projectId={projectId}
               appId={appId}
+              editType={editType}
               closePortal={() => {
                 externalPortalAjax.editExPortalEnable({ appId, isEnable: false }).then(res => {
                   if (res) {

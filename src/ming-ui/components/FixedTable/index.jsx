@@ -1,10 +1,10 @@
-import React, { useEffect, useRef, useMemo, useImperativeHandle, forwardRef } from 'react';
-import { func, number } from 'prop-types';
+import React, { useEffect, useRef, useMemo, useImperativeHandle, forwardRef, useCallback } from 'react';
+import { bool, func, number } from 'prop-types';
 import styled from 'styled-components';
 import _ from 'lodash';
 import Hammer from 'hammerjs';
 import { useRefStore } from 'worksheet/hooks';
-import Skeleton from 'src/router/Application/Skeleton';
+import Skeleton from '../Skeleton';
 import { getScrollBarWidth } from 'worksheet/util';
 import Grid from './Grid';
 import ScrollBar from './ScrollBar';
@@ -21,8 +21,6 @@ const Con = styled.div`
 function sum(array = []) {
   return array.reduce((a, b) => a + b, 0);
 }
-
-window.count = 0;
 
 function setScrollX(cache, newLeft) {
   ['top-center', 'main-center', 'bottom-center', 'scrollX'].forEach(name => {
@@ -46,16 +44,18 @@ function setScrollY(cache, newTop) {
 }
 
 function FixedTable(props, ref) {
-  // console.log('FixedTable render');
   const {
     noRenderEmpty,
     loading,
     className,
+    showHead,
+    showFoot,
     width,
     height,
-    columnHeadHeight,
+    columnHeadHeight = 34,
     setHeightAsRowCount,
     rowCount,
+    disableYScroll,
     columnCount,
     barWidth = getScrollBarWidth(),
     sheetColumnWidths = {},
@@ -65,13 +65,13 @@ function FixedTable(props, ref) {
     rightFixedCount = 0,
     hasSubListFooter,
     defaultScrollLeft, // 默认横向滚动距离
-    renderCell = () => <span />,
-    renderHeadCell,
-    renderFooterCell,
+    Cell,
+    tableData,
     renderEmpty, // 渲染空状态
+    disablePanVertical,
   } = props;
-  const bottomFixedCount = renderFooterCell ? 1 : 0;
-  const topFixedCount = renderHeadCell ? 1 : 0;
+  const bottomFixedCount = showFoot ? 1 : 0;
+  const topFixedCount = showHead ? 1 : 0;
   const conRef = useRef();
   const tablehammer = useRef();
   const [hammerCache, setHammer] = useRefStore();
@@ -93,7 +93,7 @@ function FixedTable(props, ref) {
     [width, tableSize.width, leftFixedCount, rightFixedCount, columnCount],
   );
   const YIsScroll = useMemo(
-    () => tableSize.height > height - columnHeadHeight - (bottomFixedCount ? 28 : 0),
+    () => !disableYScroll && tableSize.height > height - columnHeadHeight - (bottomFixedCount ? 28 : 0),
     [height, tableSize.height, topFixedCount, columnHeadHeight, bottomFixedCount, rowCount],
   );
   const tableConfigs = [
@@ -139,6 +139,16 @@ function FixedTable(props, ref) {
       visible: rightFixedCount > 0 && bottomFixedCount > 0 && rowCount > 0,
     },
   ];
+  const forceUpdate = useCallback(() => {
+    tableConfigs
+      .filter(t => t.visible)
+      .forEach(t => {
+        if (cache[t.id]) {
+          cache[t.id].resetAfterRowIndex(0);
+          cache[t.id].resetAfterColumnIndex(0);
+        }
+      });
+  }, [rowCount]);
   const tables = tableConfigs
     .filter(item => item.visible)
     .map(t => (
@@ -156,11 +166,8 @@ function FixedTable(props, ref) {
           rowHeight,
           cache, // 用来更新指定位置
           getColumnWidth,
-          renderCell: t.id.startsWith('bottom')
-            ? renderFooterCell
-            : t.id.startsWith('top')
-            ? renderHeadCell
-            : renderCell,
+          Cell,
+          tableData,
           setRef: ref => {
             cache[t.id] = ref;
           },
@@ -250,38 +257,6 @@ function FixedTable(props, ref) {
     e.preventDefault();
     e.stopPropagation();
   }
-  function forceUpdate() {
-    set('needUpdated', { type: 'all' });
-    tableConfigs
-      .filter(t => t.visible)
-      .forEach(t => {
-        if (cache[t.id]) {
-          cache[t.id].resetAfterRowIndex(0);
-          cache[t.id].resetAfterColumnIndex(0);
-        }
-      });
-    setTimeout(() => {
-      set('needUpdated', {});
-    }, 0);
-  }
-  function handleUpdate(rowIndex, columnIndex) {
-    const rowIsUndefined = typeof rowIndex === 'undefined';
-    const columnIsUndefined = typeof columnIndex === 'undefined';
-    if (rowIsUndefined && columnIsUndefined) {
-      return;
-    }
-    if (rowIsUndefined) {
-      set('needUpdated', { type: 'column', index: columnIndex });
-    } else if (columnIsUndefined) {
-      set('needUpdated', { type: 'row', index: rowIndex });
-    } else {
-      set('needUpdated', { type: 'cell', index: `${rowIndex}-${columnIndex}` });
-    }
-    forceUpdate();
-    setTimeout(() => {
-      set('needUpdated', {});
-    }, 0);
-  }
   // hammer event
   function handlePanMove(e) {
     if (window.disableTableScroll) {
@@ -313,10 +288,7 @@ function FixedTable(props, ref) {
 
   useImperativeHandle(ref, () => ({
     dom: conRef,
-    forceUpdate: forceUpdate,
-    updateRow: handleUpdate,
-    updateColumn: columnIndex => handleUpdate(undefined, columnIndex),
-    updateCell: handleUpdate,
+    forceUpdate,
     setScroll: (left, top) => {
       const $scrollX = conRef.current.querySelector('.scroll-x');
       const $scrollY = conRef.current.querySelector('.scroll-y');
@@ -329,12 +301,6 @@ function FixedTable(props, ref) {
     },
   }));
   useEffect(() => {
-    if (!cache.didMount) {
-      return;
-    }
-    forceUpdate();
-  }, [rowHeight, JSON.stringify(sheetColumnWidths)]);
-  useEffect(() => {
     cache.didMount = true;
     document.body.style.overscrollBehaviorX = 'none';
     conRef.current.addEventListener('wheel', handleMouseWheel);
@@ -344,7 +310,9 @@ function FixedTable(props, ref) {
     setHammer('topForHammer', _.get(conRef.current.querySelector('.scroll-y'), 'scrollTop') || 0);
     setHammer('lastPandeltaX', 0);
     setHammer('lastPandeltaY', 0);
-    tablehammer.current.get('pan').set({ direction: Hammer.DIRECTION_ALL });
+    tablehammer.current
+      .get('pan')
+      .set({ direction: disablePanVertical ? Hammer.DIRECTION_HORIZONTAL : Hammer.DIRECTION_ALL });
     tablehammer.current.on('panmove', handlePanMove);
     tablehammer.current.on('panend', handlePanEnd);
     // ---
@@ -411,6 +379,7 @@ FixedTable.propTypes = {
   rowHeight: number.isRequired,
   getColumnWidth: func.isRequired,
   renderCell: func.isRequired,
+  disablePanVertical: bool,
 };
 
 export default forwardRef(FixedTable);

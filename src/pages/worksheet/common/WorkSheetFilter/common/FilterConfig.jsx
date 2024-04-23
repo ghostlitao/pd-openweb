@@ -38,6 +38,8 @@ export default function SingleFilter(props) {
     filterDept,
     filterResigned = true,
     filterError,
+    urlParams,
+    showCustom,
   } = props;
   let { columns } = props;
   const filterWhiteKeys = _.flatten(
@@ -53,6 +55,7 @@ export default function SingleFilter(props) {
       .filter(column => !_.find(SYSTEM_CONTROLS, c => c.controlId === column.controlId))
       .concat(SYSTEM_CONTROLS);
   }
+  columns = columns.sort((a, b) => (a.row * 10 + a.col > b.row * 10 + b.col ? 1 : -1));
   const [state = {}, dispatch] = useReducer(createReducer, {
     ...initialState,
     editingFilter: formatOriginFilterGroupValue({ items: conditions }),
@@ -100,12 +103,14 @@ export default function SingleFilter(props) {
         filterResigned={filterResigned}
         filterError={filterError}
         filterAddConditionControls={filterAddConditionControls}
+        showCustom={showCustom}
         conditionProps={{
           filterDept,
           sourceControlId,
           currentColumns,
           relateSheetList,
           globalSheetControls,
+          urlParams,
         }}
       />
     </Con>

@@ -1,7 +1,6 @@
 import React from 'react';
-import { Icon, Dropdown, Tooltip, ScrollView, Checkbox, Switch } from 'ming-ui';
-
-import Api from 'api/homeApp';
+import cx from 'classnames';
+import { Icon, Dropdown, Tooltip, Checkbox } from 'ming-ui';
 import { sortByShowControls, getVisibleControls, isVisible, isRelation } from '../util';
 import {
   fromType,
@@ -11,19 +10,15 @@ import {
   MIDDLE_FONT_SIZE,
   MAX_FONT_SIZE,
   UNPRINTCONTROL,
+  APPROVAL_POSITION_OPTION,
 } from '../config';
 
 import './sidenav.less';
 import moment from 'moment';
 import { permitList } from 'src/pages/FormSet/config.js';
 import { isOpenPermit } from 'src/pages/FormSet/util.js';
+import _ from 'lodash';
 
-let sidenavList = [
-  'setting', //设置
-  'control', //字段
-  'workflow', //工作流
-  'addition', //附加
-];
 class Sidenav extends React.Component {
   constructor(props) {
     super(props);
@@ -113,19 +108,31 @@ class Sidenav extends React.Component {
     return list.length >= controls.length && !!orderNumberCheck;
   };
 
-  renderLi = list => {
-    const { handChange, printData = [], systemControl } = this.props;
+  renderLi = (list, filterSection = true) => {
+    const { handChange, printData = [], controls = [] } = this.props;
     const { receiveControls = [] } = printData;
+    const allControls = getVisibleControls(controls);
+    let listData = (list || []).filter(o => !UNPRINTCONTROL.includes(o.type));
+
     return (
       <React.Fragment>
-        {(list || [])
-          .filter(o => !UNPRINTCONTROL.includes(o.type))
+        {listData
+          .filter(l => !l.sectionId || !filterSection)
           .map(it => {
             let isRelationControls = isRelation(it);
             let isClearselected = isRelationControls && this.getRelationControlsShowPart(it);
+            let sectionLi = it.type === 52 ? allControls.filter(l => l.sectionId === it.controlId) : [];
             let isChecked = !isRelationControls ? it.checked : this.getIsChecked(it);
+            if (it.type === 52 && sectionLi.length !== 0) {
+              isChecked = sectionLi.some(l => l.checked);
+            }
+
             return (
-              <div className="Relative">
+              <div
+                className={cx('Relative', {
+                  mLeft25: !!it.sectionId,
+                })}
+              >
                 <Checkbox
                   checked={isChecked}
                   clearselected={isClearselected}
@@ -148,14 +155,14 @@ class Sidenav extends React.Component {
                     } else if (it.controlId === 'uaid') {
                       printDataN = this.changeSysFn('uaid', !printData.updateAccountChecked);
                       handChange(printDataN);
-                    }  else {
+                    } else {
                       this.setData(it, 'checked', isRelationControls);
                     }
                   }}
                   text={it.controlName || _l('未命名')}
                 />
-                {isRelationControls && (
-                  <div className="mLeft24">
+                {(isRelationControls || (it.type === 52 && sectionLi.length !== 0)) && (
+                  <div className={it.type === 52 ? '' : 'mLeft24'}>
                     <Icon
                       icon={it.expand ? 'expand_less' : 'expand_more'}
                       className="Font18 moreList Hand TxtCenter TxtBottom"
@@ -163,7 +170,10 @@ class Sidenav extends React.Component {
                         this.setData(it, 'expand');
                       }}
                     />
-                    {it.expand && this.renderLirelation(it)}
+                    {it.expand && isRelationControls && this.renderLirelation(it)}
+                    {it.expand && it.type === 52 && (
+                      <div className="Relative sectionLiCon">{this.renderLi(sectionLi, false)}</div>
+                    )}
                   </div>
                 )}
               </div>
@@ -317,7 +327,6 @@ class Sidenav extends React.Component {
     });
   }
 
-
   renderWorkflow() {
     const { handChange, printData = [], systemControl } = this.props;
     const { workflow = [] } = printData;
@@ -371,8 +380,8 @@ class Sidenav extends React.Component {
                     if (item.child.length < 2) return;
                     if (openApprovalList.find(l => l === item.processId)) {
                       this.setState({
-                        openApprovalList: openApprovalList.filter(l=>l!==item.processId)
-                      })
+                        openApprovalList: openApprovalList.filter(l => l !== item.processId),
+                      });
                     } else {
                       this.setState({
                         openApprovalList: openApprovalList.concat(item.processId),
@@ -406,11 +415,12 @@ class Sidenav extends React.Component {
   }
 
   setData = (o, key, isRelationControls) => {
-    const { printData = [], handChange } = this.props;
+    const { printData = [], handChange, controls } = this.props;
     const { receiveControls = [], workflow = [], orderNumber = [] } = printData;
     let data = receiveControls.filter(control => control.controlId === o.controlId);
     let dataOther = [];
     let isCheck;
+    let isSection = o.type === 52 && key === 'checked';
     receiveControls.map(item => {
       if (item.controlId === o.controlId) {
         if (!isRelationControls) {
@@ -430,9 +440,21 @@ class Sidenav extends React.Component {
           });
         }
       } else {
-        dataOther.push(item);
+        let _item = { ...item };
+        if (isSection && item.sectionId === o.controlId) {
+          _item.checked = !item.checked;
+        }
+        dataOther.push(_item);
       }
     });
+
+    if (key === 'checked' && o.sectionId) {
+      const sectionItems = dataOther.filter(l => l.sectionId === o.sectionId);
+      const index = _.findIndex(dataOther, l => l.controlId === o.sectionId);
+
+      dataOther[index].checked = _.some(sectionItems, l => l.checked);
+    }
+
     let list = {
       ...printData,
       receiveControls: dataOther,
@@ -449,6 +471,7 @@ class Sidenav extends React.Component {
         }),
       };
     }
+
     handChange(list);
   };
 
@@ -609,9 +632,18 @@ class Sidenav extends React.Component {
   };
 
   render() {
-    const { handChange, params, printData, systemControl, controls = [], signature = [], saveTem, sheetSwitchPermit } = this.props;
-    const { printId, type, from, printType, isDefault, viewId  } = params;
-    const { receiveControls = [], workflow = [], shareType = 0, approval = [] } = printData;
+    const {
+      handChange,
+      params,
+      printData,
+      systemControl,
+      controls = [],
+      signature = [],
+      saveTem,
+      sheetSwitchPermit,
+    } = this.props;
+    const { printId, type, from, printType, isDefault, viewId } = params;
+    const { receiveControls = [], workflow = [], shareType = 0, approval = [], approvePosition = 0 } = printData;
     const { receiveControlsCheckAll, workflowCheckAll, closeList = [] } = this.state;
     return (
       <div className="sidenavBox flexRow">
@@ -679,10 +711,26 @@ class Sidenav extends React.Component {
           <div className="lineBox"></div>
           {isOpenPermit(permitList.approveDetailsSwitch, sheetSwitchPermit, viewId) && approval.length > 0 && (
             <React.Fragment>
-              <div className="plate pBottom20">
+              <div className="plate">
                 <p className="headline Bold">{_l('审批')}</p>
                 {this.renderApproval()}
+                <p className="mTop24 mBottom10">{_l('审批签名位置')}</p>
+                <Dropdown
+                  className="w100"
+                  border
+                  value={approvePosition}
+                  data={APPROVAL_POSITION_OPTION}
+                  onChange={value => {
+                    if (value === approvePosition) return;
+
+                    handChange({
+                      ...printData,
+                      approvePosition: value,
+                    });
+                  }}
+                />
               </div>
+              <div className="lineBox"></div>
             </React.Fragment>
           )}
           {workflow.length > 0 && (
@@ -709,6 +757,21 @@ class Sidenav extends React.Component {
                   </span>
                 </div>
                 {!closeList.includes('workflow') && this.renderWorkflow()}
+                <p className="mTop24 mBottom10">{_l('审批签名位置')}</p>
+                <Dropdown
+                  className="w100"
+                  border
+                  value={approvePosition}
+                  data={APPROVAL_POSITION_OPTION}
+                  onChange={value => {
+                    if (value === approvePosition) return;
+
+                    handChange({
+                      ...printData,
+                      approvePosition: value,
+                    });
+                  }}
+                />
               </div>
               <div className="lineBox"></div>
             </React.Fragment>

@@ -85,7 +85,7 @@ class MobileCalendarView extends Component {
       //   right: 'today',
       // },
       buttonText: {
-        today: _l('今'),
+        today: <i className="icon icon-restore2 Font26 Gray_9e" />,
       },
       dateClick: info => {
         this.getMoreClickData(info.date);
@@ -112,7 +112,7 @@ class MobileCalendarView extends Component {
     };
     // 视图配置错误
     if (isHaveSelectControl || isIllegalFormat(calendarInfo)) {
-      return <ViewErrorPage icon="event" viewName={_l('日历视图')} color="#f64082" />;
+      return <ViewErrorPage icon="event" viewName={view.name + _l('视图')} color="#f64082" />;
     }
     return (
       <div className="mobileBoxCalendar">

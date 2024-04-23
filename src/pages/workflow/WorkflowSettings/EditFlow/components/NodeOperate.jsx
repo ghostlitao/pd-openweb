@@ -49,7 +49,7 @@ export default class NodeOperate extends Component {
     const name = evt.currentTarget.value.trim();
 
     if (name && name !== item.name) {
-      updateNodeName(processId, name, item.id);
+      updateNodeName(processId, item.id, name);
     } else {
       this.workflowNodeName.value = item.name;
     }
@@ -211,7 +211,7 @@ export default class NodeOperate extends Component {
         <div className={cx('TxtCenter Font15', { mTop10: item.typeId !== NODE_TYPE.BRANCH_ITEM })}>
           {item.typeId === NODE_TYPE.BRANCH_ITEM ? _l('同时删除分支下所有节点') : _l('确定删除此节点？')}
         </div>
-        <div className="flexRow Font13 mTop20">
+        <div className="flexRow Font13 mTop10">
           <div
             className="delNodeCancelBtn"
             onMouseDown={e => {
@@ -251,7 +251,7 @@ export default class NodeOperate extends Component {
         <Trigger
           popupVisible={showOperate}
           action={['click']}
-          popup={this.renderOperateList()}
+          popup={showOperate ? this.renderOperateList() : <div />}
           popupAlign={{ points: ['tr', 'br'] }}
           onPopupVisibleChange={showOperate => this.setState({ showOperate })}
         >
@@ -265,11 +265,13 @@ export default class NodeOperate extends Component {
    * 渲染操作列表
    */
   renderOperateList = () => {
-    const { item, copyBranchNode, noDelete } = this.props;
+    const { item, copyBranchNode, noDelete, flowIds } = this.props;
+    let branchItemIndex = 0;
     const list = [
       { text: _l('修改名称'), icon: 'edit', events: () => this.setState({ isEdit: true }) },
       { text: _l('编辑节点别名和说明'), icon: 'knowledge-message', events: () => this.addNodeDescribe() },
-      { text: _l('节点复制'), icon: 'copy', events: copyBranchNode },
+      { text: _l('复制'), icon: 'copy', events: () => copyBranchNode(false) },
+      { text: _l('复制整个分支'), icon: 'flow', events: () => copyBranchNode(true) },
       {
         text: _l('删除'),
         icon: 'delete1',
@@ -280,31 +282,104 @@ export default class NodeOperate extends Component {
 
     // 触发节点没有删除 || 禁用删除
     if (item.typeId === NODE_TYPE.FIRST || noDelete) {
-      _.remove(list, (o, index) => index === 3);
+      _.remove(list, (o, index) => index === 4);
     }
 
     // 只有分支节点有复制
     if (item.typeId !== NODE_TYPE.BRANCH_ITEM) {
-      _.remove(list, (o, index) => index === 2);
+      _.remove(list, (o, index) => _.includes([2, 3], index));
+    }
+
+    // 当前分支节点的位置
+    if (item.typeId === NODE_TYPE.BRANCH_ITEM) {
+      branchItemIndex = _.findIndex(flowIds, o => o === item.id);
     }
 
     return (
-      <ul className="flowNodeOperateList">
-        {list.map((item, index) => (
-          <li
-            key={index}
-            className={cx(item.className)}
-            onClick={() => {
-              item.events();
-              this.setState({ showOperate: false });
-            }}
-          >
-            <Icon icon={item.icon} />
-            {item.text}
-          </li>
-        ))}
-      </ul>
+      <div className="flowNodeOperateList">
+        <ul>
+          {list.map((item, index) => (
+            <li
+              key={index}
+              className={cx(item.className)}
+              onClick={() => {
+                item.events();
+                this.setState({ showOperate: false });
+              }}
+            >
+              <Icon icon={item.icon} />
+              {item.text}
+            </li>
+          ))}
+        </ul>
+        {item.typeId === NODE_TYPE.BRANCH_ITEM && (
+          <Fragment>
+            <div className="Gray_9e flowNodeOperateMove">{_l('移动')}</div>
+            <div className="flowNodeOperateMoveBtn flexRow">
+              <div className={cx('pAll3 flexRow', { disabled: branchItemIndex === 0 })}>
+                <Tooltip placement="bottom" title={branchItemIndex === 0 ? '' : _l('移至最左')}>
+                  <Icon icon="leftmost" onClick={() => this.updateBranchSort(1)} />
+                </Tooltip>
+                <Tooltip placement="bottom" title={branchItemIndex === 0 ? '' : _l('左移一位')}>
+                  <Icon icon="left" onClick={() => this.updateBranchSort(2)} />
+                </Tooltip>
+              </div>
+              <div className="flowNodeOperateMoveLine" />
+              <div
+                className={cx('pAll3 flexRow', {
+                  disabled: branchItemIndex === flowIds.length - 1,
+                })}
+              >
+                <Tooltip placement="bottom" title={branchItemIndex === flowIds.length - 1 ? '' : _l('右移一位')}>
+                  <Icon icon="right" onClick={() => this.updateBranchSort(3)} />
+                </Tooltip>
+                <Tooltip placement="bottom" title={branchItemIndex === flowIds.length - 1 ? '' : _l('移至最右')}>
+                  <Icon icon="rightmost" onClick={() => this.updateBranchSort(4)} />
+                </Tooltip>
+              </div>
+            </div>
+          </Fragment>
+        )}
+      </div>
     );
+  };
+
+  /**
+   * 调整分支顺序
+   */
+  updateBranchSort = type => {
+    const { processId, item, flowIds, updateBranchSort } = this.props;
+    const currentIndex = _.findIndex(flowIds, o => o === item.id);
+    const moveElements = array => {
+      array.splice(currentIndex, 1);
+
+      switch (type) {
+        case 1:
+          array.unshift(item.id);
+          break;
+        case 2:
+          array.splice(currentIndex - 1, 0, item.id);
+          break;
+        case 3:
+          array.splice(currentIndex + 1, 0, item.id);
+          break;
+        case 4:
+          array.push(item.id);
+          break;
+      }
+
+      return array;
+    };
+
+    if (
+      (_.includes([1, 2], type) && currentIndex === 0) ||
+      (_.includes([3, 4], type) && currentIndex === flowIds.length - 1)
+    ) {
+      return;
+    }
+
+    updateBranchSort(processId, item.prveId, moveElements(flowIds));
+    this.setState({ showOperate: false });
   };
 
   render() {

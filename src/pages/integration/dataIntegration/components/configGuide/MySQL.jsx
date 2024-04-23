@@ -8,21 +8,24 @@ export default function MySQLGuide(props) {
       <p>{_l('你可以把 MySQL 数据库的数据通过系统实时同步到工作表或者其它数据目的地。')}</p>
       <h5>{_l('先决条件')}</h5>
       <ul>
-        <li>
-          {_l('支持MySQL的版本')}
-          <li>5.6, 5.7, 8.0.x</li>
+        <li className="pointer textUnderline" onClick={() => document.getElementById('versionId').scrollIntoView()}>
+          {_l('支持MySQL的版本: ')}5.6, 5.7, 8.0.x
         </li>
-        <li>{_l('需要开启Binlog并设置为ROW')}</li>
-        <li>{_l('授权MySQL账户对应的权限')}</li>
-        <li>{_l('将系统 IP 添加到 MySQL 服务器的访问白名单')}</li>
+        <li className="pointer textUnderline" onClick={() => document.getElementById('binLogId').scrollIntoView()}>
+          {_l('需要开启Binlog并设置为ROW模式')}
+        </li>
+        <li className="pointer textUnderline" onClick={() => document.getElementById('authId').scrollIntoView()}>
+          {_l('授权MySQL账户对应的权限')}
+        </li>
+        <li>{_l('确保数据库可以与数据集成通信')}</li>
       </ul>
 
-      <h5>{_l('检查 MySQL 版本')}</h5>
+      <h5 id="versionId">{_l('检查 MySQL 版本')}</h5>
       <div className="sqlText">
         <div>{`mysql> mysql -V;`}</div>
       </div>
 
-      <h5>{_l('检查Binlog是否开启')}</h5>
+      <h5 id="binLogId">{_l('检查Binlog是否开启')}</h5>
       <div className="sqlText">
         <div>{`mysql> select @@log_bin;`}</div>
       </div>
@@ -33,12 +36,12 @@ export default function MySQLGuide(props) {
       </p>
 
       <h5>{_l('开启Binlog')}</h5>
-      <div>1. {_l('登陆到MySQL服务器')}</div>
-      <div>2. {_l('编辑MySQL服务器的配置文件')}</div>
+      <div className="subTitle">{_l('1. 登陆到MySQL服务器编辑配置文件')}</div>
       <div className="sqlText">
         <div>sudo nano /etc/mysql/my.cnf</div>
       </div>
-      <div>3. {_l('在配置文件中检查是否符合以下内容，不符合的需要修改')}</div>
+      <p className="subTitle">{_l('2. 检查配置文件')}</p>
+      <div>{_l('在配置文件中检查是否符合以下内容，不符合的需要修改')}</div>
       <div className="sqlText">
         <div>[mysqld]</div>
         <div>binlog_format=ROW</div>
@@ -51,54 +54,116 @@ export default function MySQLGuide(props) {
         <div>server-id=1 -- (only in the case of ubuntu)</div>
         <div>log_slave_updates=1</div>
       </div>
-      <div>4. {_l('保存文件或者退出')}</div>
-      <div className="sqlText">
-        <div>{_l('保存所做的修改，按下Ctrl+O。')}</div>
-        <div>{_l('退出，按下Ctrl+X。')}</div>
-      </div>
-      <div>5. {_l('重启MySQL服务器')}</div>
+      <div className="subTitle">{_l('3. 如果修改过配置文件，需要重启MySQL服务器')}</div>
       <div className="sqlText">
         <div>service mysql restart</div>
       </div>
-      <div>6. {_l('重启后，再次登陆到MySQL服务器，检查Binlog状态')}</div>
-      <div className="sqlText">
-        <div>{`mysql> select @@log_bin;`}</div>
-      </div>
+      <p>{_l('重启后再次检查binlog状态')}</p>
 
-      <h5>{_l('授权MySQL账户对应的权限')}</h5>
-      <div>1. {_l('对于某个数据库赋于select权限')}</div>
+      <h5 id="authId">{_l('授权MySQL账户对应的权限')}</h5>
+      <div className="subTitle">{_l('1. 创建用户，也可以用已有用户')}</div>
+      <p>{_l('MySQL5.x 用户')}</p>
       <div className="sqlText">
-        <div>
-          {`GRANT SELECT, SHOW VIEW, CREATE ROUTINE, LOCK TABLES ON <DATABASE_NAME>.<TABLE_NAME> TO 'user' IDENTIFIED BY 'password';`}
-        </div>
+        <div>{`mysql> CREATE USER '${_l('用户名')}'@'%' IDENTIFIED BY '${_l('密码')}';`}</div>
       </div>
-      <div>2. {_l('或者可以赋予全局权限')}</div>
+      <p>{_l('MySQL8.x 用户')}</p>
       <div className="sqlText">
-        <div>
-          GRANT RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'user' IDENTIFIED BY 'password';
-        </div>
+        <div>{`mysql> CREATE USER '${_l('用户名')}'@'%' IDENTIFIED WITH mysql_native_password BY '${_l(
+          '密码',
+        )}';`}</div>
       </div>
+      <p>{_l('如果已有账号可以直接进行赋权')}</p>
+      <div className="subTitle">{_l('2. 赋权')}</div>
+      <div className="sqlText">
+        <div>GRANT SELECT, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO '{_l('用户名')}' ;</div>
+      </div>
+      <div>{_l('如果是已有用户，可以通过以下命令查询权限')}</div>
+      <div className="sqlText">
+        <div>SHOW GRANTS FOR {_l("'用户名'@'主机'")} ;</div>
+      </div>
+      <p>{_l('如果权限不足，可以按照上方赋权重新增加对应权限')}</p>
+      <div>{_l('需要包含的权限')}</div>
+      <ul>
+        <li>SELECT</li>
+        <li>SHOW</li>
+        <li>DATABASES</li>
+        <li>REPLICATION SLAVE</li>
+        <li>REPLICATION CLIENT</li>
+      </ul>
+      <div>{_l('扩展：撤销用户的权限')}</div>
+      <div className="sqlText">
+        <div>EVOKE REPLICATION SLAVE ON *.* FROM {_l("'用户名'@'%'")} ;</div>
+      </div>
+      <p>
+        {_l('更多配置项参考')}
+        <a
+          href="https://debezium.io/documentation/reference/stable/connectors/mysql.html#setting-up-mysql"
+          className="mLeft8"
+        >
+          Debezium Documentation
+        </a>
+      </p>
 
-      <h5>{_l('将系统 IP 添加到了 MySQL 服务器的访问白名单')}</h5>
-      <div>1. {_l('编辑MySQL服务器的配置文件')}</div>
+      {/* <h5 id="communicationId">{_l('确保数据库可以与系统集成通信')}</h5>
+      <div className="subTitle">{_l('1. 编辑MySQL服务器的配置文件')}</div>
       <div className="sqlText">
         <div>sudo nano /etc/mysql/mysql.conf.d/mysqld.cnf</div>
       </div>
-      <div>2. {_l('找到 [mysqld] 部分，添加下方语句')}</div>
+      <div className="subTitle">{_l('2. 找到 [mysqld] 部分，添加下方语句')}</div>
       <div className="sqlText">
         <div>{_l('bind-address = 0.0.0.0 [这里是系统白名单，在左侧配置信息底部显示]')}</div>
       </div>
-      <div>3. {_l('保存所做的修改')}</div>
-      <div className="sqlText">
-        <div>{_l('按下Ctrl+O')}</div>
-      </div>
+      <p>{_l('也可以通过数据库服务器添加全局性的访问白名单')}</p> */}
 
       <h5>{_l('测试连接')}</h5>
       <p>
         {_l(
-          '创建数据源时，检查数据库服务器的连通性、账户密码等正确性、数据库是否可用、以及检查是否可以作为源或者目的地。只有数据源通过全部测试才能够正常使用数据源。',
+          '测试连接创建数据源时，检查数据库服务器的连通性、账户密码等正确性、数据库是否可用、以及检查是否可以作为源或者目的地。只有数据源通过全部测试才能够正常使用数据源。',
         )}
       </p>
+
+      <h5>{_l('其他连接器选项')}</h5>
+      <p>
+        {_l(
+          '如果数据源的连接器选项配置和数据库服务器配置不一致时，可能会出现同步错误或者创建同步任务失败的情况。此时可尝试添加额外的连接器选项参数配置。',
+        )}
+        <a
+          href="https://ververica.github.io/flink-cdc-connectors/master/content/connectors/mysql-cdc%28ZH%29.html#id6"
+          className="mLeft8"
+        >
+          {_l('查看连接器选项')}
+        </a>
+      </p>
+
+      <h5>{_l('指定当前MySQL服务器的时区')}</h5>
+      <div className="sqlText">
+        <div>server-time-zone=Asia/Shanghai</div>
+      </div>
+      <p>{_l('以“Asia/Shanghai”时区举例，这里填入数据库服务器对应的时区信息')}</p>
+
+      <h5>{_l('常见问题')}</h5>
+      <div>
+        {_l('报错内容是')} Access denied; you need (at least one of) the SUPER, REPLICATION CLIENT privilege(s) for this
+        operation
+      </div>
+      <div className="sqlText">
+        <div className="whiteSpaceNormal">
+          {_l('1 没有开启权限，尝试重新赋予用户 REPLICATION SLAVE, REPLICATION CLIENT 权限')}
+        </div>
+        <div className="whiteSpaceNormal">
+          {_l(
+            '2 说明：这两个权限在 MySQL 复制环境中起着不同的作用，REPLICATION SLAVE 用于连接和同步数据，而 REPLICATION CLIENT 则用于复制监控和管理操作。通常，在配置从服务器时，需要授予用户同时具备这两个权限才能正常进行复制。',
+          )}
+        </div>
+      </div>
+      <div>
+        {_l('创建连接过程出现SSL验证报错，可尝试在')}
+        <span className="bold mLeft5 mRight5">{_l('其他连接串参数')}</span>
+        {_l('增加如下配置')}
+      </div>
+      <div className="sqlText">
+        <div>useSSL=false</div>
+      </div>
     </div>
   ) : (
     <div className="guideContent">
@@ -106,39 +171,24 @@ export default function MySQLGuide(props) {
       <h5>{_l('先决条件')}</h5>
       <ul>
         <li>{_l('检查是否有对应数据库的全部权限')}</li>
-        <li>{_l('将系统 IP 添加到 MySQL 服务器的访问白名单 ')}</li>
+        <li>{_l('确保数据库可以与数据集成通信')}</li>
       </ul>
 
-      <h5>{_l('授权MySQL账户对应的权限')}</h5>
-      <div>1. {_l('对于某个数据库赋于全部权限')}</div>
+      <h5>{_l('给用户赋权')}</h5>
       <div className="sqlText">
-        <div>{`GRANT ALL PRIVILEGES ON <DATABASE_NAME>.<TABLE_NAME> TO 'user' IDENTIFIED BY 'password';`}</div>
-      </div>
-      <div>2. {_l('或者可以赋予全局权限')}</div>
-      <div className="sqlText">
-        <div>
-          GRANT RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'user' IDENTIFIED BY 'password';
-        </div>
+        <div>GRANT SELECT, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO '{_l('用户名')}' ;</div>
       </div>
 
-      <h5>{_l('将系统 IP 添加到了 MySQL 服务器的访问白名单')}</h5>
-      <div>1. {_l('编辑MySQL服务器的配置文件')}</div>
+      <h5>{_l('如果是已有用户，可以通过以下命令查询权限')}</h5>
       <div className="sqlText">
-        <div>sudo nano /etc/mysql/mysql.conf.d/mysqld.cnf</div>
+        <div>SHOW GRANTS FOR {_l("'用户名'@'主机'")} ;</div>
       </div>
-      <div>2. {_l('找到 [mysqld] 部分，添加下方语句')}</div>
-      <div className="sqlText">
-        <div>{_l('bind-address = 0.0.0.0 [这里是系统白名单，在左侧配置信息底部显示]')}</div>
-      </div>
-      <div>3. {_l('保存所做的修改')}</div>
-      <div className="sqlText">
-        <div>{_l('按下Ctrl+O')}</div>
-      </div>
+      <p>{_l('如果权限不足，可以按照上方赋权重新增加对应权限')}</p>
 
       <h5>{_l('测试连接')}</h5>
       <p>
         {_l(
-          '创建数据源时，检查数据库服务器的连通性、账户密码等正确性、数据库是否可用、以及检查是否可以作为源或者目的地。只有数据源通过全部测试才能够正常使用数据源。',
+          '测试连接创建数据源时，检查数据库服务器的连通性、账户密码等正确性、数据库是否可用、以及检查是否可以作为源或者目的地。只有数据源通过全部测试才能够正常使用数据源。',
         )}
       </p>
     </div>

@@ -25,9 +25,14 @@ export default class GroupingAxis extends Component {
     super(props);
   }
   handleVerification = (data, isAlert = false) => {
-    const { reportType } = this.props;
-    if (reportType === reportTypes.ScatterChart) {
-      return true;
+    const { reportType, xaxes, yaxisList } = this.props;
+    if ([reportTypes.ScatterChart].includes(reportType) && _.find(yaxisList, { controlId: data.controlId })) {
+      isAlert && alert(_l('数值和颜色不允许重复'), 2);
+      return false;
+    }
+    if ([reportTypes.BarChart, reportTypes.RadarChart].includes(reportType) && xaxes.controlId && yaxisList.length > 1) {
+      isAlert && alert(_l('多数值时不能同时配置维度和分组'), 2);
+      return false;
     }
     if (isNumberControl(data.type)) {
       isAlert && alert('数值和公式字段不能分组', 2);
@@ -162,7 +167,7 @@ export default class GroupingAxis extends Component {
   }
   render() {
     const { name, split, yaxisList, reportType } = this.props;
-    const visible = reportType === reportTypes.ScatterChart ? true : yaxisList.length === 1;
+    const visible = [reportTypes.BarChart, reportTypes.RadarChart, reportTypes.ScatterChart].includes(reportType) ? true : yaxisList.length === 1;
     return visible ? (
       <div className="fieldWrapper mBottom20">
         <div className="Bold mBottom12">{name || this.getName()}</div>

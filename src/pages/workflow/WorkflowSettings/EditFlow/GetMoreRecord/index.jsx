@@ -25,6 +25,8 @@ export default class GetMoreRecord extends Component {
       [ACTION_ID.FROM_PBC_OUTPUT_ARRAY]: _l('从业务流程输出数组获取数据'),
       [ACTION_ID.FROM_API_ARRAY]: _l('从API数组获取数据'),
       [ACTION_ID.FROM_JSON_PARSE_ARRAY]: _l('从JSON解析数组获取数据'),
+      [ACTION_ID.BATCH_UPDATE]: _l('批量更新记录'),
+      [ACTION_ID.BATCH_DELETE]: _l('批量删除记录'),
     };
 
     if (!item.appId && !item.selectNodeId) {
@@ -61,13 +63,22 @@ export default class GetMoreRecord extends Component {
         <div className="workflowContentInfo ellipsis workflowContentBG">
           <span className="Gray_75">{_l('工作表')}</span>“{item.appName}”
         </div>
-        <div className="workflowContentInfo ellipsis Gray_75 mTop4 pBottom5">{text[item.actionId]}</div>
+        {item.actionId === ACTION_ID.BATCH_UPDATE ? (
+          <div className="workflowContentInfo Gray_75 mTop4 pBottom5">
+            {_l('修改了%0个字段', item.fields.length)}
+            {item.errorFields.length > 0 ? '，' : ''}
+            <span className="yellow">{item.errorFields.length || ''}</span>
+            {item.errorFields.length > 0 ? _l('个字段存在异常') : ''}
+          </div>
+        ) : (
+          <div className="workflowContentInfo ellipsis Gray_75 mTop4 pBottom5">{text[item.actionId]}</div>
+        )}
       </Fragment>
     );
   }
 
   render() {
-    const { processId, item, disabled, selectNodeId, openDetail, approvalSelectNodeId } = this.props;
+    const { processId, item, disabled, selectNodeId, openDetail, isSimple } = this.props;
 
     return (
       <div className="flexColumn">
@@ -79,7 +90,7 @@ export default class GetMoreRecord extends Component {
               { errorShadow: (item.appId || item.selectNodeId) && item.isException },
               { active: selectNodeId === item.id },
             )}
-            onMouseDown={() => !disabled && openDetail(processId, item.id, item.typeId, approvalSelectNodeId)}
+            onMouseDown={() => !disabled && openDetail(processId, item.id, item.typeId)}
           >
             <div className="workflowAvatars flexRow">
               <i
@@ -87,7 +98,9 @@ export default class GetMoreRecord extends Component {
               />
             </div>
             <NodeOperate nodeClassName="BGYellow" {...this.props} />
-            <div className="workflowContent Font13">{this.renderContent()}</div>
+            <div className="workflowContent Font13">
+              {isSimple ? <span className="pLeft8 pRight8 Gray_9e">{_l('加载中...')}</span> : this.renderContent()}
+            </div>
           </div>
           <CreateNode {...this.props} />
         </section>

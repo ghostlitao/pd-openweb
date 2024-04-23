@@ -1,16 +1,15 @@
 import React, { Fragment, useEffect, useState } from 'react';
-import styled from 'styled-components';
 import components from '../components';
 import NumberUtil from 'src/util/number';
 import { Dropdown, Checkbox } from 'ming-ui';
-import { EditInfo, SettingItem } from '../../styled';
+import { SettingItem, NumberRange } from '../../styled';
 import WidgetVerify from '../components/WidgetVerify';
+import PreSuffix from '../components/PreSuffix';
 import DynamicDefaultValue from '../components/DynamicDefaultValue';
-import NumberConfig from '../components/ControlSetting/NumberConfig';
 import { getAdvanceSetting, handleAdvancedSettingChange } from '../../util/setting';
 import InputValue from 'src/pages/widgetConfig/widgetSetting/components/WidgetVerify/InputValue.jsx';
 import _ from 'lodash';
-const { PointerConfig, PreSuffix, WidgetColor, NumberDynamicColor, SliderScaleConfig } = components;
+const { PointerConfig, WidgetColor, NumberDynamicColor } = components;
 
 const NUMBER_TYPES = [
   {
@@ -34,28 +33,12 @@ const defaultItemColor = {
   colors: [],
 };
 
-const NumberRange = styled.div`
-  margin-top: 8px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  span {
-    margin: 0 8px;
-    color: #9e9e9e;
-  }
-  input {
-    width: 100%;
-  }
-`;
-
 export default function Number(props) {
   const { data, onChange, fromPortal, fromExcel } = props;
   const [visible, setVisible] = useState(false);
-  const [nameVisible, setNameVisible] = useState(false);
   const [numValue, setNumValue] = useState();
-  const { numshow, thousandth, showtype = '0', numinterval, min, max, showinput } = getAdvanceSetting(data);
+  const { numshow, thousandth, showtype = '0', numinterval, min, max } = getAdvanceSetting(data);
   const itemcolor = getAdvanceSetting(data, 'itemcolor') || {};
-  const itemnames = getAdvanceSetting(data, 'itemnames');
   const isNumber = showtype === '0';
   const FILTER_NUMBER_TYPES = fromPortal ? NUMBER_TYPES.filter(i => i.value !== '2') : NUMBER_TYPES;
 
@@ -108,10 +91,13 @@ export default function Number(props) {
               newOptions.numinterval = '1';
               newOptions.min = '0';
               newOptions.max = '100';
-              newOptions.itemcolor = JSON.stringify(defaultItemColor);
+              newOptions.itemcolor = JSON.stringify(_.isEmpty(itemcolor) ? defaultItemColor : itemcolor);
               newOptions.showinput = '1';
               newOptions.datamask = '';
+              newOptions.checkrange = '0';
               setNumValue(newOptions.numinterval);
+              onChange({ ...handleAdvancedSettingChange(data, newOptions), dot: 0 });
+              return;
             }
             onChange(handleAdvancedSettingChange(data, newOptions));
           }}
@@ -119,7 +105,15 @@ export default function Number(props) {
       </SettingItem>
 
       {isNumber ? (
-        <PointerConfig {...props} />
+        <Fragment>
+          <PointerConfig {...props} />
+          {numshow !== '1' && (
+            <SettingItem>
+              <div className="settingItemTitle">{_l('单位')}</div>
+              <PreSuffix data={data} onChange={onChange} />
+            </SettingItem>
+          )}
+        </Fragment>
       ) : (
         <Fragment>
           <SettingItem>
@@ -160,7 +154,11 @@ export default function Number(props) {
                   tempValue = numinterval;
                 }
                 setNumValue(tempValue);
-                onChange(handleAdvancedSettingChange(data, { numinterval: tempValue }));
+                const pointIndex = String(tempValue).indexOf('.') + 1;
+                onChange({
+                  ...handleAdvancedSettingChange(data, { numinterval: tempValue }),
+                  dot: pointIndex > 0 ? String(tempValue).length - pointIndex : 0,
+                });
               }}
             />
             <div className="labelWrap mTop12">
@@ -169,15 +167,6 @@ export default function Number(props) {
                 checked={numshow === '1'}
                 onClick={checked => {
                   let tempData = { numshow: checked ? '0' : '1' };
-                  if (!checked) {
-                    tempData = {
-                      ...tempData,
-                      min: '0',
-                      max: '1',
-                      numinterval: '0.1',
-                    };
-                    setNumValue(tempData.numinterval);
-                  }
                   onChange(handleAdvancedSettingChange(data, tempData));
                 }}
                 text={_l('按百分比显示')}
@@ -190,26 +179,13 @@ export default function Number(props) {
       {fromExcel ? null : (
         <Fragment>
           <DynamicDefaultValue {...props} />
-
-          {isNumber && (
-            <Fragment>
-              <WidgetVerify {...props} />
-              <NumberConfig {...props} />
-            </Fragment>
-          )}
-
-          {numshow !== '1' && isNumber && (
-            <SettingItem>
-              <div className="settingItemTitle">{_l('单位')}</div>
-              <PreSuffix {...props} />
-            </SettingItem>
-          )}
+          <WidgetVerify {...props} />
 
           {!isNumber && (
             <Fragment>
               <SettingItem>
                 <div className="settingItemTitle">{_l('颜色')}</div>
-                <div className="labelWrap">
+                <div className="labelWrap flexRow">
                   <Dropdown
                     border
                     isAppendToBody
@@ -247,39 +223,6 @@ export default function Number(props) {
                   )}
                 </div>
               </SettingItem>
-              <SettingItem>
-                <div className="settingItemTitle">{_l('设置')}</div>
-                <div className="labelWrap mTop12">
-                  <Checkbox
-                    size="small"
-                    checked={showinput === '1'}
-                    onClick={checked => onChange(handleAdvancedSettingChange(data, { showinput: checked ? '0' : '1' }))}
-                    text={_l('显示输入框')}
-                  />
-                </div>
-                <div className="labelWrap mTop12">
-                  <Checkbox
-                    size="small"
-                    checked={itemnames}
-                    onClick={checked => {
-                      if (checked) {
-                        onChange(handleAdvancedSettingChange(data, { itemnames: '' }));
-                      } else {
-                        setNameVisible(true);
-                      }
-                    }}
-                    text={_l('显示刻度')}
-                  />
-                </div>
-                {itemnames && (
-                  <EditInfo style={{ margin: '12px 0' }} onClick={() => setNameVisible(true)}>
-                    <div className="text overflow_ellipsis Gray">{itemnames.map(i => i.value).join('、')}</div>
-                    <div className="edit">
-                      <i className="icon-edit"></i>
-                    </div>
-                  </EditInfo>
-                )}
-              </SettingItem>
             </Fragment>
           )}
         </Fragment>
@@ -292,20 +235,6 @@ export default function Number(props) {
           onClose={() => setVisible(false)}
           handleChange={colors => {
             onChange(handleAdvancedSettingChange(data, { itemcolor: JSON.stringify({ ...itemcolor, colors }) }));
-          }}
-        />
-      )}
-
-      {nameVisible && (
-        <SliderScaleConfig
-          itemnames={itemnames}
-          itemcolor={itemcolor}
-          step={NumberUtil.parseFloat(numinterval)}
-          min={NumberUtil.parseFloat(min)}
-          max={NumberUtil.parseFloat(max)}
-          onCancel={() => setNameVisible(false)}
-          onChange={value => {
-            onChange(handleAdvancedSettingChange(data, { itemnames: JSON.stringify(value) }));
           }}
         />
       )}

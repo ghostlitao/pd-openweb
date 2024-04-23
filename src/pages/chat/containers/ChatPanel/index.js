@@ -113,6 +113,7 @@ class ChatPanel extends Component {
   }
   renderInbox() {
     const { currentSession } = this.props;
+
     return (
       <div className="ChatPanel ChatPanel-inbox">
         <i onClick={this.handleClosePanel.bind(this)} className="ChatPanel-inbox-close icon-close ThemeColor3" />
@@ -139,7 +140,6 @@ class ChatPanel extends Component {
       '.PositionContainer-wrapper',
       '.groupSettingAvatarSelect',
       '.ui-timepicker-list',
-      '.businessCardSite',
       '.selectUserBox',
       '.warpDatePicker',
       '.dropdownTrigger',

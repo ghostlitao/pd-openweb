@@ -6,9 +6,7 @@ import _ from 'lodash';
 
 // 特殊手机号验证是否合法
 export const specialTelVerify = value => {
-  return /\+234\d{10}$|\+63\d{10}$|\+60\d{8,10}$|\+852\d{8}$|\+85368\d{6}$|\+861[3-9]\d{9}$|\+5551\d{8}$/.test(
-    value || '',
-  );
+  return /\+861[3-9]\d{9}$/.test(value || '');
 };
 
 export const inputFocusFn = (e, cb) => {
@@ -28,7 +26,7 @@ export const inputFocusFn = (e, cb) => {
 
 export const inputBlurFn = (e, cb) => {
   $(e.target).closest('.mesDiv').find('.title').removeClass('focusTitle');
-  if (!e.target.value) {
+  if (!_.get(e, 'target.value')) {
     $(e.target).closest('.mesDiv').removeClass('current');
   }
   $(e.target).closest('.errorDiv').removeClass('errorDivCu');
@@ -42,10 +40,12 @@ export const setWarnningData = (warnningData, list, focusDiv, currentData) => {
   return {
     current: !!currentData,
     errorDiv: _.find(warnningData, it => _.includes(list, it.tipDom)),
+    warnDiv: _.find(warnningData, it => _.includes(list, it.tipDom)) && _.find(warnningData, it => _.includes(list, it.tipDom)).noErr,
     errorDivCu:
       !!warnningData[0] && _.includes(list, warnningData[0].tipDom) && $(focusDiv).is($(warnningData[0].tipDom)),
   };
 };
+
 //render warnningTip
 export const warnningTipFn = (warnningData, list, focusDiv) => {
   let data = _.find(warnningData, it => _.includes(list, it.tipDom));
@@ -56,10 +56,11 @@ export const warnningTipFn = (warnningData, list, focusDiv) => {
           Hidden:
             (!!warnningData[0] && !_.includes(list, warnningData[0].tipDom)) ||
             !$(focusDiv).is($(warnningData[0].tipDom)),
+          noIcon: !!warnningData[0].noErr
         })}
-      >
-        {data.warnningText}
-      </div>
+        dangerouslySetInnerHTML={{ __html: data.warnningText }}
+        onClick={data.onClick}
+      ></div>
     );
   }
 };
@@ -83,7 +84,6 @@ export const getDataByFilterXSS = summary => {
     return '/app';
   }
   return filterXSS(summary, {
-    stripIgnoreTag: true,
     whiteList: Object.assign({}, whiteList, { span: ['style'] }),
   });
 };

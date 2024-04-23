@@ -14,7 +14,7 @@ const MobileTableContent = styled.div`
     background-color: #f7f7f7;
   }
   .tableIndex {
-    width: 20px !important;
+    width: 32px !important;
     .icon-task-new-delete {
       margin-left: -4px;
     }
@@ -46,18 +46,23 @@ const MobileTableContent = styled.div`
 `;
 
 export default function MobileTable(props) {
-  const { onOpen, controls, rows, isEdit, allowcancel, allowadd, disabled, sheetSwitchPermit, onDelete } = props;
+  const { onOpen, controls, rows, isEdit, allowcancel, allowadd, disabled, sheetSwitchPermit, onDelete, showNumber } =
+    props;
   const defaultMaxLength = 10;
   const [maxShowLength, setMaxShowLength] = useState(defaultMaxLength);
   const showRows = isEdit ? rows : rows.slice(0, maxShowLength);
   const showControls = controls.slice(0, 3);
   const isShowAll = maxShowLength === rows.length;
+
   return (
     <MobileTableContent>
       <div className="mobileTableHeader flexRow valignWrapper">
         {!_.isEmpty(showRows) && <div className="mobileTableItem tableIndex"></div>}
         {showControls.map((c, cIndex) => (
-          <div key={cIndex} className={cx('mobileTableItem flex Font13', { mRight30: cIndex === showControls.length - 1 })}>
+          <div
+            key={cIndex}
+            className={cx('mobileTableItem flex Font13', { mRight30: cIndex === showControls.length - 1 })}
+          >
             {c.controlName}
           </div>
         ))}
@@ -65,7 +70,7 @@ export default function MobileTable(props) {
       {showRows.map((row, i) => (
         <div className="flexRow valignWrapper Font12" key={i}>
           <div className="mobileTableItem tableIndex">
-            {isEdit && !disabled && !/^temp/.test(row.rowid) && allowcancel ? (
+            {isEdit && !disabled && allowcancel ? (
               <i
                 className="icon icon-task-new-delete Font16 Gray_9e"
                 onClick={() => {
@@ -80,8 +85,10 @@ export default function MobileTable(props) {
                   ]);
                 }}
               ></i>
-            ) : (
+            ) : showNumber ? (
               i + 1
+            ) : (
+              ''
             )}
           </div>
           {showControls.map((c, cIndex) => (
@@ -93,6 +100,7 @@ export default function MobileTable(props) {
               }}
             >
               <CellControl
+                isMobileTable
                 className="cell flex"
                 sheetSwitchPermit={sheetSwitchPermit}
                 cell={{ ...c, value: row[c.controlId] }}

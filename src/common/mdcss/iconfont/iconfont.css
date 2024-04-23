@@ -1,8 +1,8 @@
 @font-face {
   font-family: "MD_Icon"; /* Project id 2032949 */
-  src: url('iconfont.woff2?t=1677752294581') format('woff2'),
-       url('iconfont.woff?t=1677752294581') format('woff'),
-       url('iconfont.ttf?t=1677752294581') format('truetype');
+  src: url('iconfont.woff2?t=1706760574990') format('woff2'),
+       url('iconfont.woff?t=1706760574990') format('woff'),
+       url('iconfont.ttf?t=1706760574990') format('truetype');
 }
 
 .MD_Icon {
@@ -13,16 +13,304 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+.icon-person_three:before {
+  content: "\e67a";
+}
+
+.icon-location_map:before {
+  content: "\e679";
+}
+
+.icon-import_contacts:before {
+  content: "\eada";
+}
+
+.icon-contact_support:before {
+  content: "\eadb";
+}
+
+.icon-smart_button:before {
+  content: "\e677";
+}
+
+.icon-arrows_square:before {
+  content: "\e676";
+}
+
+.icon-earth:before {
+  content: "\e675";
+}
+
+.icon-Finish:before {
+  content: "\ea63";
+}
+
+.icon-adds:before {
+  content: "\ea67";
+}
+
+.icon-sending:before {
+  content: "\ea69";
+}
+
+.icon-fill:before {
+  content: "\ea6c";
+}
+
+.icon-stamp:before {
+  content: "\ea77";
+}
+
+.icon-adds_shallow:before {
+  content: "\eab1";
+}
+
+.icon-sending_shallow:before {
+  content: "\eab3";
+}
+
+.icon-stamp_shallow:before {
+  content: "\eacf";
+}
+
+.icon-fill_shallow:before {
+  content: "\ead7";
+}
+
+.icon-home_set:before {
+  content: "\eaae";
+}
+
+.icon-unfold_more:before {
+  content: "\eaa3";
+}
+
+.icon-unfold_less:before {
+  content: "\eaab";
+}
+
+.icon-translate_language:before {
+  content: "\ea16";
+}
+
+.icon-extension_black1:before {
+  content: "\ea62";
+}
+
+.icon-react:before {
+  content: "\e674";
+}
+
+.icon-JS:before {
+  content: "\e673";
+}
+
+.icon-TS:before {
+  content: "\e672";
+}
+
+.icon-puzzle:before {
+  content: "\e671";
+}
+
+.icon-account_box:before {
+  content: "\e9c7";
+}
+
+.icon-unarchive:before {
+  content: "\e9a2";
+}
+
+.icon-T2:before {
+  content: "\e66f";
+}
+
+.icon-T4:before {
+  content: "\e670";
+}
+
+.icon-T1:before {
+  content: "\e66d";
+}
+
+.icon-T3:before {
+  content: "\e66c";
+}
+
+.icon-format_bold:before {
+  content: "\e668";
+}
+
+.icon-format_italic:before {
+  content: "\e669";
+}
+
+.icon-format_underlined:before {
+  content: "\e66a";
+}
+
+.icon-strikethrough_s:before {
+  content: "\e66b";
+}
+
+.icon-watermark:before {
+  content: "\ec2c";
+}
+
+.icon-new:before {
+  content: "\e666";
+}
+
+.icon-reader:before {
+  content: "\e663";
+}
+
+.icon-copy_all:before {
+  content: "\e661";
+}
+
+.icon-global_variable:before {
+  content: "\e99a";
+}
+
+.icon-history_edu:before {
+  content: "\e98d";
+}
+
+.icon-thumb_up_alt:before {
+  content: "\e992";
+}
+
+.icon-cloud_sync:before {
+  content: "\e943";
+}
+
 .icon-ai1:before {
   content: "\e92d";
 }
 
-.icon-add1:before {
-  content: "\e7fe";
+.icon-history_toggle_off:before {
+  content: "\e98c";
+}
+
+.icon-all_run2:before {
+  content: "\ec20";
+}
+
+.icon-add-member3:before {
+  content: "\ec01";
+}
+
+.icon-a-search_off_black_24dp1:before {
+  content: "\e98a";
+}
+
+.icon-back:before {
+  content: "\e641";
+}
+
+.icon-home:before {
+  content: "\e642";
+}
+
+.icon-wechat_pay:before {
+  content: "\e984";
+}
+
+.icon-cleaning_services:before {
+  content: "\e97c";
+}
+
+.icon-up:before {
+  content: "\e973";
+}
+
+.icon-notifications_off:before {
+  content: "\eaa0";
+}
+
+.icon-unpin:before {
+  content: "\eaa1";
+}
+
+.icon-a-Data_integration1:before {
+  content: "\e939";
+}
+
+.icon-horizontal:before {
+  content: "\e63e";
+}
+
+.icon-mix:before {
+  content: "\e63f";
+}
+
+.icon-vertically:before {
+  content: "\e640";
+}
+
+.icon-add_link:before {
+  content: "\ebf6";
+}
+
+.icon-folder_special_black_24dp:before {
+  content: "\e93a";
+}
+
+.icon-view_agenda:before {
+  content: "\e935";
+}
+
+.icon-wysiwyg:before {
+  content: "\e932";
 }
 
 .icon-add:before {
   content: "\e923";
+}
+
+.icon-trending:before {
+  content: "\ea98";
+}
+
+.icon-sync1:before {
+  content: "\ea99";
+}
+
+.icon-Worksheet_query:before {
+  content: "\ea9d";
+}
+
+.icon-leftmost:before {
+  content: "\ebd2";
+}
+
+.icon-rightmost:before {
+  content: "\ebe3";
+}
+
+.icon-left:before {
+  content: "\ebed";
+}
+
+.icon-right:before {
+  content: "\ebf3";
+}
+
+.icon-background_color:before {
+  content: "\eb9c";
+}
+
+.icon-data_bar:before {
+  content: "\ebcd";
+}
+
+.icon-switch_access_shortcut_black_24dp:before {
+  content: "\e931";
+}
+
+.icon-add1:before {
+  content: "\e7fe";
 }
 
 .icon-stats_bar_chart1:before {

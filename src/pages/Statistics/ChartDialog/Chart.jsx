@@ -86,23 +86,26 @@ export default class Chart extends Component {
     });
   }
   renderChart() {
-    const { reportData, currentReport, base, direction, getReportSingleCacheId, requestOriginalData, changeCurrentReport } = this.props;
+    const { projectId, themeColor, customPageConfig, reportData, currentReport, base, direction, getReportSingleCacheId, requestOriginalData, changeCurrentReport } = this.props;
     const { settingVisible, report = {}, sourceType } = base;
     const reportId = report.id;
-    const { reportType } = reportData;
+    const { reportType, valueMap } = reportData;
     const Chart = charts[reportType];
     const isPublicShareChart = location.href.includes('public/chart');
-    const isPublicSharePage = location.href.includes('public/page') || window.shareAuthor || window.share;
+    const isPublicSharePage = window.shareAuthor || _.get(window, 'shareState.shareId');
 
     const props = {
+      projectId,
       sourceType,
       isViewOriginalData: !settingVisible && !isMobile && !isPublicShareChart && !isPublicSharePage,
       requestOriginalData,
       direction,
+      themeColor,
+      customPageConfig
     };
 
     if ([reportTypes.PivotTable].includes(reportType)) {
-      const { data, columns, ylist, lines, valueMap } = reportData;
+      const { data, columns, ylist, lines } = reportData;
       return _.isEmpty(data.data) ? (
         <WithoutData />
       ) : (
@@ -175,6 +178,7 @@ export default class Chart extends Component {
             ...currentReport,
             map,
             contrastMap,
+            valueMap,
             summary: settingVisible ? currentReport.summary : summary,
             rightY: settingVisible ? currentReport.rightY : rightY,
             reportId,
@@ -222,11 +226,13 @@ export default class Chart extends Component {
       onChangeSheetVisible,
       renderHeaderDisplaySetup,
     } = this.props;
+    const { createdBy = {}, lastModifiedBy = {} } = reportData;
     const viewId = _.get(currentReport, ['filter', 'viewId']);
     const view = _.find(worksheetInfo.views, { viewId });
     const { direction, scopeVisible } = this.props;
     const { dragMaskVisible, min, max, sheetSize } = this.state;
-    const dragValue = this.state.dragValue - (scopeVisible && direction === 'horizontal' ? 320 : 0);
+    const storeDragValue = Number(localStorage.getItem(`${direction}ChartSheetDragValue`) || 0);
+    const dragValue = this.state.dragValue - (scopeVisible && storeDragValue && direction === 'horizontal' ? 320 : 0);
     return (
       <div
         className={cx('chartBody Relative flex', {
@@ -236,13 +242,19 @@ export default class Chart extends Component {
         ref={this.$chartRef}
       >
         <div className={cx('chart flexColumn', direction)}>
-          {reportData.status ? renderHeaderDisplaySetup() : null}
+          {reportData.status > 0 ? renderHeaderDisplaySetup() : null}
           {loading ? (
             <Loading />
-          ) : reportData.status ? (
-            <Fragment>{this.renderChart()}</Fragment>
+          ) : reportData.status > 0 ? (
+            <Fragment>
+              {this.renderChart()}
+              <div className="flexRow mTop10 Gray_9e Font13">
+                <span className="mRight25">{_l('创建人')}: {createdBy.fullName}</span>
+                <span>{_l('最后修改人')}: {lastModifiedBy.fullName}</span>
+              </div>
+            </Fragment>
           ) : (
-            <Abnormal isEdit={settingVisible ? !(viewId && _.isEmpty(view)) : false} />
+            <Abnormal isEdit={settingVisible ? !(viewId && _.isEmpty(view)) : false} status={reportData.status} />
           )}
         </div>
         {sheetVisible && (
@@ -261,6 +273,16 @@ export default class Chart extends Component {
                     dragMaskVisible: false,
                     dragValue,
                     sheetSize,
+                  }, () => {
+                    const { style } = reportData;
+                    if (
+                      direction === 'vertical' &&
+                      reportData.reportType === reportTypes.PivotTable &&
+                      (style.pivotTableColumnFreeze || style.pivotTableLineFreeze) &&
+                      style.paginationVisible
+                    ) {
+                      this.props.getReportData();
+                    }
                   });
                   safeLocalStorageSetItem(`${direction}ChartSheetDragValue`, dragValue);
                   safeLocalStorageSetItem(`${direction}ChartSheetSheetSize`, sheetSize);

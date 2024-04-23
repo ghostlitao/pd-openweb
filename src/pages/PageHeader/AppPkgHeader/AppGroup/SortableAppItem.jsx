@@ -10,10 +10,12 @@ import { Menu, MenuItem, Icon, MdLink } from 'ming-ui';
 import { changeBoardViewData } from 'src/pages/worksheet/redux/actions/boardView';
 import { APP_GROUP_CONFIG, DEFAULT_CREATE, DEFAULT_GROUP_NAME } from '../config';
 import { compareProps, getIds } from '../../util';
+import { getTranslateInfo } from 'src/util';
 import { convertColor } from 'worksheet/common/WorkSheetLeft/WorkSheetItem';
 import styled from 'styled-components';
 import _ from 'lodash';
 import { canEditApp } from 'src/pages/worksheet/redux/actions/util';
+
 const LiCon = styled.li`
   &.active {
     background-color: ${props => props.lightIconColor} !important;
@@ -100,14 +102,14 @@ export default class SortableAppItem extends Component {
 
   handleDbClick = appSectionId => {
     const { ensurePointerVisible, permissionType } = this.props;
-    if (canEditApp(permissionType)) return;
+    if (!canEditApp(permissionType)) return;
     clearTimeout(this.clickTimer);
     this.setState({ dbClickedAppGroupId: appSectionId }, ensurePointerVisible);
   };
 
   getFirstAppItemId = () => {
-    const { permissionType, value } = this.props;
-    const isCharge = canEditApp(permissionType);
+    const { permissionType, value, appPkg } = this.props;
+    const isCharge = appPkg.viewHideNavi;
     const { workSheetInfo = [], childSections = [] } = value;
     const firstAppItem = (isCharge ? workSheetInfo : workSheetInfo.filter(item => item.status === 1 && !item.navigateHide))[0] || {};
     if (firstAppItem.type === 2) {
@@ -131,6 +133,10 @@ export default class SortableAppItem extends Component {
     if (appPkg.pcNaviStyle === 2) {
       return `/app/${appId}/${appSectionId}?from=insite`;
     }
+    if (appPkg.selectAppItmeType === 1) {
+      const worksheetId = this.getFirstAppItemId();
+      return `/app/${appId}/${appSectionId}/${worksheetId || ''}?from=insite`;
+    }
     return `/app/${appId}/${appSectionId}/${_.filter([worksheetId, viewId], item => !!item).join('/')}?from=insite`;
   };
 
@@ -151,13 +157,15 @@ export default class SortableAppItem extends Component {
       changeBoardViewData,
       appPkg,
       isLock,
+      isUpgrade,
     } = this.props;
     const { visible, dbClickedAppGroupId } = this.state;
     const { name, appSectionId } = value;
-    const { groupId } = this.ids;
+    const { appId, groupId } = this.ids;
     const isFocus = appSectionId === focusGroupId || appSectionId === dbClickedAppGroupId;
     const isShowConfigIcon = appSectionId === groupId && !isFocus && canEditApp(permissionType);
     const url = this.getNavigateUrl(appSectionId);
+    const showName = getTranslateInfo(appId, appSectionId).name || name;
     return (
       <LiCon
         className={cx({ active: isFocus || groupId === appSectionId, isCanConfigAppGroup: isShowConfigIcon })}
@@ -184,14 +192,20 @@ export default class SortableAppItem extends Component {
               if (this.ids.groupId !== appSectionId) {
                 changeBoardViewData([]);
               }
+              if (appPkg.pcNaviStyle === 2) {
+                const key = `mdAppCache_${md.global.Account.accountId}_${appPkg.id}`;
+                const storage = JSON.parse(localStorage.getItem(key));
+                storage.lastGroupId = appSectionId;
+                safeLocalStorageSetItem(key, JSON.stringify(storage));
+              }
             }}
           >
-            <span title={name} onDoubleClick={() => this.handleDbClick(appSectionId)}>
-              {name}
+            <span title={showName} onDoubleClick={() => this.handleDbClick(appSectionId)}>
+              {showName}
             </span>
           </MdLink>
         )}
-        {canEditApp(permissionType) && (
+        {canEditApp(permissionType) && !isUpgrade && (
           <Trigger
             action={['click']}
             popupVisible={visible}

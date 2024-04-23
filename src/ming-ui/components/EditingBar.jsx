@@ -1,5 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import cx from 'classnames';
 import { Motion, spring } from 'react-motion';
 import styled from 'styled-components';
 
@@ -47,12 +48,18 @@ const OkButton = styled(Button)`
   color: #3ea4fc;
   background-color: #fff;
   font-weight: 600;
-  &:hover {
+  user-select: none;
+  &:not(.disabled):hover {
     background-color: #e2f1fe;
+  }
+  &.disabled {
+    color: #ddd;
+    cursor: not-allowed;
   }
 `;
 const CancelButton = styled(Button)`
   color: #fff;
+  font-weight: bold;
   &:hover {
     background-color: rgba(255, 255, 255, 0.16);
   }
@@ -66,10 +73,12 @@ export default function EditingBar(props) {
     defaultTop,
     visibleTop,
     title,
+    okDisabled,
     updateText = _l('保存'),
     cancelText = _l('取消'),
     onUpdate = () => {},
     onCancel = () => {},
+    onOkMouseDown = () => {},
   } = props;
 
   return (
@@ -93,6 +102,7 @@ export default function EditingBar(props) {
             style,
           )}
           onClick={e => e.stopPropagation()}
+          className="editingBar"
         >
           <Con>
             <span className="flex bold">{title}</span>
@@ -102,7 +112,15 @@ export default function EditingBar(props) {
                 {cancelText}
               </CancelButton>
             )}
-            {!loading && <OkButton onClick={onUpdate}>{updateText}</OkButton>}
+            {!loading && (
+              <OkButton
+                className={cx({ disabled: okDisabled })}
+                onMouseDown={onOkMouseDown}
+                onClick={okDisabled ? () => {} : onUpdate}
+              >
+                {updateText}
+              </OkButton>
+            )}
           </Con>
         </ConBox>
       )}
@@ -113,6 +131,7 @@ export default function EditingBar(props) {
 EditingBar.propTypes = {
   style: PropTypes.shape({}),
   visible: PropTypes.bool,
+  okDisabled: PropTypes.bool,
   loading: PropTypes.bool,
   title: PropTypes.string,
   defaultTop: PropTypes.number,
@@ -121,4 +140,5 @@ EditingBar.propTypes = {
   cancelText: PropTypes.string,
   onUpdate: PropTypes.func,
   onCancel: PropTypes.func,
+  onOkMouseDown: PropTypes.func,
 };

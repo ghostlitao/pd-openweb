@@ -59,7 +59,7 @@ export const VerificationPass = props => {
   const [fromFields, setFromFields] = useState([]);
   const [form] = Form.useForm();
 
-  const passwordField = _.find(fromFields, { name: ['password'] });
+  const passwordField = _.find(fromFields, { name: ['sharePassword'] });
 
   return (
     <ConfigProvider autoInsertSpaceInButton={false}>
@@ -71,8 +71,7 @@ export const VerificationPass = props => {
           </div>
           <Form
             form={form}
-            autocomplete="off"
-            name="basic"
+            name="shareform"
             validateTrigger="submit"
             onFinish={() => {
               setLoading(false);
@@ -85,8 +84,9 @@ export const VerificationPass = props => {
             }}
             autoComplete="off"
           >
+            <input type="password" hidden autoComplete="new-password" />
             <Form.Item
-              name="password"
+              name="sharePassword"
               rules={[
                 {
                   required: true,
@@ -101,14 +101,14 @@ export const VerificationPass = props => {
                           const captchaResult = {
                             randStr: data.randstr,
                             ticket: data.ticket,
-                            captchaType: md.staticglobal.getCaptchaType()
+                            captchaType: md.global.getCaptchaType()
                           }
                           resolve(validatorPassPromise(value, captchaResult));
                         } else {
                           reject(_l('图形验证失败'));
                         }
                       }
-                      if (md.staticglobal.getCaptchaType() === 1) {
+                      if (md.global.getCaptchaType() === 1) {
                         new captcha(callback);
                       } else {
                         new TencentCaptcha(md.global.Config.CaptchaAppId.toString(), callback).show();

@@ -2,9 +2,8 @@
 import ReactDom from 'react-dom';
 import './css/taskStage.less';
 import { connect } from 'react-redux';
-import doT from '@mdfe/dot';
+import doT from 'dot';
 import ajaxRequest from 'src/api/taskCenter';
-import Score from 'ming-ui/components/Score';
 import { listLoadingContent } from '../../utils/taskComm';
 import { formatTaskTime, errorMessage, formatStatus, checkIsProject, returnCustonValue } from '../../utils/utils';
 import config from '../../config/config';
@@ -16,10 +15,14 @@ import stageList from './tpl/stageList.html';
 import addList from './tpl/addList.html';
 import addNewStage from './tpl/addNewStage.html';
 import addNewStageTask from './tpl/addNewStageTask.html';
-import 'src/components/mdDialog/dialog';
-import { expireDialogAsync } from 'src/components/common/function';
+import { expireDialogAsync } from 'src/util';
 import TaskDetail from '../taskDetail/taskDetail';
 import _ from 'lodash';
+import { DateTimeRange } from 'ming-ui/components/NewDateTimePicker';
+import UserHead from 'src/components/userHead';
+import { updateTaskCharge } from '../../redux/actions';
+import dialogSelectUser from 'src/components/dialogSelectUser/dialogSelectUser';
+import { Dialog, Score } from 'ming-ui';
 
 const taskStageSettings = {
   timer: null, // 计时器
@@ -51,6 +54,8 @@ class TaskStage extends Component {
     this.bindEvents();
     this.props.emitter.removeListener('CREATE_TASK_TO_STAGE', this.quickCreateTaskCallback);
     this.props.emitter.addListener('CREATE_TASK_TO_STAGE', this.quickCreateTaskCallback);
+    this.props.emitter.removeListener('UPDATE_TASK_CHARGE', this.renderChargeHeaderAvatar);
+    this.props.emitter.addListener('UPDATE_TASK_CHARGE', this.renderChargeHeaderAvatar.bind(this));
   }
 
   componentWillReceiveProps(nextProps) {
@@ -72,6 +77,7 @@ class TaskStage extends Component {
   componentWillUnmount() {
     this.mounted = false;
     this.props.emitter.removeListener('CREATE_TASK_TO_STAGE', this.quickCreateTaskCallback);
+    this.props.emitter.removeListener('UPDATE_TASK_CHARGE', this.renderChargeHeaderAvatar);
   }
 
   /**
@@ -121,26 +127,97 @@ class TaskStage extends Component {
       });
   }
 
+  renderStageChargeUser() {
+    $('#taskList .singleStage .stageChargeAvatar').each((i, ele) => {
+      let $ele = $(ele);
+      if ($ele.data('hasbusinesscard')) return;
+      const accountId = $ele.closest('.singleStage').data('chargeid');
+
+      $ele.data('hasbusinesscard', true);
+      ReactDom.render(
+        <UserHead
+          user={{
+            userHead: $(ele).data('src'),
+            accountId: accountId,
+          }}
+          size={26}
+        />,
+        ele,
+      );
+    });
+  }
+  renderChargeHeaderAvatar(params) {
+    const { taskConfig } = this.props;
+    $('#tasks .listStageContent .chargeHeaderAvatar').each((i, ele) => {
+      let $ele = $(ele);
+
+      if ($ele.data('hasbusinesscard')) return;
+      const folderId = taskConfig.folderId;
+      let projectId = taskConfig.projectId;
+      let taskId;
+      if (folderId) {
+        taskId = $ele.closest('li').data('taskid');
+      } else {
+        taskId = $ele.closest('tr').data('taskid');
+        projectId = $ele.closest('tr').data('projectid');
+      }
+      const accountId = params ? _.get(params.data, 'data.charge.accountID') : $ele.data('id');
+      const avatar = params ? _.get(params.data, 'data.charge.avatar') : $ele.data('src');
+      const auth = params ? _.get(params.data, 'data.auth') : $ele.data('auth');
+
+      if (params) $ele.data('auth', auth);
+      $ele.data('hasbusinesscard', true);
+      ReactDom.render(
+        <UserHead
+          user={{
+            userHead: avatar,
+            accountId: accountId,
+          }}
+          size={26}
+          operation={
+            auth === config.auth.Charger ? (
+              <span
+                className="updateChargeBtn ThemeColor3"
+                onClick={() => {
+                  dialogSelectUser({
+                    sourceId: folderId,
+                    showMoreInvite: false,
+                    fromType: 2,
+                    SelectUserSettings: {
+                      includeUndefinedAndMySelf: true,
+                      filterAccountIds: [accountId],
+                      projectId: checkIsProject(projectId) ? projectId : '',
+                      unique: true,
+                      callback: users => {
+                        const user = users[0];
+
+                        this.props.dispatch(
+                          updateTaskCharge(taskId, user, '', () => {
+                            $ele.data('id', user.accountId).data('src', user.avatar).data('hasbusinesscard', false);
+                            this.renderChargeHeaderAvatar();
+                          }),
+                        );
+                      },
+                    },
+                  });
+                }}
+              >
+                {_l('将任务托付给他人')}
+              </span>
+            ) : null
+          }
+        />,
+        ele,
+      );
+    });
+  }
+
   /**
    * 绑定事件
    */
   bindEvents() {
     const that = this;
     const $taskList = $('#taskList');
-
-    // 阶段负责人头像hover
-    $taskList.on('mouseover', '.singleStage .stageChargeAvatar', function (event) {
-      const $this = $(this);
-      const accountId = $this.closest('.singleStage').data('chargeid');
-
-      if (!$this.data('hasbusinesscard')) {
-        $this.mdBusinessCard({
-          id: 'updateTaskChargeCard_' + accountId,
-          accountId,
-        });
-        $this.data('hasbusinesscard', true).mouseenter();
-      }
-    });
 
     // 阶段负责人头像点击
     $taskList.on('click', '.singleStage .stageChargeAvatar', function (event) {
@@ -621,6 +698,10 @@ class TaskStage extends Component {
     const singleTaskTpl = stageList.replace('#include.nodeLiComm', nodeLiComm);
     $('#taskList').html(doT.template(singleTaskTpl)(data));
 
+    //名片层
+    this.renderStageChargeUser();
+    this.renderChargeHeaderAvatar();
+
     // 绑定评分控件
     this.customScore();
 
@@ -724,6 +805,7 @@ class TaskStage extends Component {
 
             // 绑定评分控件
             that.customScore();
+            that.renderChargeHeaderAvatar();
 
             if ($this.find('.singleTaskStage').length >= parseInt($this.parent().find('.taskCount').html(), 10)) {
               $this.attr('data-page', 0);
@@ -775,35 +857,32 @@ class TaskStage extends Component {
 
     const { folderId } = this.props.taskConfig;
 
-    $.DialogLayer({
-      dialogBoxID: 'delStage',
-      showClose: false,
-      container: {
-        content: '<div class="Font16 mBottom20">' + _l('确认删除此看板吗？') + '</div>',
-        yesText: _l('删除'),
-        yesFn() {
-          const stageId = $li.data('stageid');
+    Dialog.confirm({
+      title: _l('确认删除此看板吗？1'),
+      closable: false,
+      okText: _l('删除'),
+      onOk: () => {
+        const stageId = $li.data('stageid');
 
-          ajaxRequest
-            .deleteFolderStage({
-              folderID: folderId,
-              stageID: stageId,
-              newStageID: '',
-            })
-            .then(source => {
-              if (source.status) {
-                alert(_l('删除成功'));
+        ajaxRequest
+          .deleteFolderStage({
+            folderID: folderId,
+            stageID: stageId,
+            newStageID: '',
+          })
+          .then(source => {
+            if (source.status) {
+              alert(_l('删除成功'));
 
-                const $newLi = $li.prev().length > 0 ? $li.prev() : $li.next();
-                $newLi.find('.listStageContent ul').append($li.find('.listStageContent li'));
-                $li.fadeOut(function () {
-                  $(this).remove();
-                });
-              } else {
-                errorMessage(source.error);
-              }
-            });
-        },
+              const $newLi = $li.prev().length > 0 ? $li.prev() : $li.next();
+              $newLi.find('.listStageContent ul').append($li.find('.listStageContent li'));
+              $li.fadeOut(function () {
+                $(this).remove();
+              });
+            } else {
+              errorMessage(source.error);
+            }
+          });
       },
     });
   }
@@ -1156,32 +1235,47 @@ class TaskStage extends Component {
         .end()
         .next()
         .hide();
-      const $stageDate = $li.find('.stageDate');
-      $stageDate.on('click', function () {
-        $('.warpDatePicker').hide();
-        const _this = $(this);
 
+      const $stageDate = $li.find('.stageDate');
+      const bindDate = () => {
         const { start: defaultStart, end: defaultEnd } = $stageDate.data();
-        $stageDate.reactTaskCalendarRangePickerClick({
-          props: {
-            selectedValue: [defaultStart, defaultEnd],
-            onClear() {
-              delete $stageDate.data().start;
-              delete $stageDate.data().end;
-              this.destroy();
-            },
-          },
-          publicMethods: {
-            submit(selectedValue) {
+
+        ReactDom.render(
+          <DateTimeRange
+            selectedValue={[defaultStart, defaultEnd]}
+            mode="task"
+            timePicker
+            separator={_l('至')}
+            timeMode="hour"
+            placeholder={_l('未指定起止时间')}
+            onOk={selectedValue => {
               let [start, end] = selectedValue;
+
+              if (start && end && start >= end) {
+                alert(_l('结束时间不能早于或等于开始时间'), 2);
+                return false;
+              }
+
               start = start ? start.format('YYYY-MM-DD HH:00') : '';
               end = end ? end.format('YYYY-MM-DD HH:00') : '';
               $stageDate.data('start', start);
               $stageDate.data('end', end);
-            },
-          },
-        });
-      });
+            }}
+            onClear={() => {
+              delete $stageDate.data().start;
+              delete $stageDate.data().end;
+
+              ReactDom.unmountComponentAtNode($stageDate[0]);
+              bindDate();
+            }}
+          >
+            <span class="icon-bellSchedule"></span>
+          </DateTimeRange>,
+          $stageDate[0],
+        );
+      };
+
+      bindDate();
 
       $('.addNewTask .teaStageName').autoTextarea({
         maxHeight: 273,
@@ -1454,11 +1548,10 @@ class TaskStage extends Component {
           if (source.data.accountID) {
             $li
               .find('.chargeHeaderAvatar')
-              .attr('src', source.data.avatar)
+              .data('src', source.data.avatar)
               .attr('data-id', source.data.accountID)
               .data('id', source.data.accountID)
               .data('hasbusinesscard', false);
-            $li.find('.chargeHeaderAvatar').mdBusinessCard('destroy');
           }
         } else {
           $(".singleStage[data-stageid='" + taskStageSettings.oldValue + "']")
@@ -1512,8 +1605,9 @@ class TaskStage extends Component {
           $li
             .find('.stageChargeAvatar')
             .toggleClass('Hidden', !ownerId)
-            .attr('src', avatar)
+            .data('src', avatar)
             .data('hasbusinesscard', false);
+          this.renderStageChargeUser();
         } else {
           errorMessage(source.error);
         }
@@ -1612,6 +1706,7 @@ class TaskStage extends Component {
     }
 
     this.canelCreateStageTask($li);
+    this.renderChargeHeaderAvatar();
 
     // 回车继续创建
     if ($listStageContent) {

@@ -7,11 +7,10 @@ import styled from 'styled-components';
 import moment from 'moment';
 import delegationApi from '../../api/delegation';
 import TodoEntrustModal from './TodoEntrustModal';
-import UserHead from 'src/pages/feed/components/userHead';
-import UserName from 'src/pages/feed/components/userName';
+import UserHead from 'src/components/userHead';
+import UserName from 'src/components/userName';
 import DelegationConfigModal from 'mobile/Process/ProcessDelegation/DelegationConfigModal';
 import { browserIsMobile } from 'src/util';
-import { QiniuImg } from 'src/pages/feed/components/common/img';
 import cx from 'classnames';
 
 const CardWrapper = styled.div`
@@ -169,18 +168,28 @@ function TodoEntrustList(props) {
                         {isMobile ? (
                           <div className="trusteeAvatarWrapper valignWrapper mRight10">
                             <div className="pointer circle">
-                              <QiniuImg
-                                style={{ backgroundColor: '#f5f5f5', borderRadius: '50%' }}
-                                size={22}
-                                qiniuSize={100}
-                                quality={90}
-                                lazy={false}
+                              <img
+                                style={{
+                                  backgroundColor: '#f5f5f5',
+                                  borderRadius: '50%',
+                                  width: '22px',
+                                  height: '22px',
+                                }}
                                 placeholder={`${md.global.FileStoreConfig.pictureHost.replace(
                                   /\/$/,
                                   '',
                                 )}/UserAvatar/default.gif`}
                                 className="circle"
-                                src={item.trustee.avatar || ''}
+                                src={
+                                  item.trustee.avatar
+                                    ? item.trustee.avatar.indexOf('?') > 0
+                                      ? item.trustee.avatar.replace(
+                                          /imageView2\/\d\/w\/\d+\/h\/\d+(\/q\/\d+)?/,
+                                          'imageView2/2/w/100/h/100/q/90',
+                                        )
+                                      : `${item.trustee.avatar}?imageView2/2/w/100/h/100/q/90`
+                                    : ''
+                                }
                               />
                             </div>
                             <div className="Gray Font13 pLeft5 pRight10 pTop1 ellipsis">{item.trustee.fullName}</div>
@@ -193,8 +202,8 @@ function TodoEntrustList(props) {
                                 userHead: item.trustee.avatar,
                                 accountId: item.trustee.accountId,
                               }}
-                              lazy={'false'}
                               size={22}
+                              chatButton={false}
                             />
                             <UserName
                               className="Gray Font13 pLeft5 pRight10 pTop1"
@@ -202,6 +211,7 @@ function TodoEntrustList(props) {
                                 userName: item.trustee.fullName,
                                 accountId: item.trustee.accountId,
                               }}
+                              chatButton={false}
                             />
                           </div>
                         )}

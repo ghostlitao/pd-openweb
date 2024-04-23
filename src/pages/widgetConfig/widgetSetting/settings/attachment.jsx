@@ -1,10 +1,8 @@
-import React, { Fragment, useState, useEffect } from 'react';
-import { Dropdown, Checkbox, Dialog, Icon } from 'ming-ui';
-import { Input, Tooltip } from 'antd';
+import React, { Fragment } from 'react';
+import { Dropdown, Icon } from 'ming-ui';
+import { Input } from 'antd';
 import { SettingItem } from '../../styled';
-import Components from '../components';
 import WidgetVerify from '../components/WidgetVerify';
-import { updateConfig } from '../../util/setting';
 import { getAdvanceSetting, handleAdvancedSettingChange } from 'src/pages/widgetConfig/util/setting';
 import _ from 'lodash';
 
@@ -31,7 +29,7 @@ const FILE_TYPE = [
   {
     value: '1',
     text: _l('图片'),
-    desc: _l('支持上传JPG、JPEG、PNG、Gif、WebP、Tiff、bmp格式的文件（在附件中支持预览）'),
+    desc: _l('支持上传JPG、JPEG、PNG、Gif、WebP、Tiff、bmp、HEIC、HEIF格式的文件（在附件中支持预览）'),
   },
   { value: '2', text: _l('文档'), desc: _l('支持除图片、音频、视频以外的文件') },
   {
@@ -47,43 +45,14 @@ const FILE_TYPE = [
   },
 ];
 
-const WATERMARK_TYPE = [
-  { value: 'user', text: _l('当前用户') },
-  { value: 'time', text: _l('当前拍摄时间') },
-  { value: 'address', text: _l('当前地点') },
-  { value: 'xy', text: _l('当前地点经纬度') },
-];
-
 export default function Attachment({ from, data, onChange }) {
-  const { enumDefault, enumDefault2, strDefault, advancedSetting = {} } = data;
-  const [disableAlbum, onlyAllowMobileInput] = (strDefault || '00').split('');
-  const { covertype = '0', showtype = '1' } = getAdvanceSetting(data);
+  const { enumDefault, advancedSetting = {} } = data;
+  const { covertype = '0', showtype = '1', showwatermark } = getAdvanceSetting(data);
   const { type = '', values = [] } = JSON.parse(advancedSetting.filetype || '{}');
-  const originWatermark = JSON.parse(advancedSetting.watermark || '[]');
-  const [visible, setVisible] = useState(false);
-  const [watermark, setWatermark] = useState(originWatermark);
   const desc = _.get(
     _.find(FILE_TYPE, i => i.value === type),
     'desc',
   );
-
-  useEffect(() => {
-    setWatermark(originWatermark);
-  }, [data.controlId]);
-
-  useEffect(() => {
-    if (!_.includes([1, 2, 3], enumDefault2)) {
-      onChange({
-        ...handleAdvancedSettingChange(data, {
-          watermark: '',
-          compress: '0',
-          getsave: '0',
-          getinput: '0',
-        }),
-        strDefault: '',
-      });
-    }
-  }, [enumDefault2]);
 
   return (
     <Fragment>
@@ -146,6 +115,9 @@ export default function Attachment({ from, data, onChange }) {
                 watermark: '',
                 getinput: '',
                 getsave: '',
+                ...(_.includes(['2', '3', '4'], value)
+                  ? { watermarkinfo: '', showwatermark: '0', watermarkstyle: '2', valuesize: '3' }
+                  : {}),
               }),
               enumDefault2: 0,
               strDefault: '',
@@ -176,162 +148,6 @@ export default function Attachment({ from, data, onChange }) {
       <SettingItem>
         <WidgetVerify data={data} onChange={onChange} />
       </SettingItem>
-      {from !== 'subList' && (_.includes(['1', '4'], type) || !type) && (
-        <SettingItem className="settingItem withSplitLine">
-          <div className="settingItemTitle">{_l('限制移动端输入')}</div>
-          <div className="labelWrap">
-            <Checkbox
-              size="small"
-              checked={_.includes([1, 3], enumDefault2)}
-              text={_l('拍摄照片')}
-              onClick={checked => {
-                const value = checked ? (enumDefault2 === 3 ? 2 : 0) : enumDefault2 === 2 ? 3 : 1;
-                onChange({ enumDefault2: value });
-              }}
-            />
-          </div>
-          {type !== '1' && (
-            <div className="labelWrap">
-              <Checkbox
-                size="small"
-                checked={_.includes([2, 3], enumDefault2)}
-                text={_l('拍摄视频')}
-                onClick={checked => {
-                  const value = checked ? (enumDefault2 === 3 ? 1 : 0) : enumDefault2 === 1 ? 3 : 2;
-                  onChange({ enumDefault2: value });
-                }}
-              />
-            </div>
-          )}
-          {_.includes([1, 2, 3], data.enumDefault2) && (
-            <SettingItem>
-              <div className="settingItemTitle Normal">{_l('选项')}</div>
-              <div className="labelWrap">
-                <Checkbox
-                  size="small"
-                  checked={onlyAllowMobileInput === '1'}
-                  onClick={checked =>
-                    onChange({ strDefault: updateConfig({ config: strDefault || '00', value: +!checked, index: 1 }) })
-                  }
-                  text={'禁止从桌面端输入'}
-                />
-              </div>
-              <div className="labelWrap">
-                <Checkbox
-                  size="small"
-                  checked={disableAlbum === '1'}
-                  onClick={checked =>
-                    onChange({ strDefault: updateConfig({ config: strDefault || '00', value: +!checked, index: 0 }) })
-                  }
-                  text={_l('禁用相册')}
-                />
-              </div>
-              <Fragment>
-                <div className="labelWrap labelBetween">
-                  <Checkbox
-                    size="small"
-                    checked={originWatermark.length > 0}
-                    onClick={checked => {
-                      if (checked) {
-                        setVisible(false);
-                        setWatermark([]);
-                        onChange({
-                          ...handleAdvancedSettingChange(data, {
-                            watermark: '',
-                          }),
-                        });
-                      } else {
-                        setVisible(true);
-                        if (!watermark.length) {
-                          setWatermark(['user', 'time']);
-                          onChange({
-                            ...handleAdvancedSettingChange(data, {
-                              watermark: JSON.stringify(['user', 'time']),
-                            }),
-                          });
-                        }
-                      }
-                    }}
-                  >
-                    <span style={{ marginRight: '4px' }}>{_l('为照片添加水印（仅APP支持）')}</span>
-                    <Tooltip
-                      placement="bottom"
-                      title={_l('添加水印设置只对App有效，勾选后 不支持在App拍摄照片时修改水印')}
-                    >
-                      <i className="icon-help Gray_9e Font16 Hand"></i>
-                    </Tooltip>
-                  </Checkbox>
-                  {originWatermark.length > 0 && (
-                    <Tooltip placement="bottom" title={_l('设置水印内容')}>
-                      <i
-                        className="icon-settings Gray_9e Font16 Hand Right ThemeHoverColor3"
-                        onClick={() => setVisible(true)}
-                      ></i>
-                    </Tooltip>
-                  )}
-                </div>
-              </Fragment>
-              {enumDefault2 !== 2 && (
-                <div className="labelWrap labelBetween">
-                  <Checkbox
-                    size="small"
-                    checked={advancedSetting.compress === '1'}
-                    onClick={checked => {
-                      onChange({
-                        ...handleAdvancedSettingChange(data, {
-                          compress: checked ? '0' : '1',
-                        }),
-                      });
-                    }}
-                  >
-                    <span style={{ marginRight: '4px' }}>{_l('压缩照片')}</span>
-                    <Tooltip
-                      placement="bottom"
-                      title={
-                        <span className="WordBreak">
-                          {_l('压缩照片只对App有效，勾选后在App拍摄照片时不上传原图')}
-                        </span>
-                      }
-                    >
-                      <i className="icon-help Gray_9e Font16 Hand"></i>
-                    </Tooltip>
-                  </Checkbox>
-                </div>
-              )}
-              <Components.SheetDealDataType data={data} onChange={onChange} />
-            </SettingItem>
-          )}
-        </SettingItem>
-      )}
-      <Dialog
-        visible={visible}
-        title={_l('水印内容')}
-        okText={_l('保存')}
-        cancelText={_l('取消')}
-        onCancel={() => setVisible(false)}
-        onOk={() => {
-          onChange({
-            ...handleAdvancedSettingChange(data, {
-              watermark: JSON.stringify(watermark),
-            }),
-          });
-          setVisible(false);
-        }}
-      >
-        {WATERMARK_TYPE.map(item => {
-          return (
-            <Checkbox
-              size="small"
-              className="mTop10"
-              checked={_.includes(watermark, item.value)}
-              onClick={checked =>
-                setWatermark(checked ? watermark.filter(i => i !== item.value) : watermark.concat([item.value]))
-              }
-              text={item.text}
-            />
-          );
-        })}
-      </Dialog>
     </Fragment>
   );
 }

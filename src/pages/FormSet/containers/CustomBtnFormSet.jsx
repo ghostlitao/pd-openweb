@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import * as actions from '../redux/actions/action';
-import { connect } from 'react-redux';
-import { Icon, ScrollView, LoadDiv, Dialog, Support, Menu, MenuItem } from 'ming-ui';
-import { bindActionCreators } from 'redux';
+import { Icon, UpgradeIcon } from 'ming-ui';
 import CSSTransitionGroup from 'react-addons-css-transition-group';
 import { CreateCustomBtn } from 'worksheet/common';
 import styled from 'styled-components';
 import './print.less';
 import sheetAjax from 'src/api/worksheet';
-import MoreOption from '../components/MoreOption';
-import { redefineComplexControl, formatValuesOfOriginConditions } from 'worksheet/common/WorkSheetFilter/util';
-import cx from 'classnames';
-import { RangeDrop } from 'src/pages/FormSet/components/RangeDrop';
+import { redefineComplexControl } from 'worksheet/common/WorkSheetFilter/util';
 import { refreshBtnData } from 'src/pages/FormSet/util';
 import _ from 'lodash';
+import { getFeatureStatus, buriedUpgradeVersionDialog } from 'src/util';
+import { VersionProductType } from 'src/util/enum';
+import TrashDialog from '../components/Trash';
+import { useSetState } from 'react-use';
+import BtnCard from '../components/BtnCard';
+
 const Con = styled.div`
   width: 100%;
   height: 100%;
@@ -50,75 +50,91 @@ const Con = styled.div`
       position: relative;
     }
   }
+  .trash {
+    color: #757575;
+    .trashIcon {
+      color: #9e9e9e;
+    }
+    &:hover {
+      color: #2196f3;
+      .trashIcon {
+        color: #2196f3;
+      }
+    }
+  }
+  .line {
+    border-top: 1px solid #e0e0e0;
+    width: 100%;
+    margin-top: 8px;
+  }
 `;
 function CustomBtnFormSet(props) {
-  const input = React.createRef();
   const { worksheetId, worksheetControls, worksheetInfo } = props;
-  const [showCreateCustomBtn, setShowCreateCustomBtn] = useState(false);
-  const [btnId, setBtnId] = useState();
-  const [showactDia, setShowactDia] = useState(false);
-  const [isRename, setIsRename] = useState(false);
-  const [templateId, setTemplateId] = useState('');
-  const [btnList, setBtnList] = useState([]);
-  const [isEdit, setIsEdit] = useState();
-  const [showMoreOption, setShowMoreOption] = useState();
-  const [showDropOption, setShowDropOption] = useState();
-  useEffect(
-    () => {
-      if (!worksheetId) return;
-      getdata();
-    },
-    [worksheetId],
-  );
+  const [{ showCreateCustomBtn, btnId, showTrash, isEdit, btnList }, setState] = useSetState({
+    showCreateCustomBtn: false,
+    btnId: '',
+    showTrash: false,
+    isEdit: false,
+    btnList: [],
+  });
+  useEffect(() => {
+    if (!worksheetId) return;
+    getSheetBtns();
+  }, [worksheetId]);
   let ajaxFn = null;
-  const getdata = () => {
+  const getSheetBtns = () => {
     if (ajaxFn) {
       ajaxFn.abort();
     }
     ajaxFn = sheetAjax.getWorksheetBtns({
       worksheetId,
     });
-    ajaxFn.then(data => {
-      setBtnList(data);
+    ajaxFn.then(btnList => {
+      setState({ btnList });
     });
   };
 
   const updateCustomButtons = (btns, isAdd) => {
-    setBtnList(refreshBtnData(_.cloneDeep(btnList), btns, isAdd));
+    setState({ btnList: refreshBtnData(_.cloneDeep(btnList), btns, isAdd) });
   };
 
-  useEffect(
-    () => {
-      if (isRename) {
-        input.current.focus();
-      }
-    },
-    [isRename],
-  );
-  const optionWorksheetBtn = ({ btnId, appId, viewId, optionType, callback }) => {
-    sheetAjax
-      .optionWorksheetBtn({
-        appId,
-        viewId,
-        btnId,
-        worksheetId,
-        optionType: optionType, // * @param { integer } args.optionType 操作类型 1：视图添加按钮 2：视图删除按钮 9：删除按钮
-      })
-      .then(data => {
-        getdata();
-      });
-  };
+  const isFree =
+    _.get(
+      _.find(md.global.Account.projects, item => item.projectId === worksheetInfo.projectId),
+      'licenseType',
+    ) === 0;
+  const featureType = getFeatureStatus(worksheetInfo.projectId, VersionProductType.recycle);
 
-  const editBtn = obj => {
-    sheetAjax
-      .saveWorksheetBtn({
-        btnId: btnId,
-        worksheetId,
-        ...obj,
-      })
-      .then(res => {
-        console.log(res);
-      });
+  const renderBtns = list => {
+    if (list.length <= 0) {
+      return (
+        <p className="noData pTop40">
+          <Icon icon="custom_actions" className="icon" />
+          <br />
+          {_l('暂无自定义动作')}
+        </p>
+      );
+    }
+    return (
+      <div className="printTemplatesList">
+        {list.map(it => {
+          return (
+            <BtnCard
+              appId={worksheetInfo.appId}
+              views={worksheetInfo.views}
+              getSheetBtns={getSheetBtns}
+              key={it.btnId}
+              it={it}
+              worksheetId={worksheetId}
+              btnList={btnList}
+              onChange={state => {
+                setState({ ...state });
+              }}
+            />
+          );
+        })}
+      </div>
+    );
   };
 
   return (
@@ -126,226 +142,54 @@ function CustomBtnFormSet(props) {
       <Con className="printBox Relative">
         <div className="printBoxList">
           <div className="">
-            <div className="topBoxText">
-              <div className="textCon">
+            <div className="topBoxText flexRow alignItemsCenter">
+              <div className="textCon flex">
                 <h5 className="formName Gray Font17 Bold">{_l('自定义动作')}</h5>
                 <p className="desc mTop8">
-                  <span className="Font13 Gray_9e">{_l('自定义在查看记录时可执行的操作')}</span>
+                  <span className="Font13 Gray_9e">{_l('自定义在查看记录详情时或批量选择记录时可执行的操作')}</span>
                 </p>
               </div>
+              {featureType && (
+                <div
+                  className="trash mRight20 ThemeHoverColor3 flexRow"
+                  onClick={() => {
+                    if (isFree) {
+                      buriedUpgradeVersionDialog(worksheetInfo.projectId, VersionProductType.recycle);
+                      return;
+                    }
+                    setState({
+                      showTrash: true,
+                    });
+                  }}
+                >
+                  <Icon icon="knowledge-recycle" className="trashIcon Hand Font18" />
+                  <div className="recycle InlineBlock Hand mLeft5">{_l('回收站')}</div>
+                  {isFree && <UpgradeIcon />}
+                </div>
+              )}
               <span
                 className="add Relative bold"
                 onClick={() => {
-                  setBtnId('');
-                  setShowCreateCustomBtn(true);
-                  setIsEdit(false);
+                  setState({
+                    btnId: '',
+                    showCreateCustomBtn: true,
+                    isEdit: false,
+                  });
                 }}
               >
                 <Icon icon="plus" className="mRight8" />
                 {_l('添加按钮')}
               </span>
             </div>
-            {btnList.length <= 0 ? (
-              <p className="noData">
-                <Icon icon="custom_actions" className="icon" />
-                <br />
-                {_l('暂无自定义动作')}
-              </p>
-            ) : (
-              <div className="printTemplatesList">
-                {btnList.map(it => {
-                  return (
-                    <div className={cx('templates')} key={it.btnId}>
-                      <div className={cx('topBox')}>
-                        <div className="bg" style={{ background: it.color ? it.color : '#2196f3', opacity: 0.1 }} />
-                        <Icon
-                          icon={it.icon || 'custom_actions'}
-                          style={{ color: it.color ? it.color : '#2196f3' }}
-                          className="iconTitle Font16"
-                        />
-                        {isRename && templateId === it.btnId ? (
-                          <input
-                            type="text"
-                            ref={input}
-                            defaultValue={it.name}
-                            onBlur={e => {
-                              setTemplateId('');
-                              setIsRename(false);
-                              if (!_.trim(e.target.value)) {
-                                alert(_l('请输入模板名称'), 3);
-                                input.current.focus();
-                                return;
-                              }
-                              let data = btnList.map(os => {
-                                if (os.btnId === it.btnId) {
-                                  return {
-                                    ...os,
-                                    name: _.trim(e.target.value),
-                                  };
-                                } else {
-                                  return os;
-                                }
-                              });
-                              setBtnList(data);
-                              editBtn({
-                                name: _.trim(e.target.value),
-                                EditAttrs: ['name'],
-                                btnId: it.btnId,
-                              });
-                            }}
-                          />
-                        ) : (
-                          <span className="Bold"> {it.name}</span>
-                        )}
-                        <Icon
-                          icon="task-point-more"
-                          className="moreActive Hand Font18"
-                          onClick={() => {
-                            setShowMoreOption(true);
-                            setTemplateId(it.btnId);
-                          }}
-                        />
-                        {showMoreOption && templateId === it.btnId && (
-                          <MoreOption
-                            delTxt={_l('删除动作')}
-                            showMoreOption={showMoreOption}
-                            onClickAwayExceptions={[]}
-                            onClickAway={() => {
-                              setShowMoreOption(false);
-                            }}
-                            setFn={data => {
-                              setIsRename(true);
-                              setShowMoreOption(false);
-                            }}
-                            deleteFn={data => {
-                              optionWorksheetBtn({
-                                btnId: it.btnId,
-                                appId: worksheetInfo.appId,
-                                viewId: '', //* @param { string } args.viewId 视图ID
-                                optionType: 9, // * @param { integer } args.optionType 操作类型 1：视图添加按钮 2：视图删除按钮 9：删除按钮
-                                callback: () => {},
-                              });
-                              // getdata();
-                            }}
-                          />
-                        )}
-                      </div>
-                      <div className="con">
-                        <div className="view">
-                          {it.isAllView === 1 ? (
-                            <span className="viewText Gray_9e">{_l('所有记录')}</span>
-                          ) : (
-                            <span
-                              className="viewText Gray_9e"
-                              style={{ WebkitBoxOrient: 'vertical' }}
-                              title={
-                                it.displayViews.length > 0 && it.displayViews[0] !== ''
-                                  ? it.displayViews
-                                      .map((item, i) => {
-                                        let view = (worksheetInfo.views || []).find(o => o.viewId === item) || {};
-                                        return view.name || _l('该视图已删除');
-                                      })
-                                      .join(',')
-                                  : _l('未分配视图')
-                              }
-                            >
-                              {it.displayViews.length > 0 && it.displayViews[0] !== '' ? (
-                                <React.Fragment>
-                                  {_l('%0视图', it.displayViews.length)}：
-                                  {it.displayViews
-                                    .map((item, i) => {
-                                      let view = (worksheetInfo.views || []).find(o => o.viewId === item) || {};
-                                      return view.name || _l('该视图已删除');
-                                    })
-                                    .join(',')}
-                                </React.Fragment>
-                              ) : (
-                                _l('未分配视图')
-                              )}
-                            </span>
-                          )}
-                        </div>
-                        <div className="activeCon Relative">
-                          <span
-                            className="Hand"
-                            onClick={() => {
-                              setTemplateId(it.btnId);
-                              setShowDropOption(true);
-                            }}
-                          >
-                            {_l('使用范围')}
-                          </span>
-                          {showDropOption && templateId === it.btnId && (
-                            <RangeDrop
-                              printData={{
-                                range: it.isAllView === 1 ? 1 : 3, //?? 是否应用到所有视图 1:所有视图 3:指定视图
-                                views: it.displayViews
-                                  .filter(o => !!o)
-                                  .map(o => {
-                                    let d = (worksheetInfo.views || []).find(it => it.viewId === o);
-                                    if (!!d && !!o) {
-                                      return {
-                                        viewId: o,
-                                        viewName: d.name,
-                                      };
-                                    }
-                                  })
-                                  .filter(o => !!o),
-                              }}
-                              views={worksheetInfo.views}
-                              onClickAwayExceptions={[]}
-                              onClickAway={() => {
-                                setShowDropOption(false);
-                              }}
-                              onClose={() => {
-                                setShowDropOption(false);
-                              }}
-                              setData={data => {
-                                const { printData = {} } = data;
-                                const isAllView = printData.range === 3 ? 0 : 1;
-                                const views =
-                                  isAllView === 1
-                                    ? []
-                                    : (printData.views || []).map(o => {
-                                        return o.viewId || '';
-                                      }) || [];
-                                editBtn({
-                                  displayViews: views,
-                                  isAllView,
-                                  EditAttrs: ['isAllView', 'displayViews'],
-                                  btnId: it.btnId,
-                                });
-                                let list = btnList.map(os => {
-                                  if (os.btnId === it.btnId) {
-                                    return {
-                                      ...os,
-                                      displayViews: views,
-                                      isAllView,
-                                    };
-                                  } else {
-                                    return os;
-                                  }
-                                });
-                                setBtnList(list);
-                              }}
-                            />
-                          )}
-                          <span
-                            className="Hand mLeft24"
-                            onClick={() => {
-                              setBtnId(it.btnId);
-                              setShowCreateCustomBtn(true);
-                              setIsEdit(true);
-                            }}
-                          >
-                            {_l('编辑')}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+            {renderBtns(btnList.filter(o => !o.isBatch))}
+            {btnList.filter(o => o.isBatch).length > 0 && (
+              <React.Fragment>
+                <p className="desc mTop8">
+                  <div className="Font13 Gray_75 Bold mTop25">{_l('批量数据源')}</div>
+                  <div className="line"></div>
+                </p>
+                {renderBtns(btnList.filter(o => o.isBatch))}
+              </React.Fragment>
             )}
           </div>
         </div>
@@ -385,10 +229,16 @@ function CustomBtnFormSet(props) {
                 '.ant-picker-dropdown',
                 '.Tooltip',
               ]}
-              onClickAway={() => setShowCreateCustomBtn(false)}
+              onClickAway={() =>
+                setState({
+                  showCreateCustomBtn: false,
+                })
+              }
               isEdit={isEdit}
               onClose={() => {
-                setShowCreateCustomBtn(false);
+                setState({
+                  showCreateCustomBtn: false,
+                });
               }}
               columns={worksheetControls
                 .filter(item => {
@@ -404,22 +254,33 @@ function CustomBtnFormSet(props) {
               viewId={''}
               appId={worksheetInfo.appId}
               worksheetId={worksheetId}
+              sheetSwitchPermit={worksheetInfo.switches}
               workflowId={''}
               refreshFn={(worksheetId, appId, viewId, rowId) => {
-                getdata();
+                getSheetBtns();
               }}
               updateCustomButtons={updateCustomButtons}
             />
           )}
         </CSSTransitionGroup>
       </Con>
+      {showTrash && (
+        <TrashDialog
+          projectId={worksheetInfo.projectId}
+          appId={worksheetInfo.appId}
+          worksheetId={worksheetId}
+          views={worksheetInfo.views || []}
+          onCancel={() => {
+            setState({
+              showTrash: false,
+            });
+          }}
+          onChange={() => {
+            getSheetBtns();
+          }}
+        />
+      )}
     </React.Fragment>
   );
 }
-const mapStateToProps = state => state.formSet;
-const mapDispatchToProps = dispatch => bindActionCreators(actions, dispatch);
-
-export default connect(
-  mapStateToProps,
-  mapDispatchToProps,
-)(CustomBtnFormSet);
+export default CustomBtnFormSet;

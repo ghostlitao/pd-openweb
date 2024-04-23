@@ -35,7 +35,9 @@ export class BarLabel {
     pixelRadio = 2,
     width = 100,
     height = 100,
+    fontSize = 1,
     firstIsTitle = false,
+    showBarValue = true,
     codePosition = 'top',
     size = 'm',
     value,
@@ -47,11 +49,13 @@ export class BarLabel {
       pixelRadio,
       width,
       height,
+      fontSize: fontSize || 1,
       size,
       firstIsTitle,
       codePosition,
       value,
       texts,
+      showBarValue,
     });
     this.setLayoutParams();
     this.init();
@@ -66,7 +70,7 @@ export class BarLabel {
         ? {
             l: 18,
             m: 14,
-            s: 14,
+            s: 9,
           }
         : {
             l: 19,
@@ -101,12 +105,15 @@ export class BarLabel {
     );
   }
   async render() {
-    if (this.options.isDebug) {
+    const { isDebug, showBarValue } = this.options;
+    if (isDebug) {
       this.drawPadding();
       this.drawGrid();
     }
     await this.drawBar();
-    this.drawBarText();
+    if (showBarValue) {
+      this.drawBarText();
+    }
     this.drawTexts();
   }
   // 处理文字换行
@@ -237,10 +244,11 @@ export class BarLabel {
     return (width / count) * 2;
   }
   drawTexts() {
-    let { isPreview, firstIsTitle, codePosition, texts } = this.options;
+    let { isPreview, firstIsTitle, codePosition, texts, showBarValue } = this.options;
     const { paddingX, paddingY, height, fontSize } = this.layout;
     const textX = paddingX * this.unitSize;
-    const textY = codePosition === 'top' ? (paddingY + height + 2) * this.unitSize : paddingY * this.unitSize;
+    const textY =
+      codePosition === 'top' ? (paddingY + height + (showBarValue ? 2 : 0)) * this.unitSize : paddingY * this.unitSize;
     const textWidth = this._width - 2 * paddingX * this.unitSize;
     const textHeight = fontSize * this.unitSize;
     texts = _.flatten(
@@ -251,7 +259,11 @@ export class BarLabel {
               forceInLine,
               isBold: firstIsTitle && i === 0,
             }
-          : this.cutTextByWidth(textHeight * 0.6, text, this._width - paddingX * 2 * this.unitSize).map(t => ({
+          : this.cutTextByWidth(
+              textHeight * 0.6 * (firstIsTitle && i === 0 ? 1 : this.options.fontSize),
+              text,
+              this._width - paddingX * 2 * this.unitSize,
+            ).map(t => ({
               text: t,
               isBold: firstIsTitle && i === 0,
             })),
@@ -266,7 +278,7 @@ export class BarLabel {
       if (!text) {
         return;
       }
-      let textFontSize = textHeight * 0.6;
+      let textFontSize = textHeight * 0.6 * this.options.fontSize;
       const isCenter = !titleIsSplitted && isBold && i === 0;
       if (forceInLine) {
         const contentWidth = this.measureTextWidth(text, textFontSize);

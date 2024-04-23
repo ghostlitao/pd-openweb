@@ -46,6 +46,7 @@ const builtinPlacements = {
 
 class Tooltip extends Component {
   static propTypes = {
+    flag: string,
     action: arrayOf(string),
     /**
      * 放置的位置
@@ -93,7 +94,7 @@ class Tooltip extends Component {
     text: <span />,
     popupPlacement: 'top',
     themeColor: 'black',
-    offset: [1, 1],
+    offset: [1, 3],
     overflow: [1, 1],
     disable: false,
     tooltipStyle: {},
@@ -104,6 +105,11 @@ class Tooltip extends Component {
     this.state = {
       loading: this.contentIsFunction,
     };
+  }
+  componentWillReceiveProps(nextProps) {
+    if (this.contentIsFunction && nextProps.flag !== this.props.flag && !this.state.loading) {
+      this.setState({ loading: true });
+    }
   }
   renderPopup() {
     const { text, tooltipClass, tooltipStyle } = this.props;

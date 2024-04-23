@@ -9,6 +9,7 @@ import styled from 'styled-components';
 import { getAppFeaturesPath } from 'src/util';
 import reportApi from 'statistics/api/report';
 import { VIEW_DISPLAY_TYPE } from 'src/pages/worksheet/constants/enum';
+import homeAppApi from 'src/api/homeApp';
 import './index.less';
 import _ from 'lodash';
 
@@ -19,9 +20,9 @@ const Content = styled.div`
   }
 `;
 
-function Chart({ data, mobileCount }) {
-  if (!data.status) {
-    return <Abnormal />;
+function Chart({ data, mobileCount, mobileFontSize, isHorizontal, projectId, themeColor, pageConfig = {} }) {
+  if (data.status <= 0) {
+    return <Abnormal status={data.status} />;
   }
 
   const isMingdao = navigator.userAgent.toLowerCase().includes('mingdao application');
@@ -33,27 +34,56 @@ function Chart({ data, mobileCount }) {
   const isContrastEmpty = _.isEmpty(data.contrast);
   const Charts = charts[data.reportType];
   const WithoutDataComponent = <WithoutData />;
+  const { drillParticleSizeType } = data.country || {};
   const filter = data.filter || {};
+  const { filterRangeId, rangeType, rangeValue, dynamicFilter, today = false, customRangeValue } = filter;
+  const { filters, filtersGroup } = pageConfig;
   const viewOriginalSheet = (params) => {
     reportApi.getReportSingleCacheId({
-      ...filter,
       ...params,
+      appId: data.appId,
+      filterRangeId,
+      rangeType,
+      rangeValue,
+      dynamicFilter,
+      today,
+      customRangeValue,
+      filters: [filters, filtersGroup].filter(_ => _),
+      particleSizeType: drillParticleSizeType,
       isPersonal: true,
       reportId: data.reportId
     }).then(result => {
       if (result.id) {
-        const url = `/worksheet/${data.appId}/view/${filter.viewId}?chartId=${result.id}&${getAppFeaturesPath()}`;
-        if (isMingdao || isWeixin || isSafari) {
+        const workSheetId = data.appId;
+        if (isMingdao) {
+          const url = `/worksheet/${workSheetId}/view/${filter.viewId}?chartId=${result.id}&${getAppFeaturesPath()}`;
           window.location.href = url;
         } else {
-          window.open(url);
+          homeAppApi.getAppSimpleInfo({ workSheetId }).then(data => {
+            const url = `/mobile/recordList/${data.appId}/${data.appSectionId}/${workSheetId}/${filter.viewId}?chartId=${result.id}`;
+            window.mobileNavigateTo(url);
+          });
         }
       }
     });
   }
-  const isPublicShare = location.href.includes('public/page') || window.shareAuthor || window.share;
+  const isPublicShare = window.shareAuthor || _.get(window, 'shareState.shareId');
   const isViewOriginalData = filter.viewId && [VIEW_DISPLAY_TYPE.sheet].includes(filter.viewType.toString()) && !isPublicShare;
-  const ChartComponent = <Charts reportData={data} isThumbnail={true} isViewOriginalData={isViewOriginalData} onOpenChartDialog={viewOriginalSheet} mobileCount={mobileCount} />;
+
+  const ChartComponent = (
+    <Charts
+      reportData={data}
+      isThumbnail={true}
+      isViewOriginalData={isViewOriginalData}
+      onOpenChartDialog={viewOriginalSheet}
+      mobileCount={mobileCount}
+      mobileFontSize={mobileFontSize}
+      isHorizontal={isHorizontal}
+      projectId={projectId}
+      themeColor={themeColor}
+      customPageConfig={pageConfig}
+    />
+  );
 
   switch (data.reportType) {
     case reportTypes.BarChart:
@@ -85,7 +115,21 @@ function Chart({ data, mobileCount }) {
   }
 }
 
-function ChartWrapper({ data, loading, mobileCount, onOpenFilterModal, onOpenZoomModal, onLoadBeforeData, onLoadNextData, pageComponents = [], isHorizontal }) {
+function ChartWrapper({
+  data,
+  loading,
+  mobileCount,
+  mobileFontSize,
+  pageComponents = [],
+  projectId,
+  themeColor,
+  pageConfig,
+  isHorizontal,
+  onOpenFilterModal,
+  onOpenZoomModal,
+  onLoadBeforeData,
+  onLoadNextData
+}) {
   const isVertical = window.orientation === 0;
   const isMobileChartPage = location.href.includes('mobileChart');
   const index = _.findIndex(pageComponents, { value: data.reportId });
@@ -93,7 +137,7 @@ function ChartWrapper({ data, loading, mobileCount, onOpenFilterModal, onOpenZoo
   const nextAllow = index < pageComponents.length - 1;
   return (
     <Fragment>
-      <div className="mBottom10 flexRow valignWrapper">
+      <div className={cx('mBottom10 flexRow valignWrapper', { mRight20: isHorizontal })}>
         <div className="Font17 Gray ellipsis name flex">{data.name}</div>
         {isHorizontal && (
           <Fragment>
@@ -122,7 +166,15 @@ function ChartWrapper({ data, loading, mobileCount, onOpenFilterModal, onOpenZoo
             <ActivityIndicator size="large" />
           </Flex>
         ) : (
-          <Chart data={data} mobileCount={mobileCount} />
+          <Chart
+            data={data}
+            mobileCount={mobileCount}
+            mobileFontSize={mobileFontSize}
+            isHorizontal={isHorizontal}
+            projectId={projectId}
+            themeColor={themeColor}
+            pageConfig={pageConfig}
+          />
         )}
       </Content>
     </Fragment>

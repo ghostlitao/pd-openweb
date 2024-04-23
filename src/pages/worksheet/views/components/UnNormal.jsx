@@ -32,7 +32,7 @@ const UnNormalWrap = styled.div`
   }
 `;
 
-const CODE_TYPE = {
+const VIEW_CODE_TYPE = {
   '-10000': {
     src: abnormal,
     text: `${_l('地址无法访问')}\n${_l('被取消了查看权限或已删除')}`,
@@ -45,10 +45,34 @@ const CODE_TYPE = {
     src: withoutPermission,
     text: _l('视图无权限'),
   },
+  13: {
+    src: abnormal,
+    text: _l('排序超过内存限制，请创建包含当前筛选条件与排序字段的索引后重试”'),
+  },
+};
+
+const SHEET_CODE_TYPE = {
+  '-20000': {
+    src: abnormal,
+    text: `${_l('地址无法访问')}\n${_l('应用项被移走了')}`,
+  },
+  '-10000': {
+    src: abnormal,
+    text: `${_l('地址无法访问')}\n${_l('被取消了查看权限或已删除')}`,
+  },
+  4: {
+    src: alreadyDelete,
+    text: _l('应用项已删除'),
+  },
+  7: {
+    src: withoutPermission,
+    text: _l('应用项无权限'),
+  },
 };
 
 const UnNormal = props => {
-  const { resultCode, errorText } = props;
+  const { resultCode, errorText, type = 'view' } = props;
+  const CODE_TYPE = type === 'view' ? VIEW_CODE_TYPE : SHEET_CODE_TYPE;
   let { src, text, renderRefresh } = CODE_TYPE[resultCode] || {
     src: abnormal,
     renderRefresh: true,

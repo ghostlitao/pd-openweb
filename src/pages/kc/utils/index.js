@@ -4,7 +4,8 @@ import moment from 'moment';
 import base64 from 'js-base64';
 import { assign, trim, isObject, isEmpty } from 'lodash';
 import { PICK_TYPE, ROOT_PERMISSION_TYPE, NODE_SORT_TYPE, NODE_SORT_BY } from '../constant/enum';
-import { index as dialog } from 'src/components/mdDialog/dialog';
+import Dialog from 'ming-ui/components/Dialog';
+import React from 'react';
 
 const base64encode = base64.Base64.encode;
 
@@ -233,30 +234,25 @@ export function confirm(
   className = '',
 ) {
   const dfd = $.Deferred();
-  const container = {
-    dialogBoxID: Math.random(),
-    header, // '删除',
-    content, // '确认删除选定文件？',
-    ckText,
-    minorContent,
-  };
+  const container = {};
   if (yesText === false) {
-    container.yesFn = false;
+    container.removeOkBtn = true;
   } else {
-    container.yesFn = checked => dfd.resolve(checked);
-    container.yesText = yesText;
+    container.onOk = checked => dfd.resolve(checked);
+    container.okText = yesText;
   }
   if (noText === false) {
-    container.noFn = false;
+    container.removeCancelBtn = true;
   } else {
-    container.noFn = () => dfd.reject();
-    container.noText = noText;
+    container.onCancel = () => dfd.reject();
+    container.cancelText = noText;
   }
 
-  dialog({
-    showClose,
-    className: className || null,
-    container,
+  Dialog.confirm({
+    dialogClasses: Math.random(),
+    title: header,
+    children: <div dangerouslySetInnerHTML={{ __html: content }}></div>,
+    ...container,
   });
   return dfd.promise();
 }
@@ -382,6 +378,36 @@ export function wait(ms) {
 
 export function isOffice(fileExt) {
   var fileExts = ['.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx'];
+  if (fileExt) {
+    fileExt = fileExt.toLowerCase();
+    return fileExts.indexOf(fileExt) !== -1;
+  }
+  return false;
+}
+
+export function isWpsPreview(fileExt) {
+  var fileExts = [
+    'xls',
+    'xlsx',
+    'xlsm',
+    'xlm',
+    'xlsb',
+    'doc',
+    'docx',
+    'dotx',
+    'dot',
+    'dotm',
+    'ppt',
+    'pptx',
+    'pps',
+    'ppsx',
+    'potx',
+    'pot',
+    'pptm',
+    'potm',
+    'ppsm',
+    'wps',
+  ];
   if (fileExt) {
     fileExt = fileExt.toLowerCase();
     return fileExts.indexOf(fileExt) !== -1;

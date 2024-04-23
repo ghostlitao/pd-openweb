@@ -4,22 +4,39 @@ import update from 'immutability-helper';
 import { VIEW_DISPLAY_TYPE } from 'worksheet/constants/enum';
 import { formatValuesOfCondition } from 'worksheet/common/WorkSheetFilter/util';
 import addRecord from 'worksheet/common/newRecord/addRecord';
-import { refresh as sheetViewRefresh, addRecord as sheetViewAddRecord, setViewLayout } from './sheetview';
+import {
+  refresh as sheetViewRefresh,
+  addRecord as sheetViewAddRecord,
+  setViewLayout,
+  setHighLightOfRows,
+} from './sheetview';
 import { refresh as galleryViewRefresh } from './galleryview';
 import { refresh as calendarViewRefresh } from './calendarview';
+import { refresh as resourceViewRefresh } from './resourceview';
 import { resetLoadGunterView, addNewRecord as addGunterNewRecord } from './gunterview';
 import { initBoardViewData } from './boardView';
 import { getDefaultHierarchyData, updateHierarchySearchRecord } from './hierarchy';
 import { updateGunterSearchRecord } from './gunterview';
+import { refresh as detailViewRefresh } from './detailView';
+import { refresh as customWidgetViewRefresh } from './customWidgetView';
 import { refreshBtnData } from 'src/pages/FormSet/util';
 import { permitList } from 'src/pages/FormSet/config.js';
 import { isOpenPermit } from 'src/pages/FormSet/util.js';
 import { formatSearchConfigs } from 'src/pages/widgetConfig/util';
+import { getFilledRequestParams, needHideViewFilters, replaceControlsTranslateInfo } from 'src/pages/worksheet/util';
 import _ from 'lodash';
+import { emitter, getTranslateInfo } from 'src/util';
+import { initMapViewData, mapNavGroupFiltersUpdate } from './mapView';
 
 export const updateBase = base => {
   return (dispatch, getState) => {
-    dispatch(loadCustomButtons({ worksheetId: base.worksheetId }));
+    const sheet = getState().sheet;
+    if (_.get(sheet, 'base.viewId') && base.viewId && _.get(sheet, 'base.viewId') !== base.viewId) {
+      const view = _.find(sheet.views, v => v.viewId === base.viewId);
+      if (view && needHideViewFilters(view)) {
+        dispatch(clearFilters());
+      }
+    }
     dispatch({
       type: 'WORKSHEET_UPDATE_BASE',
       base: Object.assign({}, base, {
@@ -38,6 +55,12 @@ export const clearChartId = base => {
   };
 };
 
+// 更新个别字段
+export const updateWorksheetSomeControls = controls => ({
+  type: 'WORKSHEET_UPDATE_SOME_CONTROLS',
+  controls,
+});
+
 export const updateIsCharge = isCharge => ({ type: 'WORKSHEET_UPDATE_IS_CHARGE', isCharge });
 export const updateAppPkgData = appPkgData => ({ type: 'WORKSHEET_UPDATE_APPPKGDATA', appPkgData });
 
@@ -45,10 +68,10 @@ export const updateWorksheetLoading = loading => ({ type: 'WORKSHEET_UPDATE_LOAD
 
 let worksheetRequest = null;
 
-export function loadWorksheet(worksheetId) {
+export function loadWorksheet(worksheetId, setRequest) {
   return (dispatch, getState) => {
     const { base = {} } = getState().sheet;
-    const { viewId, chartId } = base;
+    const { appId, viewId, chartId } = base;
 
     if (
       worksheetRequest &&
@@ -63,34 +86,60 @@ export function loadWorksheet(worksheetId) {
       type: 'WORKSHEET_FETCH_START',
     });
 
-    worksheetRequest = worksheetAjax.getWorksheetInfo({
+    const args = {
       worksheetId,
       reportId: chartId || undefined,
       getViews: true,
       getTemplate: true,
       getRules: true,
       getSwitchPermit: true,
-    });
+      resultType: 2,
+    };
 
+    worksheetRequest = worksheetAjax.getWorksheetInfo(args);
+    if (_.isFunction(setRequest)) {
+      setRequest(worksheetRequest);
+    }
     worksheetRequest
       .then(async res => {
-        if (_.get(window, 'shareState.isPublicView')) {
+        const translateInfo = getTranslateInfo(appId, worksheetId);
+        res.entityName = translateInfo.recordName || res.entityName;
+        if (res.advancedSetting) {
+          res.advancedSetting.title = translateInfo.formTitle || res.advancedSetting.title;
+          res.advancedSetting.sub = translateInfo.formSub || res.advancedSetting.sub;
+          res.advancedSetting.continue = translateInfo.formContinue || res.advancedSetting.continue;
+        }
+        if (_.get(window, 'shareState.isPublicView') || _.get(window, 'shareState.isPublicPage')) {
           res.allowAdd = false;
         }
         let queryRes;
         if (res.isWorksheetQuery) {
           queryRes = await worksheetAjax.getQueryBySheetId({ worksheetId }, { silent: true });
         }
-        if (res.resultCode !== 1) {
+
+        if (![1, 4].includes(res.resultCode)) {
           dispatch({
             type: 'WORKSHEET_INIT_FAIL',
           });
           return;
         }
+        if (_.get(res, 'template.controls')) {
+          res.template.controls = replaceControlsTranslateInfo(appId, res.template.controls);
+        }
         if (!res.isWorksheetQuery || queryRes) {
           dispatch({
             type: 'WORKSHEET_INIT',
-            value: !chartId ? res : { ...res, views: res.views.map(v => ({ ...v, viewType: 0 })) },
+            value: Object.assign(
+              !chartId
+                ? res
+                : {
+                    ...res,
+                    views: res.views.map(v => ({ ...v, viewType: 0 })),
+                  },
+              {
+                isRequestingRelationControls: res.requestAgain,
+              },
+            ),
           });
           dispatch(setViewLayout(viewId));
           dispatch({
@@ -98,10 +147,24 @@ export function loadWorksheet(worksheetId) {
             value: formatSearchConfigs(_.get(queryRes, 'searchConfig') || []),
           });
         }
-        if (worksheetId && !_.get(window, 'shareState.isPublicView')) {
+        if (worksheetId) {
           dispatch({
             type: 'WORKSHEET_PERMISSION_INIT',
             value: res.switches,
+          });
+        }
+        if (res.requestAgain) {
+          worksheetRequest = worksheetAjax.getWorksheetInfo({ ...args, resultType: undefined });
+          worksheetRequest.then(infoRes => {
+            const newControls = replaceControlsTranslateInfo(appId, _.get(infoRes, 'template.controls'));
+            if (_.isEmpty(newControls)) {
+              return;
+            }
+            dispatch(updateWorksheetSomeControls(newControls));
+            dispatch({
+              type: 'WORKSHEET_UPDATE_IS_REQUESTING_RELATION_CONTROLS',
+              value: false,
+            });
           });
         }
       })
@@ -120,7 +183,7 @@ export const updateWorksheetInfo = info => ({
 
 export function loadCustomButtons({ appId, viewId, rowId, worksheetId }) {
   return dispatch => {
-    if (!worksheetId || _.get(window, 'shareState.isPublicView')) {
+    if (!worksheetId || _.get(window, 'shareState.isPublicView') || _.get(window, 'shareState.isPublicPage')) {
       return;
     }
     worksheetAjax
@@ -188,10 +251,10 @@ export const updateView = view => ({
 export function saveView(viewId, newConfig, cb) {
   return (dispatch, getState) => {
     const sheet = getState().sheet;
-    const { base, views } = sheet;
+    const { base, views, navGroupFilters } = sheet;
     const view = _.find(views, v => v.viewId === viewId);
     const saveParams = { ...newConfig };
-    const editAttrs = Object.keys(saveParams);
+    const editAttrs = Object.keys(saveParams).filter(o => 'editAdKeys' !== o);
     if (!view) {
       console.error('can not find view');
       return;
@@ -199,13 +262,9 @@ export function saveView(viewId, newConfig, cb) {
     // 筛选需要在保存成功后再触发界面更新
     const updateAfterSave =
       _.some(['filters', 'moreSort', 'viewControl', 'fastFilters'].map(k => editAttrs.includes(k))) ||
-      (editAttrs.includes('advancedSetting') && !!_.get(saveParams, ['advancedSetting', 'navfilters']));
-    if (!updateAfterSave) {
-      dispatch({
-        type: 'WORKSHEET_UPDATE_VIEW',
-        view: { ...view, ...newConfig },
-      });
-    }
+      (editAttrs.includes('advancedSetting') &&
+        (!!_.get(saveParams, ['advancedSetting', 'navfilters']) ||
+          !!_.get(saveParams, ['advancedSetting', 'colorid'])));
     if (saveParams.filters) {
       saveParams.filters = saveParams.filters.map(formatValuesOfCondition);
     }
@@ -224,16 +283,29 @@ export function saveView(viewId, newConfig, cb) {
           },
           { ...view, ...newConfig },
         );
+        if (
+          _.get(newConfig, 'advancedSetting.shownullitem') !== _.get(view, 'advancedSetting.shownullitem') &&
+          _.get(newConfig, 'advancedSetting.shownullitem') === '' &&
+          navGroupFilters &&
+          navGroupFilters.length > 0
+        ) {
+          if (navGroupFilters[0].values.length <= 0) {
+            dispatch(updateGroupFilter([]));
+          }
+        }
         if (editAttrs.includes('navGroup')) {
           dispatch(updateGroupFilter([], nextView));
           dispatch(getNavGroupCount());
         }
+        dispatch({
+          type: 'WORKSHEET_UPDATE_VIEW',
+          view: data,
+        });
         if (updateAfterSave) {
-          dispatch({
-            type: 'WORKSHEET_UPDATE_VIEW',
-            view: nextView,
-          });
-          if (_.includes(editAttrs, 'filters') && !_.isEqual(view.filters, nextView.filters)) {
+          if (
+            (_.includes(editAttrs, 'filters') && !_.isEqual(view.filters, nextView.filters)) ||
+            _.get(view, 'advancedSetting.colorid') !== _.get(nextView, 'advancedSetting.colorid')
+          ) {
             dispatch(refreshSheet(nextView));
           }
         }
@@ -247,11 +319,23 @@ export function saveView(viewId, newConfig, cb) {
   };
 }
 
+// 更新分组筛选
+export const updateNavGroup = () => {
+  return (dispatch, getState) => {
+    const { views, base } = getState().sheet;
+    const { viewId = '' } = base;
+    const view = views.find(o => o.viewId === viewId) || {};
+    const navGroup = view.navGroup && view.navGroup.length > 0 ? view.navGroup[0] : {};
+    navGroup.controlId && window.localStorage.getItem('navGroupIsOpen') !== 'false' && dispatch(getNavGroupCount());
+  };
+};
+
 // 刷新视图
 export function refreshSheet(view, options) {
   return dispatch => {
     if (String(view.viewType) === VIEW_DISPLAY_TYPE.sheet) {
       dispatch(sheetViewRefresh(options));
+      dispatch(updateNavGroup());
     } else if (String(view.viewType) === VIEW_DISPLAY_TYPE.board) {
       dispatch(initBoardViewData());
     } else if (String(view.viewType) === VIEW_DISPLAY_TYPE.structure) {
@@ -260,17 +344,32 @@ export function refreshSheet(view, options) {
       dispatch(calendarViewRefresh());
     } else if (String(view.viewType) === VIEW_DISPLAY_TYPE.gallery) {
       dispatch(galleryViewRefresh());
+      dispatch(updateNavGroup());
     } else if (String(view.viewType) === VIEW_DISPLAY_TYPE.gunter) {
       dispatch(resetLoadGunterView());
+    } else if (String(view.viewType) === VIEW_DISPLAY_TYPE.detail) {
+      dispatch(detailViewRefresh());
+    } else if (String(view.viewType) === VIEW_DISPLAY_TYPE.resource) {
+      dispatch(resourceViewRefresh());
+    } else if (String(view.viewType) === VIEW_DISPLAY_TYPE.customize && _.get(options, 'isRefreshBtn')) {
+      dispatch(customWidgetViewRefresh());
+    } else if (String(view.viewType) === VIEW_DISPLAY_TYPE.map) {
+      dispatch(initMapViewData(undefined, true));
     }
   };
 }
 
 // 添加记录
 export function addNewRecord(data, view) {
+  emitter.emit('POST_MESSAGE_TO_CUSTOM_WIDGET', {
+    action: 'new-record',
+    value: data,
+  });
+
   return dispatch => {
     if (String(view.viewType) === VIEW_DISPLAY_TYPE.sheet) {
       dispatch(sheetViewAddRecord(data));
+      dispatch(updateNavGroup());
     } else if (String(view.viewType) === VIEW_DISPLAY_TYPE.board) {
       dispatch(initBoardViewData());
     } else if (String(view.viewType) === VIEW_DISPLAY_TYPE.structure) {
@@ -279,9 +378,15 @@ export function addNewRecord(data, view) {
       dispatch(calendarViewRefresh());
     } else if (String(view.viewType) === VIEW_DISPLAY_TYPE.gallery) {
       dispatch(galleryViewRefresh());
-      dispatch(getNavGroupCount());
+      dispatch(updateNavGroup());
     } else if (String(view.viewType) === VIEW_DISPLAY_TYPE.gunter) {
       dispatch(addGunterNewRecord(data));
+    } else if (String(view.viewType) === VIEW_DISPLAY_TYPE.resource) {
+      dispatch(resourceViewRefresh());
+    } else if (String(view.viewType) === VIEW_DISPLAY_TYPE.detail) {
+      dispatch(detailViewRefresh());
+    } else if (String(view.viewType) === VIEW_DISPLAY_TYPE.map) {
+      dispatch(initMapViewData(undefined, true));
     }
   };
 }
@@ -291,7 +396,7 @@ export function openNewRecord() {
   return (dispatch, getState) => {
     const { base, views, worksheetInfo, navGroupFilters, sheetSwitchPermit, isCharge, draftDataCount, appPkgData } =
       getState().sheet;
-    const { appId, viewId, worksheetId } = base;
+    const { appId, viewId, groupId, worksheetId } = base;
     const view = _.find(views, { viewId }) || (!viewId && views[0]) || {};
     const { advancedSetting = {} } = view;
     let { usenav } = advancedSetting;
@@ -308,16 +413,22 @@ export function openNewRecord() {
         viewId,
         worksheetId,
         worksheetInfo,
+        groupId,
         projectId: worksheetInfo.projectId,
         needCache: true,
         addType: 1,
-        showShare: isOpenPermit(permitList.recordShareSwitch, sheetSwitchPermit, viewId),
+        showShare: true,
+        sheetSwitchPermit,
+        hidePublicShare: !(
+          isOpenPermit(permitList.recordShareSwitch, sheetSwitchPermit, viewId) && !md.global.Account.isPortal
+        ),
         isCharge: isCharge,
         appPkgData: appPkgData,
         entityName: worksheetInfo.entityName,
         onAdd: data => {
           if (!_.isEmpty(data)) {
             dispatch(addNewRecord(data, view));
+            dispatch(setHighLightOfRows([data.rowid]));
             return;
           }
           dispatch({ type: 'UPDATE_DRAFT_DATA_COUNT', data: draftDataCount + 1 });
@@ -380,12 +491,6 @@ export const updateWorksheetControls = controls => ({
   controls,
 });
 
-// 更新个别字段
-export const updateWorksheetSomeControls = controls => ({
-  type: 'WORKSHEET_UPDATE_SOME_CONTROLS',
-  controls,
-});
-
 // 更新字段
 export const refreshWorksheetControls = controls => {
   return (dispatch, getState) => {
@@ -408,6 +513,15 @@ export function updateFilters(filters, view) {
       filters,
     });
     dispatch(refreshSheet(view, { changeFilters: true }));
+  };
+}
+
+// 清空筛选条件
+export function clearFilters(filters, view) {
+  return dispatch => {
+    dispatch({
+      type: 'WORKSHEET_CLEAR_FILTERS',
+    });
   };
 }
 
@@ -443,21 +557,35 @@ export function updateGroupFilter(navGroupFilters = [], view) {
       type: 'WORKSHEET_UPDATE_GROUP_FILTER',
       navGroupFilters,
     });
+    if (String(view.viewType) === VIEW_DISPLAY_TYPE.map) {
+      dispatch(mapNavGroupFiltersUpdate(navGroupFilters, view));
+    }
   };
 }
-
+let getNavGroupRequest = null;
+let preWorksheetIds = [];
 // 获取分组筛选的count
 export function getNavGroupCount() {
   return (dispatch, getState) => {
     const sheet = getState().sheet;
     const { filters = {}, base = {}, quickFilter = {} } = sheet;
-    const { worksheetId, viewId } = base;
+    const { appId, worksheetId, viewId } = base;
     const { filterControls, filtersGroup, keyWords, searchType } = filters;
+    if (
+      getNavGroupRequest &&
+      getNavGroupRequest.state() === 'pending' &&
+      getNavGroupRequest.abort &&
+      preWorksheetIds.includes(worksheetId)
+    ) {
+      getNavGroupRequest.abort();
+    }
     if (!worksheetId && !viewId) {
       return;
     }
-    worksheetAjax
-      .getNavGroup({
+    preWorksheetIds.push(worksheetId);
+    getNavGroupRequest = worksheetAjax.getNavGroup(
+      getFilledRequestParams({
+        appId,
         worksheetId,
         viewId,
         filterControls,
@@ -477,13 +605,16 @@ export function getNavGroupCount() {
           ]),
         ),
         keyWords,
-      })
-      .then(data => {
-        dispatch({
-          type: 'WORKSHEET_NAVGROUP_COUNT',
-          data,
-        });
+      }),
+    );
+
+    getNavGroupRequest.then(data => {
+      preWorksheetIds = (preWorksheetIds || []).filter(o => o !== worksheetId);
+      dispatch({
+        type: 'WORKSHEET_NAVGROUP_COUNT',
+        data,
       });
+    });
   };
 }
 
@@ -526,6 +657,11 @@ export function updateSearchRecord(view = {}, record) {
       dispatch(updateHierarchySearchRecord(record));
     } else if (String(view.viewType) === VIEW_DISPLAY_TYPE.gunter) {
       dispatch(updateGunterSearchRecord(record));
+    } else if (String(view.viewType) === VIEW_DISPLAY_TYPE.map) {
+      dispatch({
+        type: 'CHANGE_MAP_VIEW_SEARCH_DATA',
+        data: record,
+      });
     }
   };
 }
@@ -560,7 +696,7 @@ export function initMobileGunter({ appId, worksheetId, viewId, access_token }) {
 export const loadDraftDataCount =
   ({ appId, worksheetId }) =>
   (dispatch, getState) => {
-    if (_.get(window, 'shareState.isPublicView')) {
+    if (_.get(window, 'shareState.isPublicView') || _.get(window, 'shareState.isPublicPage')) {
       return;
     }
     worksheetAjax
@@ -576,3 +712,27 @@ export const loadDraftDataCount =
         });
       });
   };
+
+export function updateCurrentViewState(updates) {
+  return (dispatch, getState) => {
+    const { base, views } = getState().sheet;
+    const { viewId } = base;
+    const view = _.find(views, v => v.viewId === viewId);
+    dispatch({
+      type: 'WORKSHEET_UPDATE_VIEW',
+      view: { ...view, ...updates },
+    });
+  };
+}
+
+export function updateViewShowcount(showcount) {
+  return (dispatch, getState) => {
+    const { base } = getState().sheet;
+    const { viewId } = base;
+    safeLocalStorageSetItem('showcount_' + viewId, showcount);
+    dispatch({
+      type: 'VIEW_UPDATE_SHOW_COUNT',
+      showcount,
+    });
+  };
+}

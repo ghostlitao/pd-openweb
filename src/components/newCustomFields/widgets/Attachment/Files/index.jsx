@@ -6,9 +6,8 @@ import { SortableContainer, SortableElement, arrayMove } from 'react-sortable-ho
 import { openControlAttachmentInNewTab } from 'worksheet/controllers/record';
 import previewAttachments from 'src/components/previewAttachments/previewAttachments';
 import RecordInfoContext from 'worksheet/common/recordInfo/RecordInfoContext';
-import { isDocument, formatTime } from 'src/components/UploadFiles/utils';
-import { formatFileSize, isVideo, getClassNameByExt } from 'src/util';
-import { browserIsMobile } from 'src/util';
+import { formatFileSize, getClassNameByExt } from 'src/util';
+import { browserIsMobile, addBehaviorLog } from 'src/util';
 import ImageCard from './ImageCard';
 import SmallCard from './SmallCard';
 import ListCard, { ListCardHeader } from './ListCard';
@@ -62,7 +61,11 @@ const SortableItem = SortableElement(props => {
       browse: isKc ? !!data.shareUrl : true,
       fileClassName: getClassNameByExt(data.attachmentType === 5 ? false : data.ext),
       fileSize: formatFileSize(data.filesize),
-      isMore: allowDownload && !md.global.Account.isPortal && !window.share && !location.href.includes('public/query'),
+      isMore:
+        allowDownload &&
+        md.global.Account.accountId &&
+        !md.global.Account.isPortal &&
+        !_.get(window, 'shareState.shareId'),
       isDownload: isKc ? data.allowDown === 'ok' : data.accountId === md.global.Account.accountId || isPicture || data.allowDown === 'ok',
     });
   } else {
@@ -82,23 +85,18 @@ const SortableItem = SortableElement(props => {
 const SortableList = SortableContainer(props => {
   const { list, className, smallSize, style, ref, ...otherProps } = props;
   const { showType } = props;
-
-  if (list.length) {
-    return (
-      <div style={style} ref={ref} className={cx('overflowHidden', { mTop8: !['3'].includes(showType) })}>
-        <div className={cx(className, 'attachmentFilesWrap', showTypes[showType], { mobile: isMobile, smallSize })}>
-          {list.map((data, index) => (
-            <SortableItem key={data.fileID} index={index} sortIndex={index} data={data} {...otherProps} />
-          ))}
-          {['1', '2'].includes(showType) && (
-            Array.from({ length: 10 }).map((_, index) => <i key={index} className={cx('fileEmpty', showType === '1' ? 'attachmentImageCard' : 'attachmentSmallCard', { mobile: isMobile })} />)
-          )}
-        </div>
+  return (
+    <div style={style} ref={ref} className={cx('overflowHidden', { mTop8: !['3'].includes(showType), hide: !list.length })}>
+      <div className={cx(className, 'attachmentFilesWrap', showTypes[showType], { mobile: isMobile, smallSize })}>
+        {list.map((data, index) => (
+          <SortableItem key={data.fileID} index={index} sortIndex={index} data={data || {}} {...otherProps} />
+        ))}
+        {['1', '2'].includes(showType) && (
+          Array.from({ length: 10 }).map((_, index) => <i key={index} className={cx('fileEmpty', showType === '1' ? 'attachmentImageCard' : 'attachmentSmallCard', { mobile: isMobile })} />)
+        )}
       </div>
-    );
-  } else {
-    return null;
-  }
+    </div>
+  );
 });
 
 const Files = props => {
@@ -111,7 +109,7 @@ const Files = props => {
   const [viewMoreVisible, setViewMoreVisible] = useState(false);
   const [viewMore, setViewMore] = useState(props.viewMore);
   const [smallSize, setSmallSize] = useState(false);
-  const { recordBaseInfo = {} } = useContext(RecordInfoContext) || {};
+  const { recordBaseInfo = {} } = useContext(RecordInfoContext) || props;
   const ref = useRef(null);
 
   const { showType, allowSort } = props;
@@ -136,10 +134,10 @@ const Files = props => {
           setViewMore(true);
           setViewMoreVisible(clientHeight > el.clientHeight);
         }
-        if (!isMobile && ['1'].includes(showType)) {
+        if (!isMobile && clientWidth && ['1'].includes(showType)) {
           setSmallSize(clientWidth <= 160);
         }
-        if (!isMobile && ['2', '3'].includes(showType)) {
+        if (!isMobile && clientWidth && ['2', '3'].includes(showType)) {
           setSmallSize(clientWidth <= 300);
         }
       } else {
@@ -165,6 +163,11 @@ const Files = props => {
   }
   // 重命名未保存的七牛云附件
   const handleResetNameFile = (id, newName) => {
+    newName = newName.trim();
+    if (_.isEmpty(newName)) {
+      alert(_l('名称不能为空'), 2);
+      return;
+    }
     const files = attachments.map(item => {
       if (item.fileID === id) {
         item.originalFileName = newName;
@@ -178,6 +181,7 @@ const Files = props => {
   const handleMDPreview = data => {
     const { allowDownload = false } = props;
     const hideFunctions = ['editFileName'].concat(allowDownload ? [] : ['download', 'share', 'saveToKnowlege']);
+    addBehaviorLog('previewFile', recordBaseInfo.worksheetId, { fileId: data.fileID, rowId: recordBaseInfo.recordId });
     previewAttachments(
       {
         attachments: attachmentData,
@@ -190,6 +194,9 @@ const Files = props => {
         showThumbnail: true,
         showAttInfo: false,
         hideFunctions: hideFunctions,
+        worksheetId: recordBaseInfo.worksheetId,
+        fileId: data.fileID,
+        recordId: recordBaseInfo.recordId,
       },
       {
         mdReplaceAttachment: newAttachment => {
@@ -214,7 +221,7 @@ const Files = props => {
         attachments: res,
         index: _.findIndex(res, { id: data.fileID }),
         callFrom: 'kc',
-        hideFunctions: ['editFileName'],
+        hideFunctions: ['editFileName', 'share', 'saveToKnowlege'],
       }
     );
   }
@@ -226,7 +233,7 @@ const Files = props => {
         path: item.previewUrl
           ? `${item.previewUrl}`
           : item.url
-          ? `${item.url}&imageView2/1/w/200/h/140`
+          ? `${item.url}${item.url.includes('?') ? '&' : '?'}imageView2/1/w/200/h/140`
           : `${item.serverName}${item.key}`,
         previewAttachmentType: 'QINIU',
         size: item.fileSize,
@@ -237,7 +244,7 @@ const Files = props => {
       attachments: res,
       index: _.findIndex(attachments, { fileID: data.fileID }),
       callFrom: 'chat',
-      hideFunctions: ['editFileName'],
+      hideFunctions: ['editFileName', 'share', 'saveToKnowlege'],
     });
   }
 
@@ -278,6 +285,7 @@ const Files = props => {
     if (!recordBaseInfo) {
       return;
     }
+    addBehaviorLog('previewFile', recordBaseInfo.worksheetId, { fileId, rowId: recordBaseInfo.recordId });
     openControlAttachmentInNewTab(
       _.assign(_.pick(recordBaseInfo, ['appId', 'recordId', 'viewId', 'worksheetId']), {
         controlId,
@@ -303,11 +311,18 @@ const Files = props => {
         className={className}
         smallSize={smallSize}
         list={isLargeImageCard && viewMoreVisible && viewMore ? sortAllAttachments.filter(filterImageAttachments).filter((_, index) => index < showLineCount) : sortAllAttachments}
+        worksheetId={recordBaseInfo.worksheetId}
+        recordId={recordBaseInfo.recordId}
         onDeleteMDFile={handleDeleteMDFile}
         onDeleteKCFile={handleDeleteKCFile}
         onDeleteFile={handleDeleteFile}
         onResetNameFile={handleResetNameFile}
         onAttachmentName={(id, name) => {
+          name = name.trim();
+          if (_.isEmpty(name)) {
+            alert(_l('名称不能为空'), 2);
+            return;
+          }
           onAttachmentName(id, name, {
             instanceId: recordBaseInfo.instanceId,
             workId: recordBaseInfo.workId,

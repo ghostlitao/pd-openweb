@@ -3,11 +3,11 @@ import PropTypes from 'prop-types';
 import { autobind } from 'core-decorators';
 import cx from 'classnames';
 import styled from 'styled-components';
-import { Input } from 'antd';
-import { Button, MenuItem, Icon, Tooltip, Textarea, Dialog, VerifyPasswordConfirm } from 'ming-ui';
+import { Button, MenuItem, Icon, Tooltip, Dialog, VerifyPasswordConfirm } from 'ming-ui';
+import mdNotification from 'ming-ui/functions/notify';
+import { verifyPassword } from 'src/util';
 import IconText from 'worksheet/components/IconText';
 import NewRecord from 'src/pages/worksheet/common/newRecord/NewRecord';
-import { verifyPassword } from 'src/util';
 import FillRecordControls from '../FillRecordControls';
 import { CUSTOM_BUTTOM_CLICK_TYPE } from 'worksheet/constants/enum';
 import worksheetAjax from 'src/api/worksheet';
@@ -15,17 +15,8 @@ import { getRowDetail } from 'worksheet/api';
 import processAjax from 'src/pages/workflow/api/process';
 import _ from 'lodash';
 import FunctionWrap from 'ming-ui/components/FunctionWrap';
-
-const Password = styled(Input.Password)`
-  box-shadow: none !important;
-  line-height: 28px !important;
-  border-radius: 3px !important;
-  border: 1px solid #ccc !important;
-  margin-bottom: 10px;
-  &.ant-input-affix-wrapper-focused {
-    border-color: #2196f3;
-  }
-`;
+import CustomButtonConfirm from './CustomButtonConfirm';
+import { getButtonColor, handleRecordError } from 'worksheet/util';
 
 const MenuItemWrap = styled(MenuItem)`
   .btnName {
@@ -43,96 +34,7 @@ const MenuItemWrap = styled(MenuItem)`
   }
 `;
 
-const SectionName = styled.div`
-  font-size: 13px;
-  color: #333;
-  font-weight: 500;
-  margin: 18px 0 8px;
-  position: relative;
-  &.required {
-    &:before {
-      position: absolute;
-      left: -10px;
-      top: 3px;
-      color: red;
-      content: '*';
-    }
-  }
-`;
-
-const RemarkTextArea = styled(Textarea)`
-  &::placeholder {
-    color: #bfbfbf;
-  }
-`;
-
-function confirm(props) {
-  const {
-    title,
-    description,
-    okText,
-    cancelText,
-    enableRemark,
-    remarkName,
-    remarkHint,
-    remarkRequired,
-    verifyPwd,
-    onOk,
-    onClose,
-  } = props;
-  const passwordRef = useRef();
-  const remarkRef = useRef();
-  return (
-    <Dialog
-      visible
-      className="customButtonConfirm"
-      title={<b>{title}</b>}
-      okText={okText}
-      cancelText={cancelText}
-      onOk={() => {
-        const remark = _.get(remarkRef, 'current.value') || '';
-        if (remarkRequired && !remark.trim()) {
-          alert(_l('%0不能为空', remarkName), 3);
-          return;
-        }
-        if (verifyPwd) {
-          verifyPassword(passwordRef.current.input.value, () => {
-            onOk({ remark });
-            onClose();
-          });
-        } else {
-          onOk({ remark });
-          onClose();
-        }
-      }}
-      onCancel={onClose}
-    >
-      {description && <div className="Font14 Gray_75">{description}</div>}
-      {enableRemark && (
-        <Fragment>
-          <SectionName className={cx({ required: remarkRequired })}>{remarkName || _l('备注')}</SectionName>
-          <RemarkTextArea manualRef={ref => (remarkRef.current = ref)} placeholder={remarkHint} />
-        </Fragment>
-      )}
-      {verifyPwd && (
-        <Fragment>
-          <SectionName className={cx({ required: true })}>{_l('登录密码验证')}</SectionName>
-          <div style={{ height: '0px', overflow: 'hidden' }}>
-            // 用来避免浏览器将用户名塞到其它input里
-            <input type="text" />
-          </div>
-          <Password
-            ref={passwordRef}
-            autoComplete="new-password"
-            placeholder={_l('输入当前用户（%0）的登录密码', md.global.Account.fullname)}
-          />
-        </Fragment>
-      )}
-    </Dialog>
-  );
-}
-
-const confirmClick = props => FunctionWrap(confirm, props);
+const confirmClick = props => FunctionWrap(CustomButtonConfirm, props);
 export default class CustomButtons extends React.Component {
   static propTypes = {
     iseditting: PropTypes.bool,
@@ -170,7 +72,7 @@ export default class CustomButtons extends React.Component {
 
   @autobind
   triggerCustomBtn(btn) {
-    const { worksheetId, recordId, handleUpdateWorksheetRow } = this.props;
+    const { worksheetId, recordId, handleUpdateWorksheetRow, projectId } = this.props;
     this.remark = undefined;
     if (window.isPublicApp) {
       alert(_l('预览模式下，不能操作'), 3);
@@ -182,35 +84,18 @@ export default class CustomButtons extends React.Component {
       alert(_l('正在编辑记录，无法触发自定义按钮'), 3);
       return;
     }
-    function handleTrigger() {
-      const needConform = btn.enableConfirm || btn.clickType === CUSTOM_BUTTOM_CLICK_TYPE.CONFIRM;
-      function run({ remark } = {}) {
-        function trigger(btn) {
-          if (handleTriggerCustomBtn) {
-            handleTriggerCustomBtn(btn);
-            return;
-          }
-          _this.triggerImmediately(btn.btnId);
-          triggerCallback();
+    function run({ remark } = {}) {
+      function trigger(btn) {
+        if (handleTriggerCustomBtn) {
+          handleTriggerCustomBtn(btn);
+          return;
         }
-        if (btn.clickType === CUSTOM_BUTTOM_CLICK_TYPE.FILL_RECORD) {
-          // 填写字段
-          _this.remark = remark;
-          _this.fillRecord(btn);
-        } else if (_.get(btn, 'advancedSetting.enableremark') && remark) {
-          if (_.isFunction(handleUpdateWorksheetRow)) {
-            handleUpdateWorksheetRow({
-              worksheetId,
-              rowId: recordId,
-              newOldControl: [],
-              btnRemark: remark,
-              btnId: btn.btnId,
-              btnWorksheetId: worksheetId,
-              btnRowId: recordId,
-            });
-            return;
-          }
-          worksheetAjax.updateWorksheetRow({
+        _this.triggerImmediately(btn.btnId, btn);
+        triggerCallback();
+      }
+      if (_.get(btn, 'advancedSetting.enableremark') && remark) {
+        if (_.isFunction(handleUpdateWorksheetRow)) {
+          handleUpdateWorksheetRow({
             worksheetId,
             rowId: recordId,
             newOldControl: [],
@@ -218,37 +103,86 @@ export default class CustomButtons extends React.Component {
             btnId: btn.btnId,
             btnWorksheetId: worksheetId,
             btnRowId: recordId,
+            noAlert: true,
           });
-        } else {
-          trigger(btn);
+          return;
         }
+        worksheetAjax.updateWorksheetRow({
+          worksheetId,
+          rowId: recordId,
+          newOldControl: [],
+          btnRemark: remark,
+          btnId: btn.btnId,
+          btnWorksheetId: worksheetId,
+          btnRowId: recordId,
+          noAlert: true,
+        });
+      } else {
+        trigger(btn);
       }
-      function verifyAndRun() {
-        if (btn.verifyPwd) {
-          VerifyPasswordConfirm.confirm({
-            title: _l('安全认证'),
-            inputName: _l('登录密码验证'),
-            passwordPlaceHolder: _l('输入当前用户（%0）的密码', md.global.Account.fullname),
-            onOk: run,
-          });
-        } else {
-          run();
-        }
-      }
-      if (needConform) {
-        // 二次确认
+    }
+    function verifyConform(removeNoneVerification) {
+      VerifyPasswordConfirm.confirm({
+        allowNoVerify: !removeNoneVerification,
+        isRequired: true,
+        closeImageValidation: true,
+        onOk: run,
+      });
+    }
+    function handleTrigger() {
+      const needConfirm = btn.enableConfirm || btn.clickType === CUSTOM_BUTTOM_CLICK_TYPE.CONFIRM;
+      function confirm({ onOk, onClose = () => {} } = {}) {
         confirmClick({
+          projectId,
           title: btn.confirmMsg,
           description: _.get(btn, 'advancedSetting.confirmcontent'),
           enableRemark: _.get(btn, 'advancedSetting.enableremark'),
           remarkName: _.get(btn, 'advancedSetting.remarkname'),
           remarkHint: _.get(btn, 'advancedSetting.remarkhint'),
           remarkRequired: _.get(btn, 'advancedSetting.remarkrequired'),
+          remarkoptions: _.get(btn, 'advancedSetting.remarkoptions'),
+          remarktype: _.get(btn, 'advancedSetting.remarktype'),
           verifyPwd: btn.verifyPwd,
           okText: btn.sureName,
           cancelText: btn.cancelName,
-          onOk: run,
+          onOk: onOk || run,
+          onClose,
         });
+      }
+      if (btn.clickType === CUSTOM_BUTTOM_CLICK_TYPE.FILL_RECORD) {
+        _this.fillRecord({
+          ...btn,
+          confirm:
+            needConfirm || btn.verifyPwd
+              ? () =>
+                  new Promise((resolve, reject) => {
+                    confirm({
+                      onOk: ({ remark }) => {
+                        _this.remark = remark;
+                        resolve(remark);
+                      },
+                      onClose: reject,
+                    });
+                  })
+              : undefined,
+        });
+        return;
+      }
+      function verifyAndRun() {
+        if (btn.verifyPwd) {
+          verifyPassword({
+            projectId,
+            checkNeedAuth: true,
+            success: run,
+            fail: result => verifyConform(result === 'showPassword'),
+          });
+        } else {
+          run();
+        }
+      }
+      if (needConfirm) {
+        // 二次确认
+        confirm();
       } else {
         verifyAndRun();
       }
@@ -271,7 +205,7 @@ export default class CustomButtons extends React.Component {
   }
 
   @autobind
-  triggerImmediately(btnId) {
+  triggerImmediately(btnId, btn) {
     const { worksheetId, recordId, loadBtns, onButtonClick } = this.props;
     onButtonClick(btnId);
     processAjax
@@ -279,10 +213,18 @@ export default class CustomButtons extends React.Component {
         appId: worksheetId,
         sources: [recordId],
         triggerId: btnId,
-        pushUniqueId: md.global.Config.pushUniqueId,
+        pushUniqueId: _.get(window, 'md.global.Config.pushUniqueId'),
       })
       .then(data => {
-        loadBtns();
+        if (!data) {
+          mdNotification.error({
+            title: _l('批量操作"%0"', btn.name),
+            description: _l('失败，记录不满足执行条件或流程尚未启用'),
+            duration: 3,
+          });
+        } else {
+          loadBtns();
+        }
       });
   }
 
@@ -303,7 +245,7 @@ export default class CustomButtons extends React.Component {
   }
 
   @autobind
-  fillRecordControls(newControls, targetOptions, customwidget) {
+  fillRecordControls(newControls, targetOptions, customwidget, cb = () => {}) {
     const {
       worksheetId,
       recordId,
@@ -360,7 +302,17 @@ export default class CustomButtons extends React.Component {
           alert(_l('操作成功'));
         }
         if (targetOptions.recordId === recordId) {
-          onUpdate(_.pick(res.data, newControls.map(c => c.controlId).concat('isviewdata')), res.data, newControls);
+          onUpdate(
+            _.pick(
+              res.data,
+              (_.find(newControls, { type: 34 })
+                ? Object.keys(res.data).filter(key => key.length === 24)
+                : newControls.map(c => c.controlId)
+              ).concat('isviewdata'),
+            ),
+            res.data,
+            newControls,
+          );
         }
         if (this.activeBtn.writeObject === 1 && !res.data.isviewdata) {
           hideRecordInfo();
@@ -370,9 +322,16 @@ export default class CustomButtons extends React.Component {
         if (res.resultCode === 11) {
           if (customwidget && _.isFunction(customwidget.uniqueErrorUpdate)) {
             customwidget.uniqueErrorUpdate(res.badData);
+            cb(true);
           }
+        } else if (res.resultCode === 22) {
+          handleRecordError(res.resultCode);
+          cb(true, res);
+        } else if (res.resultCode === 32) {
+          cb(true, res);
         } else {
-          alert(_l('保存失败，请稍后重试'), 2);
+          handleRecordError(res.resultCode);
+          cb(true);
         }
       }
     });
@@ -417,6 +376,7 @@ export default class CustomButtons extends React.Component {
     const addRelationControl = _.find(rowInfo.formData || [], c => c.controlId === btn.addRelationControl);
     this.activeBtn = btn;
     this.fillRecordProps = {};
+    this.customButtonConfirm = btn.confirm;
     switch (caseStr) {
       case '11': // 本记录 - 填写字段
         this.btnRelateWorksheetId = worksheetId;
@@ -573,7 +533,7 @@ export default class CustomButtons extends React.Component {
   }
 
   renderDialogs() {
-    const { worksheetId, viewId, appId, recordId, projectId, isBatchOperate, triggerCallback } = this.props;
+    const { isCharge, worksheetId, viewId, appId, recordId, projectId, isBatchOperate, triggerCallback } = this.props;
     const { rowInfo, fillRecordControlsVisible, newRecordVisible } = this.state;
     const { activeBtn = {}, fillRecordId, btnRelateWorksheetId, fillRecordProps } = this;
     const btnTypeStr = activeBtn.writeObject + '' + activeBtn.writeType;
@@ -581,6 +541,7 @@ export default class CustomButtons extends React.Component {
       <React.Fragment key="dialogs">
         {fillRecordControlsVisible && (
           <FillRecordControls
+            isCharge={isCharge}
             isBatchOperate={isBatchOperate}
             className="recordOperateDialog"
             title={activeBtn.name}
@@ -600,6 +561,7 @@ export default class CustomButtons extends React.Component {
               triggerCallback();
             }}
             {...fillRecordProps}
+            customButtonConfirm={this.customButtonConfirm}
           />
         )}
         {newRecordVisible && (
@@ -617,10 +579,10 @@ export default class CustomButtons extends React.Component {
               btnId: this.activeBtn.btnId,
               btnWorksheetId: worksheetId,
               btnRowId: recordId,
-              btnRemark: this.remark,
             }}
+            customButtonConfirm={this.customButtonConfirm}
             defaultRelatedSheet={{
-              worksheetId,
+              worksheetId: this.masterRecord.worksheetId,
               relateSheetControlId: activeBtn.addRelationControl,
               value: {
                 sid: this.masterRecord.rowId,
@@ -658,14 +620,14 @@ export default class CustomButtons extends React.Component {
         const buttonComponent = (
           <span key={i} className="InlineBlock borderBox mRight6">
             <Button
-              className={cx('recordCustomButton overflowHidden')}
+              className={cx('recordCustomButton overflowHidden', {
+                transparentButton: button.color === 'transparent',
+              })}
               size="small"
               type="ghost"
               disabled={btnDisable[button.btnId] || button.disabled}
               style={{
-                backgroundColor: button.color || '#2196f3',
-                borderColor: button.color || '#2196f3',
-                color: '#fff',
+                ...getButtonColor(button.color),
                 maxWidth: '100%',
                 minWidth: 'inherit',
               }}
@@ -678,7 +640,7 @@ export default class CustomButtons extends React.Component {
               }}
             >
               <div className="content ellipsis">
-                {button.icon && <i className={`icon icon-${button.icon}`}></i>}
+                {button.icon && <i className={`icon icon-${button.icon}`} />}
                 <span className="breakAll overflow_ellipsis">{button.name}</span>
               </div>
             </Button>
@@ -697,7 +659,7 @@ export default class CustomButtons extends React.Component {
         <IconText
           disabled={btnDisable[button.btnId] || button.disabled}
           icon={button.icon || 'custom_actions'}
-          iconColor={button.color}
+          iconColor={!button.icon ? '#bdbdbd' : button.color === 'transparent' ? '#333' : button.color}
           text={button.name}
           onClick={evt => {
             if (btnDisable[button.btnId] || button.disabled) {
@@ -714,9 +676,13 @@ export default class CustomButtons extends React.Component {
           key={i}
           icon={
             button.icon ? (
-              <Icon style={{ color: button.color }} icon={button.icon || 'custom_actions'} className="Font17 mLeft5" />
+              <Icon
+                style={{ color: button.color === 'transparent' ? '#333' : button.color }}
+                icon={button.icon || 'custom_actions'}
+                className="Font17 mLeft5"
+              />
             ) : (
-              <Icon icon="custom_actions" className="Font17 mLeft5" />
+              <Icon icon="custom_actions" className="Font17 mLeft5 Gray_bd" />
             )
           }
           className={cx({ disabled: btnDisable[button.btnId] || button.disabled })}

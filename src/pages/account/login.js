@@ -70,7 +70,7 @@ class LoginContainer extends React.Component {
         },
       },
       isFrequentLoginError: false, // 是否需要验证登录
-      homeImage: ''
+      homeImage: '',
     };
   }
 
@@ -94,7 +94,7 @@ class LoginContainer extends React.Component {
         this.setState({ loading: false });
       }
     } else {
-      let param = { loginType, accountId, encryptPassword, };
+      let param = { loginType, accountId, encryptPassword };
       if (loginType === 1) {
         param = { ...param, account, projectId };
       }
@@ -129,9 +129,9 @@ class LoginContainer extends React.Component {
     if (data.accountResult === ActionResult.needTwofactorVerifyCode) {
       //开启了两步验证
       if (request.ReturnUrl) {
-        location.href = `/twofactor.htm?state=${data.state}&ReturnUrl=${encodeURIComponent(request.ReturnUrl)}`;
+        location.href = `/twofactor?state=${data.state}&ReturnUrl=${encodeURIComponent(request.ReturnUrl)}`;
       } else {
-        location.href = `/twofactor.htm?state=${data.state}`;
+        location.href = `/twofactor?state=${data.state}`;
       }
       return;
     }
@@ -140,7 +140,7 @@ class LoginContainer extends React.Component {
       if (request.ReturnUrl) {
         location.replace(getDataByFilterXSS(request.ReturnUrl));
       } else {
-        window.location.replace('/app/my');
+        window.location.replace('/dashboard');
       }
     } else {
       // 如果登录失败，需要把本地保存的 accountId 和 encryptPassword 清理掉
@@ -150,6 +150,20 @@ class LoginContainer extends React.Component {
       if (ignoreError) return;
 
       var msg = '';
+      if (data.accountResult === ActionResult.accountNotExist) {
+        this.setState({
+          loginData: {
+            ...this.state.loginData,
+            warnningData: [
+              {
+                tipDom: '#txtMobilePhone',
+                warnningText: _l('账号未注册'),
+              },
+            ],
+          },
+        });
+        return;
+      }
       if (data.accountResult === ActionResult.accountFrequentLoginError) {
         this.setState({ isFrequentLoginError: true }, () => {
           if (callback) {
@@ -159,14 +173,47 @@ class LoginContainer extends React.Component {
         return;
       } else if (data.accountResult === ActionResult.isLock) {
         let t = data.state ? Math.ceil(data.state / 60) : 20;
-        msg = _l('密码错误次数过多被锁定，请 %0 分钟后再试，或 重置密码', t);
+        this.setState({
+          loginData: {
+            ...this.state.loginData,
+            warnningData: [
+              {
+                tipDom: '.warnningDiv',
+                warnningText: _l(
+                  '错误次数过多，出于安全考虑，暂时锁定您的账户，请 %0 分钟后尝试，或%1重置密码%2解除锁定',
+                  t,
+                  '<a href="/findPassword" target="_blank">',
+                  '</a>',
+                ),
+              },
+            ],
+          },
+        });
+        return;
       } else if (data.accountResult === ActionResult.userFromError) {
         msg = _l('账号来源类型受限');
       } else if (data.accountResult === ActionResult.accountDisabled) {
         msg = _l('账号被禁用，请联系系统管理员进行恢复');
       } else {
-        if (isMDLogin && data.accountResult === ActionResult.accountNotExist) {
-          msg = _l('该帐号未注册');
+        //密码错误
+        if (isMDLogin && data.accountResult === ActionResult.passwordError) {
+          const { state } = data;
+          const t = (state || '').split('|');
+          if (t.length > 1) {
+            this.setState({
+              loginData: {
+                ...this.state.loginData,
+                warnningData: [
+                  {
+                    tipDom: '.warnningDiv',
+                    warnningText: _l('您输入错误%0次，还可尝试%1次', t[1], t[0] - t[1]),
+                  },
+                ],
+              },
+            });
+            return;
+          }
+          msg = _l('用户名或密码不正确');
         } else {
           msg = data.accountResult === ActionResult.verifyCodeError ? _l('验证码输入错误') : _l('用户名或密码不正确');
         }
@@ -197,11 +244,11 @@ class LoginContainer extends React.Component {
               projectId: data.projectId,
               text: data.companyName,
               logo: data.logo,
-              linkInvite: data.projectId ? '/linkInvite.htm?projectId=' + data.projectId : '',
+              linkInvite: '/linkInvite?projectId=' + data.projectId,
               homeImage: data.homeImage,
               intergrationScanEnabled: data.intergrationScanEnabled,
               hideRegister: data.hideRegister,
-              loading: false
+              loading: false,
             },
             () => {
               document.title = data.companyName;
@@ -214,18 +261,29 @@ class LoginContainer extends React.Component {
       });
   };
 
-  // 在集成环境移动端如果 ReturnUrl 包含 appId，去 sso 页面登录
+  // 在集成环境如果 ReturnUrl 包含 appId，去 sso 页面登录
   ssoLogin = (returnUrl = '') => {
-    const isMobile = browserIsMobile();
     const userAgent = window.navigator.userAgent.toLowerCase();
+    const getAppId = pathname => {
+      if (pathname.includes('mobile')) {
+        const match = pathname.match(/\/mobile\/([^\/]+)\/([^\/]+)/);
+        return match && match[2];
+      } else if (pathname.includes('embed/view')) {
+        const match = pathname.match(/\/embed\/view\/([^\/]+)/);
+        return match && match[1];
+      } else {
+        const match = pathname.match(/\/app\/([^\/]+)/);
+        return match && match[1];
+      }
+    };
     const isApp =
       userAgent.includes('dingtalk') ||
       userAgent.includes('wxwork') ||
       userAgent.includes('huawei-anyoffice') ||
       userAgent.includes('feishu');
-    if (isMobile && returnUrl.includes('mobile') && isApp) {
-      const { pathname } = new URL(returnUrl);
-      const [mobile, page, appId] = pathname.split('/').filter(_ => _);
+    if (isApp && returnUrl) {
+      const { pathname, search } = new URL(returnUrl);
+      const appId = getAppId(pathname);
       if (appId) {
         workWeiXinController
           .getIntergrationInfo({
@@ -233,10 +291,10 @@ class LoginContainer extends React.Component {
           })
           .then(data => {
             const { item1, item2 } = data;
-            const url = encodeURIComponent(pathname);
+            const url = encodeURIComponent(pathname + search);
             // 钉钉
             if (item1 === 1) {
-              const url = encodeURIComponent(pathname.replace(/^\//, ''));
+              const url = encodeURIComponent(pathname.replace(/^\//, '') + search);
               location.href = `/sso/sso?t=2&p=${item2}&ret=${url}`;
             }
             // 企业微信
@@ -317,8 +375,17 @@ class LoginContainer extends React.Component {
   };
 
   renderFooter = () => {
-    let { linkInvite, isNetwork, openLDAP, canLDAP, intergrationScanEnabled, isOpenSso, ssoWebUrl, ssoAppUrl, hideRegister } =
-      this.state;
+    let {
+      linkInvite,
+      isNetwork,
+      openLDAP,
+      canLDAP,
+      intergrationScanEnabled,
+      isOpenSso,
+      ssoWebUrl,
+      ssoAppUrl,
+      hideRegister,
+    } = this.state;
     const isBindAccount = !!request.unionId;
     const isMobile = browserIsMobile();
     const scanLoginEnabled = intergrationScanEnabled && !isMobile;
@@ -363,28 +430,39 @@ class LoginContainer extends React.Component {
             <span className={cx('line', { mTop80: !canLDAP })} />
           </React.Fragment>
         )}
-        {!hideRegister && (
-          <span
-            className="btnUseOldAccount Hand"
-            onClick={() => {
-              if (linkInvite) {
-                location.href = linkInvite;
-              } else {
-                let request = getRequest();
-                let returnUrl = getDataByFilterXSS(request.ReturnUrl || '');
-                if (returnUrl.indexOf('type=privatekey') > -1) {
-                  location.href = '/register.htm?ReturnUrl=' + encodeURIComponent(returnUrl);
-                } else if (isBindAccount) {
-                  location.href = `/register.htm?state=${request.state}&tpType=${request.tpType}&unionId=${request.unionId}`;
-                } else {
-                  location.href = '/register.htm';
-                }
-              }
-            }}
-          >
-            {_l('注册新账号')}
-          </span>
-        )}
+        <div className="flexRow alignItemsCenter justifyContentCenter footerCon">
+          {!hideRegister && (
+            <React.Fragment>
+              <span
+                className="changeBtn Hand TxtRight"
+                onClick={() => {
+                  if (md.global.Config.IsPlatformLocal) {
+                    //平台版=>/register
+                    location.href = '/register';
+                  } else if (linkInvite) {
+                    location.href = linkInvite;
+                  } else {
+                    let request = getRequest();
+                    let returnUrl = getDataByFilterXSS(request.ReturnUrl || '');
+                    if (returnUrl.indexOf('type=privatekey') > -1) {
+                      location.href = '/register?ReturnUrl=' + encodeURIComponent(returnUrl);
+                    } else if (isBindAccount) {
+                      location.href = `/register?state=${request.state}&tpType=${request.tpType}&unionId=${request.unionId}`;
+                    } else {
+                      location.href = '/register';
+                    }
+                  }
+                }}
+              >
+                {_l('注册新账号')}
+              </span>
+              <span className="lineCenter mLeft16"></span>
+            </React.Fragment>)
+          }
+          <div className={cx("TxtLeft", !hideRegister ? 'mLeft16' : '')}>
+            <ChangeLang className='justifyContentLeft' />
+          </div>
+        </div>
       </React.Fragment>
     );
   };
@@ -400,20 +478,30 @@ class LoginContainer extends React.Component {
           'background-image': 'url(' + this.state.homeImage + ')',
           'background-size': 'cover',
         });
+
       return (
         <div className="loginBox">
           <div className="loginContainer">
             <div className="titleHeader">
-              {this.state.isNetwork && !SysSettings.hideBrandLogo && this.state.logo && <img src={this.state.logo} height={SysSettings.brandLogoHeight || 30} />}
-              {this.state.isNetwork && !SysSettings.hideBrandName && <p className="Font17 Gray mAll0 mTop8">{this.state.text}</p>}
+              {this.state.isNetwork && !SysSettings.hideBrandLogo && this.state.logo && (
+                <img src={this.state.logo} height={SysSettings.brandLogoHeight || 30} />
+              )}
+              {this.state.isNetwork && !SysSettings.hideBrandName && (
+                <p className="Font17 Gray mAll0 mTop8">{this.state.text}</p>
+              )}
             </div>
             {this.renderCon()}
             {this.renderFooter()}
           </div>
-          <ChangeLang />
           {md.global.Config.IsPlatformLocal && md.global.Config.IsCobranding && (
-            <div className={cx('powered w100 flexRow valignWrapper Font12', this.state.homeImage ? 'White' : 'Gray_9e', { linearGradientBg: this.state.homeImage })}>
-              <span className="pointer info mTop10" onClick={() => window.open('https://www.mingdao.com')}>{_l('基于明道云应用平台内核')}</span>
+            <div
+              className={cx('powered w100 flexRow valignWrapper Font12', this.state.homeImage ? 'White' : 'Gray_9e', {
+                linearGradientBg: this.state.homeImage,
+              })}
+            >
+              <span className="pointer info mTop10" onClick={() => window.open('https://www.mingdao.com')}>
+                {_l('基于明道云应用平台内核')}
+              </span>
             </div>
           )}
         </div>

@@ -6,7 +6,6 @@ import WorksheetItem from './WorksheetItem';
 import { DEFAULT_CONFIG } from 'src/pages/widgetConfig/config/widget.js';
 import { FILEDS_TYPE_INFO } from '../util';
 import { canSetAsTitle } from 'src/pages/widgetConfig/util';
-import cx from 'classnames';
 import './index.less';
 import ExcelControlSetting from './ExcelControlSetting';
 import { connect } from 'react-redux';
@@ -57,7 +56,7 @@ export default class SetImportExcelCreateWorksheetOrApp extends Component {
         <div className="selectCellsItem">
           <Checkbox
             checked={selectCells.length}
-            className={cx({ checkBoxHalf: selectCells.length && selectCells.length !== cells.length })}
+            clearselected={selectCells.length && selectCells.length !== cells.length}
             onClick={checked => {
               if (selectCells.length !== cells.length) {
                 this.props.updateCurrentSheetInfo({
@@ -401,7 +400,7 @@ export default class SetImportExcelCreateWorksheetOrApp extends Component {
                 <Support
                   type={2}
                   text={_l('帮助')}
-                  href="https://help.mingdao.com/zh/sheet50.html"
+                  href="https://help.mingdao.com/sheet50"
                   className="Gray_bd mRight30"
                 />
                 <Button type="link" className="mRight15 cancelBtn" onClick={this.props.onCancel}>

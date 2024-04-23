@@ -2,8 +2,8 @@ import kcCtrl from 'src/api/kc';
 import React from 'react';
 import 'src/pages/PageHeader/components/NetState/index.less';
 import { formatFileSize } from 'src/util';
-import { index as dialog } from 'src/components/mdDialog/dialog';
 import _ from 'lodash';
+import { Dialog } from 'ming-ui';
 
 export const QiniuUpload = {
   Tokens: {
@@ -246,22 +246,26 @@ export const checkAccountUploadLimit = (size, params = {}) => {
 };
 
 export const openMdDialog = () => {
-  dialog({
-    container: {
-      content: `<div id="uploadStorageOverDialog">
-                    <div class="mTop20 mLeft30">
-                      <div class="uploadStorageOverLogo Left"></div>
-                      <div class="uploadStorageOverTxt Left">您已经没有足够的流量来上传该附件！</div>
-                      <div class="Clear"></div>
-                    </div>
-                    <div class="mTop20 mBottom20 TxtCenter">
-                      <a href="/personal?type=enterprise" class="uploadStorageOverBtn btnBootstrap btnBootstrap-primary btnBootstrap-small">升级至专业版</a>
-                    </div>
-                  </div>`,
-      width: 450,
-      yesText: false,
-      noText: false,
-    },
+  Dialog.confirm({
+    width: 450,
+    noFooter: true,
+    children: (
+      <div id="uploadStorageOverDialog">
+        <div className="mTop20 mLeft30">
+          <div className="uploadStorageOverLogo Left"></div>
+          <div className="uploadStorageOverTxt Left">{_l('您已经没有足够的流量来上传该附件！')}</div>
+          <div className="Clear"></div>
+        </div>
+        <div className="mTop20 mBottom20 TxtCenter">
+          <a
+            href="/personal?type=enterprise"
+            className="uploadStorageOverBtn btnBootstrap btnBootstrap-primary btnBootstrap-small"
+          >
+            {_l('升级至专业版')}
+          </a>
+        </div>
+      </div>
+    ),
   });
 };
 
@@ -325,7 +329,7 @@ export const checkFileExt = (filetype = '', fileExt = '') => {
 
   const FileExts = {
     0: values,
-    1: ['JPG', 'JPEG', 'PNG', 'Gif', 'WebP', 'Tiff', 'bmp'],
+    1: ['JPG', 'JPEG', 'PNG', 'Gif', 'WebP', 'Tiff', 'bmp', 'HEIC', 'HEIF'],
     3: ['WAV', 'FLAC', 'APE', 'ALAC', 'WavPack', 'MP3', 'M4a', 'AAC', 'Ogg Vorbis', 'Opus', 'Au', 'MMF', 'AIF'],
     4: ['MP4', 'AVI', 'MOV', 'WMV', 'MKV', 'FLV', 'F4V', 'SWF', 'RMVB', 'MPG'],
   };
@@ -355,7 +359,7 @@ export const checkFileAvailable = (fileSettingInfo = {}, files = [], tempCount =
 
   // 附件数量
   if (maxcount && count > Number(maxcount)) {
-    alert(_l('最多上传%0个文件', maxcount));
+    alert(_l('最多上传%0个文件', maxcount), 2);
     isAvailable = false;
   }
 
@@ -373,7 +377,7 @@ export const checkFileAvailable = (fileSettingInfo = {}, files = [], tempCount =
         }
       }
       if (max && (itemField.size || itemField.fileSize) > parseFloat(max) * 1024 * 1024) {
-        alert(_l('上传失败，无法上传大于%0MB的文件', max));
+        alert(_l('上传失败，无法上传大于%0MB的文件', max), 2);
         return false;
       }
       return true;

@@ -2,16 +2,19 @@ import React, { Fragment, useState } from 'react';
 import styled from 'styled-components';
 import homeAppAjax from 'src/api/homeApp';
 import { navigateTo } from 'router/navigateTo';
-import { COLORS } from 'src/pages/AppHomepage/components/SelectIcon/config';
 import DialogImportExcelCreate from 'src/pages/worksheet/components/DialogImportExcelCreate';
+import { getThemeColors } from 'src/util';
 import bgPng from '../assets/welcome.png';
 import _ from 'lodash';
 
 const FullCon = styled.div`
   flex: 1;
-  padding-top: 160px;
+  padding: 40px 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
   background: #fff;
-  text-align: center;
   .welcomeImg {
     height: 100px;
   }
@@ -57,7 +60,7 @@ const FullCon = styled.div`
   }
 `;
 
-export default function NoProjectsStatus(props) {
+export default function CreateFirstApp(props) {
   const { projectId } = props;
   const project = _.find(md.global.Account.projects, { projectId });
   const canCreate = !_.get(project, 'cannotCreateApp');
@@ -105,20 +108,36 @@ export default function NoProjectsStatus(props) {
                 className="introItem"
                 onClick={() => {
                   if (type === 'excel_create') {
-                    console.log('excel_create');
                     setDialogImportExcel(true);
                     return;
                   }
                   if (type === 'create') {
-                    homeAppAjax.createApp({
-                      projectId,
-                      name: _l('未命名应用'),
-                      icon: '0_lego',
-                      iconColor: COLORS[_.random(0, COLORS.length - 1)],
-                      permissionType: 200,
-                    }).then(res => {
-                      navigateTo(`/app/${res.id}`);
-                    });
+                    const COLORS = getThemeColors(projectId);
+                    homeAppAjax
+                      .createApp({
+                        projectId,
+                        name: _l('未命名应用'),
+                        icon: '0_lego',
+                        iconColor: COLORS[_.random(0, COLORS.length - 1)],
+                        permissionType: 200,
+                      })
+                      .then(res => {
+                        switch (res.state) {
+                          case 1:
+                            const data = res.data || {};
+                            navigateTo(`/app/${data.id}`);
+                            break;
+                          case 3:
+                            alert(_l('目标分组不存在！'), 2);
+                            break;
+                          case 4:
+                            alert(_l('没有创建权限！'), 2);
+                            break;
+                          default:
+                            alert(_l('新建应用失败！'), 2);
+                            break;
+                        }
+                      });
                     return;
                   }
                   if (type === 'solution') {

@@ -1,11 +1,11 @@
 import React, { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { func, string } from 'prop-types';
 import styled from 'styled-components';
-import { Modal, Icon, Input } from 'ming-ui';
-import Skeleton from 'src/router/Application/Skeleton';
+import { Modal, Icon, Input, Skeleton } from 'ming-ui';
 import sheetAjax from 'src/api/worksheet';
 import RecordCoverCardList from './RecordCoverCardList';
 import _, { debounce } from 'lodash';
+import emptyImg from './empty.png';
 
 const Title = styled.div`
   font-size: 16px;
@@ -131,6 +131,7 @@ function Search(props) {
 
 export default function SearchRelateRecords(props) {
   const {
+    from,
     allowAdd,
     title,
     worksheetId,
@@ -152,6 +153,7 @@ export default function SearchRelateRecords(props) {
   const [keyWords, setKeyWords] = useState('');
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(!onlySearchLoad);
+  const [abnormal, setAbnormal] = useState(false);
   const [total, setTotal] = useState(0);
   const [queryArgs, setQueryArgs] = useState({
     pageIndex: 1,
@@ -163,17 +165,27 @@ export default function SearchRelateRecords(props) {
   const load = useCallback(
     debounce((args, cb = () => {}) => {
       setLoading(true);
+      if (from === 21) {
+        args.getType = 21;
+      }
       sheetAjax.getRowRelationRows(args).then(res => {
         setLoading(false);
+        if (res.resultCode !== 1) {
+          setAbnormal(true);
+          return;
+        }
         setTotal(res.count);
-        setList(old => _.uniqBy([...old, ...res.data], 'rowid'));
-        cb();
+        setList(old => _.uniqBy([...old, ...(res.data || [])], 'rowid'));
+        cb(res.data || []);
       });
     }, 200),
     [],
   );
   function initLoad() {
-    load({ ...queryArgs, pageIndex: 1 }, () => {
+    load({ ...queryArgs, pageIndex: 1 }, data => {
+      if (data.length < 20) {
+        return;
+      }
       setQueryArgs(old => ({
         ...old,
         pageIndex: 2,
@@ -197,27 +209,29 @@ export default function SearchRelateRecords(props) {
       bodyStyle={{ padding: '14px 0px', display: 'flex', flexDirection: 'column' }}
     >
       <Title>{title}</Title>
-      <Search
-        className="flex"
-        onChange={value => {
-          setKeyWords(value);
-          setList([]);
-          if (!(value || '').trim()) {
-            if (onlySearchLoad) {
-              return;
-            } else {
-              initLoad();
-              return;
+      {!abnormal && (
+        <Search
+          className="flex"
+          onChange={value => {
+            setKeyWords(value);
+            setList([]);
+            if (!(value || '').trim()) {
+              if (onlySearchLoad) {
+                return;
+              } else {
+                initLoad();
+                return;
+              }
             }
-          }
-          setLoading(true);
-          load({
-            ...queryArgs,
-            keyWords: value,
-            pageIndex: 1,
-          });
-        }}
-      />
+            setLoading(true);
+            load({
+              ...queryArgs,
+              keyWords: value,
+              pageIndex: 1,
+            });
+          }}
+        />
+      )}
       <RecordsCon
         ref={conRef}
         onScroll={() => {
@@ -250,15 +264,20 @@ export default function SearchRelateRecords(props) {
             />
           </div>
         )}
-        {!loading && !keyWords && !list.length && (
-          <Empty>
-            <img src={require('./empty.png')} alt="" />
-            {_l('请输入关键词进行搜索')}
-          </Empty>
-        )}
+        {!loading &&
+          !keyWords &&
+          !list.length &&
+          (abnormal ? (
+            <Empty>{_l('无权限')}</Empty>
+          ) : (
+            <Empty>
+              <img src={emptyImg} alt="" />
+              {_l('请输入关键词进行搜索')}
+            </Empty>
+          ))}
         {!loading && !!keyWords && !list.length && (
           <Empty>
-            <img src={require('./empty.png')} alt="" />
+            <img src={emptyImg} alt="" />
             <div className="Font16 Gray_9e">{_l('没有搜索结果')}</div>
             {allowAdd && (
               <NewRecordButton

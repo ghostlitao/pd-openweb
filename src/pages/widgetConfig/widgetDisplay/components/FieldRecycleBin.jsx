@@ -1,13 +1,15 @@
 import React, { Component, Fragment } from 'react';
-import { Icon, Dialog, LoadDiv, Tooltip } from 'ming-ui';
+import { Icon, Dialog, LoadDiv, Tooltip, UpgradeIcon } from 'ming-ui';
 import worksheetAjax from 'src/api/worksheet';
-import UserHead from 'src/pages/feed/components/userHead/userHead';
+import UserHead from 'src/components/userHead/userHead';
 import { getWidgetInfo } from '../../util';
 import { isExceedMaxControlLimit } from '../../util/setting';
-import WidgetDeatail from 'src/pages/widgetConfig/widgetSetting';
+import WidgetDetail from 'src/pages/widgetConfig/widgetSetting';
 import { getFeatureStatus, buriedUpgradeVersionDialog } from 'src/util';
-import { handleAddWidget } from 'src/pages/widgetConfig/util/data';
+import { VersionProductType } from 'src/util/enum';
+import { handleAddWidgets, handleMoveWidgets } from 'src/pages/widgetConfig/util/data';
 import SearchInput from 'worksheet/components/SearchInput';
+import { SearchFn, getDefaultSizeByType } from 'src/pages/widgetConfig/util';
 import cx from 'classnames';
 import './FieldRecycleBin.less';
 import _ from 'lodash';
@@ -43,7 +45,7 @@ export default class FieldRecycleBin extends Component {
           originList: tempList,
           filterList: tempList,
           activeWidget: tempList[0],
-          isAdmin: [2, 4].includes(globalSheetInfo.roleType),//开发者和管理员
+          isAdmin: [2, 4].includes(globalSheetInfo.roleType), //开发者和管理员
           loading: false,
         });
       });
@@ -53,9 +55,7 @@ export default class FieldRecycleBin extends Component {
     const { originList, keywords } = this.state;
     const newFilterList = originList.filter(
       item =>
-        (item.controlName || '').indexOf(keywords) > -1 ||
-        (item.controlId || '').indexOf(keywords) > -1 ||
-        (item.alias || '').indexOf(keywords) > -1,
+        SearchFn(keywords, item.controlName) || SearchFn(keywords, item.controlId) || SearchFn(keywords, item.alias),
     );
     this.setState({
       filterList: newFilterList,
@@ -128,7 +128,25 @@ export default class FieldRecycleBin extends Component {
       .then(res => {
         if (res.data) {
           if (status === 'recover') {
-            handleAddWidget({ ...item, attribute: 0 }, {}, this.props);
+            const parentControl = item.sectionId ? _.find(allControls, a => a.controlId === item.sectionId) : '';
+            const tempData = [
+              {
+                ...item,
+                attribute: 0,
+                alias: '',
+                sectionId: parentControl ? item.sectionId : '',
+                size: item.size || getDefaultSizeByType(item.type),
+                ...(item.type === 34 && _.isUndefined(item.relationControls) ? { needUpdate: true } : {}),
+              },
+            ];
+            if (parentControl) {
+              handleMoveWidgets(tempData, {
+                ...this.props,
+                activeWidget: parentControl,
+              });
+            } else {
+              handleAddWidgets(tempData, {}, this.props);
+            }
           }
 
           const newFilterList = filterList.filter(i => i.controlId !== item.controlId);
@@ -163,8 +181,7 @@ export default class FieldRecycleBin extends Component {
         <div className="columnWidth Gray_75 flexRow">
           <UserHead
             size={21}
-            lazy={false}
-            bindBusinessCard={false}
+            disabled={true}
             user={{ userHead: _.get(item.deleteAccount, 'avatar'), accountId: _.get(item.deleteAccount, 'accountId') }}
           />
           <div className="mLeft8 ellipsis flex">{_.get(item.deleteAccount, 'fullname')}</div>
@@ -229,7 +246,7 @@ export default class FieldRecycleBin extends Component {
           <div className="tableContent">{filterList.map(item => this.renderListItem(item))}</div>
         </div>
         <div className="FieldRecycleBinDetail">
-          <WidgetDeatail {...this.props} activeWidget={activeWidget} isRecycle={true} />
+          <WidgetDetail {...this.props} activeWidget={activeWidget} isRecycle={true} />
         </div>
       </Fragment>
     );
@@ -243,7 +260,7 @@ export default class FieldRecycleBin extends Component {
         _.find(md.global.Account.projects, item => item.projectId === projectId),
         'licenseType',
       ) === 0;
-    const featureType = getFeatureStatus(projectId, 16);
+    const featureType = getFeatureStatus(projectId, VersionProductType.recycle);
     return (
       <Fragment>
         <Dialog
@@ -262,7 +279,7 @@ export default class FieldRecycleBin extends Component {
             className="fieldRecycleBinText"
             onClick={() => {
               if (featureType === '2') {
-                buriedUpgradeVersionDialog(projectId, 16);
+                buriedUpgradeVersionDialog(projectId, VersionProductType.recycle);
                 return;
               }
               this.setState({ visible: true }, this.getRecycleList);
@@ -270,7 +287,7 @@ export default class FieldRecycleBin extends Component {
           >
             <Icon icon="trash" />
             <div className="recycle">{_l('回收站')}</div>
-            {isFree && <Icon icon="auto_awesome" className="freeIcon" />}
+            {isFree && <UpgradeIcon />}
           </div>
         )}
       </Fragment>

@@ -46,28 +46,28 @@ export const NODE_TYPE_LIST = [
 
 export const ACTION_LIST = [
   {
-    txt: _l('多表连接'),
-    type: 'JOIN',
-    color: '#2196F3',
-    icon: 'join_inner',
-  },
-  {
-    txt: _l('数据合并'),
-    type: 'UNION',
-    color: '#1FBCD4',
-    icon: 'merge',
-  },
-  {
     txt: _l('筛选过滤'),
     type: 'FILTER',
     color: '#4C7D9E',
     icon: 'filter',
   },
   {
+    txt: _l('多表连接'),
+    type: 'JOIN',
+    color: '#2196F3',
+    icon: 'join_inner',
+  },
+  {
     txt: _l('分类汇总'),
     type: 'AGGREGATE',
     color: '#FFA340',
     icon: 'classify',
+  },
+  {
+    txt: _l('数据合并'),
+    type: 'UNION',
+    color: '#1FBCD4',
+    icon: 'merge',
   },
 ];
 //表连接类型
@@ -93,13 +93,13 @@ export const JOIN_TYPE = [
     img: 'joinRight',
     tips: _l('右查左，合并全部'),
   },
-  {
-    txt: _l('全连接'), //全外连接
-    type: 'FULL_OUTER_JOIN',
-    color: '#2196F3',
-    img: 'joinFull',
-    tips: _l('左右表按连接字段全部合并'),
-  },
+  // {
+  //   txt: _l('全连接'), //全外连接
+  //   type: 'FULL_OUTER_JOIN',
+  //   color: '#2196F3',
+  //   img: 'joinFull',
+  //   tips: _l('左右表按连接字段全部合并'),
+  // },
 ];
 
 export const FILTER_RELATION_TYPE_DATA = [
@@ -111,6 +111,9 @@ export const TYPE_DATA = [
   { text: _l('或'), value: 'OR' },
   // { text: _l('非'), value: 'NOT' },
 ];
+export const REL_OPERATOR_TYPE = {
+  EQ: 'EQ',
+};
 //节点状态 //字段状态
 export const node_status = [
   { text: _l('正常'), value: 'NORMAL' },
@@ -123,7 +126,7 @@ export const OPERATION_TYPE_DATA = [
   { text: _l('最小值'), value: 'MIN' },
   { text: _l('平均值'), value: 'AVG' },
   { text: _l('计数'), value: 'COUNT' },
-  // { text: _l('去重计数'), value: 'COUNT' },
+  { text: _l('去重计数'), value: 'DISTINCT_COUNT' },
 ];
 
 //数据合并类型
@@ -134,6 +137,8 @@ export const UNION_TYPE_LIST = [
     tips: _l('合并时去掉两个表中重复的行记录，保留唯一记录。'),
     Er: 'UNION',
     img: 'unionImg',
+    tipImg: 'UNION',
+    h: 237
   },
   {
     type: 'UNION_ALL',
@@ -141,6 +146,8 @@ export const UNION_TYPE_LIST = [
     tips: _l('合并时保留两个表中所有的行记录'),
     Er: 'UNION ALL',
     img: 'unionAllImg',
+    tipImg: 'UNIONALL',
+    h: 237
   },
   {
     type: 'INTERSECT',
@@ -148,6 +155,8 @@ export const UNION_TYPE_LIST = [
     tips: _l('只有在两个表中都存在的记录，才会被保留，并去除重复记录'),
     Er: 'INTERSECT',
     img: 'intersectImg',
+    tipImg: 'INTERSECT',
+    h: 294
   },
   {
     type: 'INTERSECT_ALL',
@@ -155,6 +164,8 @@ export const UNION_TYPE_LIST = [
     tips: _l('只有在两个表中都存在的记录，才会被保留，不会去除重复记录'),
     Er: 'INTERSECT ALL',
     img: 'intersectAllImg',
+    tipImg: 'INTERSECTALL',
+    h: 280
   },
   {
     type: 'EXCEPT',
@@ -162,6 +173,8 @@ export const UNION_TYPE_LIST = [
     tips: _l('只有在左表中存在，但在右表中不存在的记录会被保留，并去除重复记录'),
     Er: 'EXCEPT',
     img: 'exceptImg',
+    tipImg: 'EXCEPT',
+    h: 272
   },
   {
     type: 'EXCEPT_ALL',
@@ -169,6 +182,8 @@ export const UNION_TYPE_LIST = [
     tips: _l('只有在左表中存在，但在右表中不存在的记录会被保留，不会去除重复记录'),
     Er: 'EXCEPT ALL',
     img: 'exceptAllImg',
+    tipImg: 'EXCEPTALL',
+    h: 270
   },
 ];
 
@@ -178,3 +193,181 @@ export const TASK_STATUS_TXT = {
   STOP: _l('停止'),
   ERROR: _l('异常'),
 };
+
+export const schemaTypes = [
+  {
+    id: 1,
+    type: 'MING_DAO_YUN',
+    name: '工作表',
+    isCommon: true,
+    className: 'table',
+    iconBgColor: '#E8F4FE',
+    fromType: 'LOCAL',
+    roleType: 'ALL',
+    hasSchema: false,
+    weight: 2147483647,
+  },
+  {
+    id: 2,
+    type: 'MYSQL',
+    name: 'MySQL',
+    isCommon: true,
+    className: 'mysql',
+    iconBgColor: '#ECF4F9',
+    fromType: 'LOCAL',
+    roleType: 'ALL',
+    hasSchema: false,
+    weight: 2147483646,
+  },
+  {
+    id: 3,
+    type: 'SQL_SERVER',
+    name: 'SQL Server',
+    isCommon: true,
+    className: 'sqlserver',
+    iconBgColor: '#FBECEC',
+    fromType: 'LOCAL',
+    roleType: 'SOURCE',
+    hasSchema: true,
+    weight: 2147483645,
+  },
+  {
+    id: 5,
+    type: 'POSTGRESQL',
+    name: 'PostgreSQL',
+    isCommon: true,
+    className: 'postgres',
+    iconBgColor: '#E9EFF4',
+    fromType: 'LOCAL',
+    roleType: 'ALL',
+    hasSchema: true,
+    weight: 2147483643,
+  },
+  {
+    id: 7,
+    type: 'MARIADB',
+    name: 'MariaDB',
+    isCommon: true,
+    className: 'mariadb',
+    iconBgColor: '#F7F3F0',
+    fromType: 'LOCAL',
+    roleType: 'ALL',
+    hasSchema: false,
+    weight: 2147483641,
+  },
+  {
+    id: 8,
+    type: 'DB2',
+    name: 'IBM db2',
+    isCommon: false,
+    className: 'db2',
+    iconBgColor: '#EEEEEE',
+    fromType: 'LOCAL',
+    roleType: 'SOURCE',
+    hasSchema: true,
+    weight: 2147483640,
+  },
+  {
+    id: 102,
+    type: 'ALIYUN_MYSQL',
+    name: '阿里云 MySQL',
+    isCommon: false,
+    className: 'aliyun_mysql',
+    iconBgColor: '#FFF0E8',
+    fromType: 'CLOUD',
+    roleType: 'ALL',
+    hasSchema: false,
+    weight: 2147483638,
+  },
+  {
+    id: 104,
+    type: 'ALIYUN_SQLSERVER',
+    name: '阿里云 SQL Server',
+    isCommon: false,
+    className: 'aliyun_sqlserver',
+    iconBgColor: '#FFF0E8',
+    fromType: 'CLOUD',
+    roleType: 'SOURCE',
+    hasSchema: true,
+    weight: 2147483637,
+  },
+  {
+    id: 100,
+    type: 'ALIYUN_MARIADB',
+    name: '阿里云 MariaDB',
+    isCommon: false,
+    className: 'aliyun_mariadb',
+    iconBgColor: '#FFF0E8',
+    fromType: 'CLOUD',
+    roleType: 'ALL',
+    hasSchema: false,
+    weight: 2147483634,
+  },
+  {
+    id: 107,
+    type: 'TENCENT_MYSQL',
+    name: '腾讯云 MySQL',
+    isCommon: false,
+    className: 'tencent_mysql',
+    iconBgColor: '#E6F6FE',
+    fromType: 'CLOUD',
+    roleType: 'ALL',
+    hasSchema: false,
+    weight: 2147483633,
+  },
+  {
+    id: 109,
+    type: 'TENCENT_SQLSERVER',
+    name: '腾讯云 SQL Server',
+    isCommon: false,
+    className: 'tencent_sqlserver',
+    iconBgColor: '#E6F6FE',
+    fromType: 'CLOUD',
+    roleType: 'SOURCE',
+    hasSchema: true,
+    weight: 2147483632,
+  },
+  {
+    id: 105,
+    type: 'TENCENT_MARIADB',
+    name: '腾讯云 MariaDB',
+    isCommon: false,
+    className: 'tencent_mariadb',
+    iconBgColor: '#E6F6FE',
+    fromType: 'CLOUD',
+    roleType: 'ALL',
+    hasSchema: false,
+    weight: 2147483629,
+  },
+]
+  .filter(o => o.hasSchema)
+  .map(o => {
+    return o.className;
+  });
+
+export const mdUniquePkData = {
+  id: 'unique_pk_mdy0000',
+  oid: 'unique_pk_mdy0000',
+  dependFieldIds: ['unique_pk_mdy0000'],
+  name: 'unique_pk_mdy0000',
+  dataType: 'varchar',
+  jdbcTypeId: 12,
+  precision: 255,
+  scale: 0,
+  isPk: true,
+  isUniquePk: true,
+  mdType: 2,
+  isTitle: null,
+  isNotNull: true,
+  alias: 'unique_pk_mdy0000',
+  isCheck: true,
+  orderNo: 0,
+  status: 'NORMAL',
+  defaultValue: null,
+  comment: null,
+  controlSetting: null,
+};
+//文本类
+export const text_jdbcTypeIds = [12, -1, -15, -16, -9, 1];
+//数值类
+export const num_jdbcTypeIds = [-7, -6, 5, 4, -5, 2, 3, 6, 7, 8, 91, 92, 93, 2013, 2014];

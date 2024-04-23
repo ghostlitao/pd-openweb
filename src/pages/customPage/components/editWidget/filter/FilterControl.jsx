@@ -9,8 +9,11 @@ import sheetApi from 'src/api/worksheet';
 import { getIconByType, filterOnlyShowField } from 'src/pages/widgetConfig/util';
 import FilterSetting from './FilterSetting';
 import FilterDefaultValue from './FilterDefaultValue';
+import FilterShowItem from './FilterShowItem';
 import { FASTFILTER_CONDITION_TYPE, getSetDefault } from 'worksheet/common/ViewConfig/components/fastFilter/util';
 import { WIDGETS_TO_API_TYPE_ENUM } from 'src/pages/widgetConfig/config/widget';
+import { replaceControlsTranslateInfo } from 'src/pages/worksheet/util';
+import { getTranslateInfo } from 'src/util';
 import _ from 'lodash';
 
 export default function FilterControl(props) {
@@ -20,7 +23,7 @@ export default function FilterControl(props) {
   const [loading, setLoading] = useState(true);
   const [searchValue, setSearchValue] = useState('');
 
-  const { objectControls = [], dataType } = filter;
+  const { filterId, objectControls = [], dataType, advancedSetting } = filter;
   const filterObjectControls = _.uniqBy(objectControls, 'worksheetId');
 
   useEffect(() => {
@@ -39,7 +42,8 @@ export default function FilterControl(props) {
         setLoading(false);
         data = data.map(sheet => {
           const controls = _.get(sheet, 'template.controls');
-          _.set(sheet, 'template.controls', controls.map(redefineComplexControl));
+          _.set(sheet, 'template.controls', replaceControlsTranslateInfo(sheet.appId, controls).map(redefineComplexControl));
+          sheet.name = getTranslateInfo(sheet.appId, sheet.worksheetId).name || sheet.name;
           return sheet;
         });
         setSheetList(sheetList.concat(data));
@@ -107,7 +111,7 @@ export default function FilterControl(props) {
             const newControls = objectControls.map(f => {
               const data = { ...f }
               if (f.worksheetId === item.worksheetId) {
-                data.controlId =  value;
+                data.controlId = value || '';
               } else if (!index) {
                 data.controlId = '';
               }
@@ -120,6 +124,7 @@ export default function FilterControl(props) {
               const { type } = control;
               const { controlId, ...data } = getSetDefault(control);
               param.control = control;
+              param.filterType = 0;
               param.values = [];
               param.value = '';
               param.minValue = '';
@@ -145,6 +150,9 @@ export default function FilterControl(props) {
           })
           .filter(c => {
             if (isOptionControl || isRelateControl) {
+              if (c.controlId === 'rowid') {
+                return true;
+              }
               if (c.dataSource && firstControlData.dataSource) {
                 return c.dataSource === firstControlData.dataSource;
               } else {
@@ -189,6 +197,31 @@ export default function FilterControl(props) {
         {filterObjectControls.map((item, index) => (
           renderSelect(item, index)
         ))}
+        {[29, 11, 10, 9, 26].includes(dataType) && (
+          <FilterShowItem
+            dataType={dataType}
+            sheet={firstSheet}
+            allControls={props.allControls}
+            control={firstControlData}
+            filterId={filterId}
+            advancedSetting={advancedSetting}
+            onChangeAdvancedSetting={(data) => {
+              const { navshow } = data;
+              let values = filter.values;
+              if ([9, 10, 11].includes(dataType)) {
+                const navfilters = JSON.parse(data.navfilters);
+                values = filter.values.filter(n => navfilters.includes(n));
+              }
+              setFilter({
+                values: navshow === '2' ? [] : values,
+                advancedSetting: {
+                  ...advancedSetting,
+                  ...data 
+                }
+              });
+            }}
+          />
+        )}
       </div>
       <Divider className="mTop0 mBottom15" />
       {!!dataType && (

@@ -1,5 +1,5 @@
 import React, { Component, Fragment } from 'react';
-import { ScrollView, LoadDiv, Dropdown } from 'ming-ui';
+import { ScrollView, LoadDiv, Dropdown, Checkbox, Icon } from 'ming-ui';
 import flowNode from '../../../api/flowNode';
 import { DetailHeader, DetailFooter, SelectNodeObject, CustomTextarea } from '../components';
 import cx from 'classnames';
@@ -38,11 +38,12 @@ export default class File extends Component {
    */
   getNodeDetail(props, sId) {
     const { processId, selectNodeId, selectNodeType } = props;
+    const { data } = this.state;
 
     flowNode
       .getNodeDetail({ processId, nodeId: selectNodeId, flowNodeType: selectNodeType, selectNodeId: sId })
       .then(result => {
-        this.setState({ data: result });
+        this.setState({ data: !sId ? result : { ...result, name: data.name } });
       });
   }
 
@@ -59,7 +60,7 @@ export default class File extends Component {
    */
   onSave = () => {
     const { data, saveRequest } = this.state;
-    const { name, selectNodeId, appId, fileName } = data;
+    const { name, selectNodeId, appId, fileName, pdf } = data;
 
     if (!selectNodeId) {
       alert(_l('必须先选择一个对象'), 2);
@@ -67,7 +68,7 @@ export default class File extends Component {
     }
 
     if (!appId) {
-      alert(_l('Word打印模板必选'), 2);
+      alert(_l('打印模板必选'), 2);
       return;
     }
 
@@ -89,6 +90,7 @@ export default class File extends Component {
         selectNodeId,
         appId,
         fileName,
+        pdf,
       })
       .then(result => {
         this.props.updateNodeData(result);
@@ -116,7 +118,7 @@ export default class File extends Component {
       <Fragment>
         <div className="Gray_75 workflowDetailDesc pTop15 pBottom15">
           {_l(
-            '将记录转为PDF或Word文件，可以通过新增记录、更新记录或发送邮件节点将文件写入附件。注：文档大小不得超过100M。',
+            '将记录转为PDF、Word或Excel文件，可以通过新增记录、更新记录或发送邮件节点将文件写入附件。注：文档大小不得超过100M，作为邮件附件发送时不得超过10M。',
           )}
         </div>
 
@@ -130,7 +132,7 @@ export default class File extends Component {
           onChange={sId => this.getNodeDetail(this.props, sId)}
         />
 
-        <div className="mTop20 bold">{_l('Word打印模板')}</div>
+        <div className="mTop20 bold">{_l('打印模板')}</div>
         <Dropdown
           className={cx('flowDropdown mTop10', { 'errorBorder errorBG': data.appId && !selectAppItem })}
           data={appList}
@@ -144,7 +146,7 @@ export default class File extends Component {
           }
           border
           openSearch
-          noData={_l('暂无Word打印模板')}
+          noData={_l('暂无打印模板')}
           onChange={appId => this.updateSource({ appId })}
         />
 
@@ -153,7 +155,9 @@ export default class File extends Component {
           {_l('系统默认使用记录标题作为文件名，自定义名称时不得包含英文字符/:*?"<>|')}
         </div>
         <CustomTextarea
+          projectId={this.props.companyId}
           processId={this.props.processId}
+          relationId={this.props.relationId}
           selectNodeId={this.props.selectNodeId}
           type={2}
           height={0}
@@ -162,6 +166,33 @@ export default class File extends Component {
           onChange={(err, value, obj) => this.updateSource({ fileName: value })}
           updateSource={this.updateSource}
         />
+
+        <div className="Font13 mTop20 bold">
+          {_l('其他')}
+          <span
+            className="workflowDetailTipsWidth mLeft5 tip-top-right"
+            data-tip={_l('系统默认会生成 Word/Excel 文件，生成的文件后续流程节点可直接使用')}
+          >
+            <Icon className="Font14 Gray_9e" icon="info" />
+          </span>
+        </div>
+        <div className="mTop10 flexRow">
+          <Checkbox
+            className="InlineFlex"
+            text={_l('同时生成PDF文件')}
+            checked={data.pdf}
+            disabled={!data.wpsConfig}
+            onClick={checked => this.updateSource({ pdf: !checked })}
+          />
+        </div>
+        {!data.wpsConfig && <div className="mTop5" style={{ color: '#ffa340' }}>{_l('未配置 PDF 转换服务')}</div>}
+        {md.global.Config.IsPlatformLocal && data.pdf && (
+          <div className="mTop5 Gray_9e">
+            {_l('生成PDF文件是由WPS提供的第三方服务，收费标准为')}
+            <span style={{ color: '#ffa340' }}>{_l('每个文件0.15元')}</span>
+            {_l('，转换失败的文件将不收取费用。')}
+          </div>
+        )}
       </Fragment>
     );
   }
@@ -182,7 +213,7 @@ export default class File extends Component {
           bg="BGBlueAsh"
           updateSource={this.updateSource}
         />
-        <div className="flex mTop20">
+        <div className="flex">
           <ScrollView>
             <div className="workflowDetailBox">{this.renderContent()}</div>
           </ScrollView>

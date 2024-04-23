@@ -17,6 +17,9 @@ const PivotTableContent = styled.div`
     .ant-table-content {
       overflow: auto !important;
     }
+    .ant-table {
+      height: ${props => props.paginationVisible ? 'calc(100% - 45px)' : '100%'};
+    }
   }
   &.contentXAuto {
     .ant-table-container {
@@ -26,6 +29,16 @@ const PivotTableContent = styled.div`
   }
   &.hideHeaderLastTr {
     thead tr:last-child {
+      display: none;
+    }
+  }
+  &.hideBody {
+    .ant-table-tbody {
+      display: none;
+    }
+  }
+  &.hideDrag {
+    .drag {
       display: none;
     }
   }
@@ -58,12 +71,50 @@ const PivotTableContent = styled.div`
     text-align: right;
   }
   .cell-content {
+    color: ${props => props.pivotTableStyle.textColor};
     text-align: ${props => props.pivotTableStyle.cellTextAlign || 'right'};
+  }
+  tbody {
+    .cell-content {
+      padding: 0 !important;
+      position: relative;
+    }
+    .cell-value {
+      padding: 8px;
+      // height: 38px;
+      position: relative;
+      overflow-wrap: break-word;
+      z-index: 2;
+    }
+    .data-bar, .data-bg {
+      position: absolute;
+      top: 0;
+      width: 100%;
+      height: 100%;
+    }
+    .data-bg {
+      z-index: 0;
+    }
+    .data-bar, .data-axis {
+      z-index: 1;
+    }
+    .data-axis {
+      position: absolute;
+      top: 0;
+      height: 100%;
+      border-left: 1px dashed #333;
+    }
+    .ant-table-cell-fix-left {
+      z-index: 3;
+    }
   }
   .line-content {
     text-align: ${props => props.pivotTableStyle.lineTextAlign || 'left'};
     color: ${props => props.pivotTableStyle.lineTextColor || '#000000d9'};
     background-color: ${props => props.pivotTableStyle.lineBgColor || '#fff'} !important;
+  }
+  .line-content, .cell-content {
+    white-space: pre-wrap;
   }
   .ant-table-container {
     th.ant-table-cell-ellipsis {
@@ -75,6 +126,15 @@ const PivotTableContent = styled.div`
       color: ${props => props.pivotTableStyle.columnTextColor || '#757575'};
       background-color: ${props => props.pivotTableStyle.columnBgColor || '#fafafa'} !important;
       font-weight: bold;
+    }
+  }
+  .ant-pagination-options {
+    display: block !important;
+  }
+  .ant-table-pagination.ant-pagination {
+    margin-bottom: 5px;
+    .ant-select-selector {
+      border-radius: 4px;
     }
   }
   .ant-table-container, table, tr>th, tr>td {
@@ -95,9 +155,15 @@ const PivotTableContent = styled.div`
       background-color: ${props => props.pivotTableStyle.oddBgColor ? `${props.pivotTableStyle.oddBgColor}e8` : '#fafafa'};
     }
   }
-  .ant-table-tbody tr:not(tr[data-row-key='sum']) .contentValue:hover {
-    color: ${props => props.pivotTableStyle.lineTextColor || '#2196f3'} !important;
-    background-color: ${props => props.pivotTableStyle.lineBgColor || '#E3F2FD'} !important;
+  .ant-table-tbody tr:not(tr.sum-content) .contentValue {
+    cursor: pointer;
+    &:hover {
+      color: ${props => props.pivotTableStyle.lineTextColor || '#2196f3'} !important;
+      background-color: ${props => props.pivotTableStyle.lineBgColor || '#E3F2FD'} !important;
+    }
+  }
+  .ant-table-tbody .sum-content .ant-table-cell {
+    font-weight: bold;
   }
   .drag {
     position: absolute;

@@ -1,13 +1,13 @@
-import React, { Component, Fragment } from 'react';
+import React, { Component } from 'react';
 import { ScrollView, LoadDiv } from 'ming-ui';
 import './index.less';
 import cx from 'classnames';
 import { RENDER_RECORD_NECESSARY_ATTR, getRecordAttachments } from '../util';
-import { emitter } from 'worksheet/util';
+import { emitter, handleRecordClick } from 'worksheet/util';
 import worksheetAjax from 'src/api/worksheet';
 import RecordInfoWrapper from 'src/pages/worksheet/common/recordInfo/RecordInfoWrapper';
 import { RecordInfoModal } from 'mobile/Record';
-import { getAdvanceSetting, browserIsMobile } from 'src/util';
+import { getAdvanceSetting, browserIsMobile, addBehaviorLog } from 'src/util';
 import NoRecords from 'src/pages/worksheet/components/WorksheetTable/components/NoRecords';
 import { connect } from 'react-redux';
 import { bindActionCreators } from 'redux';
@@ -16,13 +16,12 @@ import _, { isEmpty } from 'lodash';
 import renderCellText from 'src/pages/worksheet/components/CellControls/renderText';
 import GalleryItem from './GalleryItem';
 import { isOpenPermit } from 'src/pages/FormSet/util.js';
+import { getRecordColorConfig } from 'worksheet/util';
 import { permitList } from 'src/pages/FormSet/config.js';
 import * as actions from 'worksheet/redux/actions/galleryview';
-import addRecord from 'worksheet/common/newRecord/addRecord';
 import autoSize from 'ming-ui/decorators/autoSize';
 import { transferValue } from 'src/pages/widgetConfig/widgetSetting/components/DynamicDefaultValue/util';
 import { getEmbedValue } from 'src/components/newCustomFields/tools/utils.js';
-import { controlState } from 'src/components/newCustomFields/tools/utils';
 import { autobind } from 'core-decorators';
 
 const isMobile = browserIsMobile();
@@ -54,7 +53,6 @@ export default class RecordGallery extends Component {
       base,
       chatVisible,
       sheetListVisible, // 左侧打开或关闭
-      galleryview,
       views,
       groupFilterWidth,
       navGroupFilters,
@@ -69,7 +67,10 @@ export default class RecordGallery extends Component {
       return;
     }
     const isNoAs =
-      !_.isEqual(currentView, preView) ||
+      !_.isEqual(
+        _.omit(currentView, ['name', 'worksheetName', 'advancedSetting.rowcolumns', 'advancedSetting.checkradioid']),
+        _.omit(preView, ['name', 'worksheetName', 'advancedSetting.rowcolumns', 'advancedSetting.checkradioid']),
+      ) ||
       clicksearch !== this.state.clicksearch ||
       !_.isEqual(navGroupFilters, this.props.navGroupFilters);
     if (
@@ -79,8 +80,14 @@ export default class RecordGallery extends Component {
       chatVisible !== this.props.chatVisible ||
       groupFilterWidth !== this.props.groupFilterWidth
     ) {
-      !hasGroupFilter && this.getFetch(nextProps);
-      this.resizeBind(nextProps);
+      setTimeout(
+        () => {
+          !hasGroupFilter && this.getFetch(nextProps);
+          this.resizeBind(nextProps);
+        },
+        // 修改颜色字段时晚一点取, 不然返回的数据还是不包括新改的字段的值
+        _.get(preView, 'advancedSetting.colorid') !== _.get(currentView, 'advancedSetting.colorid') ? 200 : 0,
+      );
     }
     this.setState({ clicksearch });
   }
@@ -155,10 +162,12 @@ export default class RecordGallery extends Component {
     let { base = {}, views = [], width } = props;
     const { viewId = '' } = base;
     const view = views.find(o => o.viewId === viewId) || {};
-    const { coverposition = '2' } = getAdvanceSetting(view);
+    const { coverposition = '2', cardwidth } = getAdvanceSetting(view);
     const isTopCover = coverposition === '2'; // 封面上
     width = width - 8 * 2; //padding:8px;
-    return Math.floor(width / Math.floor(width / (!isTopCover ? 336 : 246)));
+    const minW = !!cardwidth ? Number(cardwidth) + 16 : !isTopCover ? 336 : 246;
+    let W = minW > width ? minW : Math.floor(Math.floor(width) / Math.floor(Math.floor(width) / minW));
+    return W;
   };
 
   formData = row => {
@@ -209,9 +218,9 @@ export default class RecordGallery extends Component {
     const { base, views, sheetSwitchPermit, galleryview, filters, worksheetInfo, controls, quickFilter } = this.props;
     const { viewId, appId, worksheetId, groupId } = base;
     const currentView = views.find(o => o.viewId === viewId) || {};
-    const { gallery = [], galleryViewLoading, galleryLoading, galleryIndex } = galleryview;
+    const { gallery = [], galleryViewLoading, galleryLoading } = galleryview;
     const coverCid = currentView.coverCid || _.get(worksheetInfo, ['advancedSetting', 'coverid']);
-    let { coverposition = '2', abstract = '', clicksearch } = getAdvanceSetting(currentView);
+    let { coverposition = '2', abstract = '' } = getAdvanceSetting(currentView);
     const isTopCover = coverposition === '2';
     const { recordInfoVisible, recordId } = this.state;
     if (galleryViewLoading) {
@@ -221,23 +230,7 @@ export default class RecordGallery extends Component {
       if (filters.keyWords || !isEmpty(filters.filterControls) || isMobile) {
         return <ViewEmpty filters={filters} />;
       }
-      return (
-        <NoRecords
-          sheetIsFiltered={!this.noFilter()}
-          allowAdd={isOpenPermit(permitList.createButtonSwitch, sheetSwitchPermit) && worksheetInfo.allowAdd}
-          showNewRecord={() => {
-            addRecord({
-              worksheetId,
-              // defaultFormData,
-              defaultFormDataEditable: true,
-              directAdd: true,
-              onAdd: record => {
-                this.props.updateRow(record);
-              },
-            });
-          }}
-        />
-      );
+      return <NoRecords sheetIsFiltered={!this.noFilter()} />;
     }
     return (
       <ScrollView className="galleryScrollWrap" updateEvent={_.throttle(this.scrollLoad, 400)}>
@@ -286,10 +279,11 @@ export default class RecordGallery extends Component {
               allowEdit: item.allowedit,
               allowDelete: item.allowdelete,
               rawRow: item,
+              recordColorConfig: getRecordColorConfig(currentView),
               fields: this.formData(item),
               formData,
               rowId: item.rowid,
-              abstractValue: abstract //&& controlState(abstractData).visible //排除无查看权限的
+              abstractValue: abstract
                 ? renderCellText({
                     ...abstractData,
                     value: item[abstract],
@@ -301,12 +295,15 @@ export default class RecordGallery extends Component {
                 className={cx('galleryItem', { mobile: isMobile })}
                 style={isMobile ? { width: '100%', padding: '5px 0px' } : { width: this.getWith() }}
                 onClick={() => {
-                  const isMingdao = navigator.userAgent.toLowerCase().indexOf('mingdao application') >= 0;
-                  if (isMingdao) {
-                    window.location.href = `/mobile/record/${appId}/${worksheetId}/${viewId}/${item.rowid}`;
-                    return;
-                  }
-                  this.setState({ recordId: item.rowid, recordInfoVisible: true });
+                  handleRecordClick(currentView, item, () => {
+                    const isMingdao = navigator.userAgent.toLowerCase().indexOf('mingdao application') >= 0;
+                    if (isMingdao) {
+                      window.location.href = `/mobile/record/${appId}/${worksheetId}/${viewId}/${item.rowid}`;
+                      return;
+                    }
+                    this.setState({ recordId: item.rowid, recordInfoVisible: true });
+                    addBehaviorLog('worksheetRecord', worksheetId, { rowId: item.rowid }); // 埋点
+                  });
                 }}
               >
                 <GalleryItem
@@ -321,11 +318,13 @@ export default class RecordGallery extends Component {
                   onCopySuccess={data => {
                     this.props.updateRow(data);
                   }}
+                  onAdd={data => {
+                    this.props.updateRow(data);
+                  }}
                 />
               </div>
             );
           })}
-          {galleryLoading && <LoadDiv size="big" className="mTop32" />}
           {/* 表单信息 */}
           {recordInfoVisible &&
             (isMobile ? (
@@ -378,6 +377,11 @@ export default class RecordGallery extends Component {
               />
             ))}
         </div>
+        {galleryLoading && (
+          <div className="w100">
+            <LoadDiv size="big" className="mTop32" />
+          </div>
+        )}
       </ScrollView>
     );
   }

@@ -1,8 +1,6 @@
 import React, { Component } from 'react';
-import DialogLayer from 'src/components/mdDialog/dialog';
-import ReactDom from 'react-dom';
 import 'src/pages/PageHeader/AppNameHeader/index.less';
-import { Icon } from 'ming-ui';
+import { Icon, Menu, Dialog } from 'ming-ui';
 import CSSTransitionGroup from 'react-addons-css-transition-group';
 import withClickAway from 'ming-ui/decorators/withClickAway';
 import createDecoratedComponent from 'ming-ui/decorators/createDecoratedComponent';
@@ -26,7 +24,10 @@ import FindPwdDialog from './FindPwdDialog';
 import PortalMessage from './PortalMessage';
 import { getAppId } from 'src/pages/PortalAccount/util.js';
 import _ from 'lodash';
-import { WrapHeader, Wrap } from './style';
+import { WrapHeader, Wrap, ModalWrap, RedMenuItemWrap } from './style';
+import Trigger from 'rc-trigger';
+import langConfig from 'src/common/langConfig';
+import accountSetting from 'src/api/accountSetting';
 
 export default class PortalUserSet extends Component {
   constructor(props) {
@@ -48,11 +49,14 @@ export default class PortalUserSet extends Component {
       showDelDialog: false,
       allowExAccountDiscuss: false, //允许外部用户讨论
       exAccountDiscussEnum: 0, //外部用户的讨论类型 0：所有讨论 1：不可见内部讨论
+      approved: false, //允许外部用户允许查看审批流转详情
       url: '',
       baseInfo: {},
       type: '',
       showChangePwd: false,
       hasPassword: false,
+      showMenu: false,
+      showModel: false,
     };
   }
 
@@ -122,19 +126,14 @@ export default class PortalUserSet extends Component {
   };
   //编辑详细资料
   handleUploadImg = () => {
-    const options = {
-      container: {
-        content: '',
-        yesText: null,
-        noText: null,
-        header: _l('上传头像'),
-      },
-      dialogBoxID: 'uploadAvatorDialogId',
-      width: browserIsMobile() ? '100%' : '460px',
-    };
     const { currentData, avatar = '' } = this.state;
-    ReactDom.render(
-      <DialogLayer {...options}>
+
+    Dialog.confirm({
+      dialogClasses: 'uploadAvatorDialogId',
+      width: browserIsMobile() ? '100%' : '460px',
+      title: _l('上传头像'),
+      noFooter: true,
+      children: (
         <AvatorInfo
           editAvatar={res => {
             ///更新数据 /////
@@ -151,18 +150,17 @@ export default class PortalUserSet extends Component {
               .then(res => {
                 this.setState({ avatar: res.data.portal_avatar }, () => {
                   md.global.Account.avatar = res.data.portal_avatar;
-                  $('#uploadAvatorDialogId_container,#uploadAvatorDialogId_mask').remove();
+                  $('.uploadAvatorDialogId').parent().remove();
                 });
               });
           }}
           avatar={avatar.split('imageView2')[0]}
           closeDialog={() => {
-            $('#uploadAvatorDialogId_container,#uploadAvatorDialogId_mask').remove();
+            $('.uploadAvatorDialogId').parent().remove();
           }}
         />
-      </DialogLayer>,
-      document.createElement('div'),
-    );
+      ),
+    });
   };
 
   //头像和徽章
@@ -183,6 +181,8 @@ export default class PortalUserSet extends Component {
       baseInfo,
       type,
       showChangePwd,
+      showMenu,
+      showModel,
     } = this.state;
     const { isMobile, match = {}, appStatus, noAvatar, currentPcNaviStyle } = this.props;
     const info = currentData.filter(
@@ -238,7 +238,7 @@ export default class PortalUserSet extends Component {
             onClickAway={() => this.setState({ showUserInfo: false })}
             // 知识文件选择层 点击时不收起
             onClickAwayExceptions={[
-              '#uploadAvatorDialogId,.mui-dialog-container,.rc-trigger-popup,#uploadAvatorDialogId_mask',
+              '.uploadAvatorDialogId,.mui-dialog-container,.rc-trigger-popup,#uploadAvatorDialogId_mask,.am-modal-mask,.am-modal-wrap',
             ]}
           >
             <CSSTransitionGroup
@@ -339,6 +339,36 @@ export default class PortalUserSet extends Component {
                         </span>
                       </span>
                     </div>
+                    <div className={cx('tel flexRow alignItemsCenter mTop24')}>
+                      <span className="title InlineBlock Gray_9e">{_l('语言设置')}</span>
+                      <div className="languagueSetting flexRow flex">
+                        {langConfig.map(item => {
+                          return (
+                            <div
+                              className={cx('languagueItem flex Hand', {
+                                active: (getCookie('i18n_langtag') || md.global.Config.DefaultLang) === item.key,
+                              })}
+                              onClick={() => {
+                                const settingValue = { 'zh-Hans': '0', en: '1', ja: '2', 'zh-Hant': '3' };
+                                accountSetting
+                                  .editAccountSetting({ settingType: '6', settingValue: settingValue[item.key] })
+                                  .then(res => {
+                                    if (res) {
+                                      setCookie('i18n_langtag', item.key);
+                                      window.location.reload();
+                                    } else {
+                                      alert(_l('设置失败，请稍后再试'), 2);
+                                    }
+                                  });
+                              }}
+                            >
+                              {item.value}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
                     <h6 className={cx('Font16', { mTop32: !isMobile, mTop24: isMobile })}>{_l('我的信息')}</h6>
                     <div className="infoBox">
                       {info
@@ -376,24 +406,109 @@ export default class PortalUserSet extends Component {
                       }}
                     >
                       <Icon icon="exit_to_app" className="mRight5 Font18" />
-                      {_l('安全退出')}
+                      {_l('退出登录')}
                     </div>
-
-                    <div
-                      className="del Hand Font14 Bold"
-                      onClick={() => {
-                        this.setState({
-                          showDelDialog: true,
-                        });
-                      }}
-                    >
-                      {_l('注销账户')}
-                    </div>
+                    {browserIsMobile() ? (
+                      <div
+                        className="opt Hand TxtCenter"
+                        onClick={() => {
+                          this.setState({
+                            showModel: true,
+                          });
+                        }}
+                      >
+                        <Icon icon="more_horiz" className="Font18" />
+                      </div>
+                    ) : (
+                      <Trigger
+                        action={['click']}
+                        popupVisible={showMenu}
+                        onPopupVisibleChange={visible => {
+                          this.setState({
+                            showMenu: visible,
+                          });
+                        }}
+                        popup={
+                          <Menu>
+                            <RedMenuItemWrap
+                              className="RedMenuItem"
+                              onClick={() => {
+                                this.setState({
+                                  showDelDialog: true,
+                                  showMenu: false,
+                                });
+                              }}
+                            >
+                              <span>{_l('注销此账户')}</span>
+                            </RedMenuItemWrap>
+                          </Menu>
+                        }
+                        popupClassName={cx('dropdownTrigger')}
+                        popupAlign={{
+                          points: ['tl', 'bl'],
+                          overflow: {
+                            adjustX: true,
+                            adjustY: true,
+                          },
+                        }}
+                      >
+                        <div
+                          className="opt Hand TxtCenter"
+                          onClick={() => {
+                            this.setState({
+                              showMenu: true,
+                            });
+                          }}
+                        >
+                          <Icon icon="more_horiz" className="Font18" />
+                        </div>
+                      </Trigger>
+                    )}
                   </div>
                 </Wrap>
               }
             </CSSTransitionGroup>
           </ClickAwayable>
+        )}
+        {showModel && (
+          <ModalWrap
+            popup
+            animationType="slide-up"
+            visible={showModel}
+            className="appMoreActionWrap"
+            onClose={() => {
+              this.setState({
+                showModel: false,
+              });
+            }}
+          >
+            <div className="flexRow header">
+              <div className="Font13 Gray_9e flex">{_l('更多')}</div>
+              <div
+                className="closeIcon"
+                onClick={() => {
+                  this.setState({
+                    showModel: false,
+                  });
+                }}
+              >
+                <Icon icon="close" className="Font17 Gray_9e bold" />
+              </div>
+            </div>
+            <div className="actionContent">
+              <div
+                className="RedMenuItem"
+                onClick={() => {
+                  this.setState({
+                    showModel: false,
+                    showDelDialog: true,
+                  });
+                }}
+              >
+                <span>{_l('注销此账户')}</span>
+              </div>
+            </div>
+          </ModalWrap>
         )}
         {showUserInfoDialog && (
           <UserInfoDialog
@@ -424,6 +539,7 @@ export default class PortalUserSet extends Component {
                 })
                 .then(res => {
                   this.setState({ showUserInfoDialog: false, currentData: data });
+                  ids.includes('portal_name') && location.reload();
                 });
             }}
           />

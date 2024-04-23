@@ -1,29 +1,18 @@
 ﻿import { navigateTo } from 'router/navigateTo';
-import { upgradeVersionDialog } from 'src/util';
+import { upgradeVersionDialog, getCurrentProject, expireDialogAsync } from 'src/util';
 var AdminCommon = {};
 import Config from '../config';
 import RoleController from 'src/api/role';
-import 'src/components/select/select';
 import './common.less';
-import { expireDialogAsync } from 'src/components/common/function';
-import JqueryWrapper from 'ming-ui/utils/JQueryWrapper';
-import MultipleDropdown from 'ming-ui/components/MultipleDropdown';
 import _ from 'lodash';
-JqueryWrapper(MultipleDropdown, {
-  name: 'reactMultipleDropdown',
-});
 
 const { AUTHORITY_DICT } = Config;
 
-AdminCommon.init = function() {
+AdminCommon.init = function () {
   Config.getParams();
   Config.project = {};
 
-  md.global.Account.projects.forEach(item => {
-    if (item.projectId === Config.projectId) {
-      Config.project = item;
-    }
-  });
+  Config.project = getCurrentProject(Config.projectId);
   // 是否在这个网络
   if (Config.project.projectId) {
     return AdminCommon.getProjectPermissionsByUser().then((...authority) => {
@@ -36,7 +25,7 @@ AdminCommon.init = function() {
   }
 };
 
-AdminCommon.getProjectPermissionsByUser = function() {
+AdminCommon.getProjectPermissionsByUser = function () {
   return RoleController.getProjectPermissionsByUser({
     projectId: Config.projectId,
   }).then(data => {
@@ -82,50 +71,6 @@ AdminCommon.getProjectPermissionsByUser = function() {
     }
 
     return res;
-  });
-};
-
-AdminCommon.initProjectSelect = function() {
-  var currentCompanyName;
-  var dataArr = [];
-  var $adminProjects = $('#adminProjects');
-  if ($adminProjects.data('bind')) {
-    return;
-  }
-  $adminProjects.data('bind', true);
-  if (md.global.Account.projects) {
-    dataArr = $.map(md.global.Account.projects, function(item) {
-      if (item.projectId === Config.projectId) {
-        currentCompanyName = item.companyName;
-      }
-      return {
-        id: item.projectId,
-        name: item.companyName,
-      };
-    });
-  }
-  $adminProjects.MDSelect({
-    dataArr: dataArr,
-    defualtSelectedValue: Config.projectId,
-    zIndex: 1,
-    wordLength: 100,
-    maxWidth: 230,
-    fontSize: 14,
-    onChange: function(value, text) {
-      if (value === Config.projectId) {
-        return;
-      }
-      expireDialogAsync(value).then(
-        function() {
-          const params = Config.params.concat();
-          params[2] = value;
-          navigateTo('/' + params.join('/'));
-        },
-        function() {
-          $adminProjects.MDSelect('setValue', Config.projectId, currentCompanyName);
-        },
-      );
-    },
   });
 };
 

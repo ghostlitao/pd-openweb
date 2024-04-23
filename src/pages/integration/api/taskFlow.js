@@ -59,6 +59,20 @@ var taskFlow = {
   },
 
   /**
+   * 升级所有任务流，所有节点field字段生成唯一id和oid
+   *
+   * @param {Object} args 请求参数
+   * @param {Object} options 配置参数
+   * @param {Boolean} options.silent 是否禁止错误弹层
+   * @returns {Promise<Boolean, ErrorModel>}
+   **/
+  upgradeTaskFlow: function (args, options) {
+    base.ajaxOptions.url = base.server(options) + 'taskFlow/upgradeTaskFlow';
+    base.ajaxOptions.type = 'POST';
+    return $.api(controllerName, 'taskFlowupgradeTaskFlow', JSON.stringify(args), $.extend(base, options));
+  },
+
+  /**
    * 全量更新任务流
    *
    * @param {Object} args 请求参数
@@ -83,7 +97,7 @@ var taskFlow = {
    * @param {Object} args 请求参数
    * @param {string} args.projectId 组织id
    * @param {string} args.flowId 任务流id
-   * @param {string} args.nodeId 节点id
+   * @param {string} args.nodeId 待删除的节点id
    * @param {Object} options 配置参数
    * @param {Boolean} options.silent 是否禁止错误弹层
    * @returns {Promise<Boolean, ErrorModel>}
@@ -150,11 +164,28 @@ var taskFlow = {
   },
 
   /**
+   * 还原升级后的所有任务流，所有节点field字段生成唯一id和oid
+   *
+   * @param {Object} args 请求参数
+   * @param {Object} options 配置参数
+   * @param {Boolean} options.silent 是否禁止错误弹层
+   * @returns {Promise<Boolean, ErrorModel>}
+   **/
+  recoverTaskFlow: function (args, options) {
+    base.ajaxOptions.url = base.server(options) + 'taskFlow/recoverTaskFlow';
+    base.ajaxOptions.type = 'POST';
+    return $.api(controllerName, 'taskFlowrecoverTaskFlow', JSON.stringify(args), $.extend(base, options));
+  },
+
+  /**
    * 发布同步任务
    *
    * @param {Object} args 请求参数
    * @param {string} args.projectId 组织id
    * @param {string} args.flowId 任务流id
+   * @param {object} args.fieldForIdentifyDuplicate 用于工作表识别重复的字段信息(object)
+   * @param {string} args.writeMode 工作表写入模式(See: 写入模式)
+   * @param {boolean} args.isCleanDestTableData 是否清空目标表数据
    * @param {Object} options 配置参数
    * @param {Boolean} options.silent 是否禁止错误弹层
    * @returns {Promise<Boolean, ErrorModel>}
@@ -163,6 +194,25 @@ var taskFlow = {
     base.ajaxOptions.url = base.server(options) + 'taskFlow/publishTask';
     base.ajaxOptions.type = 'POST';
     return $.api(controllerName, 'taskFlowpublishTask', JSON.stringify(args), $.extend(base, options));
+  },
+
+  /**
+   * 初始化一个空的任务流
+   *
+   * @param {Object} args 请求参数
+   * @param {string} args.projectId 组织id
+   * @param {string} args.owner 所属用户id
+   * @param {object} args.sourceNode 源表节点(object)
+   * @param {object} args.destNode 目的地节点(object)
+   * @param {object} args.workflowConfig 工作流配置(object)
+   * @param {Object} options 配置参数
+   * @param {Boolean} options.silent 是否禁止错误弹层
+   * @returns {Promise<Boolean, ErrorModel>}
+   **/
+  initEmpty: function (args, options) {
+    base.ajaxOptions.url = base.server(options) + 'taskFlow/initEmpty';
+    base.ajaxOptions.type = 'POST';
+    return $.api(controllerName, 'taskFlowinitEmpty', JSON.stringify(args), $.extend(base, options));
   },
 
   /**
@@ -189,6 +239,7 @@ var taskFlow = {
    * @param {string} args.owner 所属用户id
    * @param {object} args.sourceNode 源表节点(object)
    * @param {object} args.destNode 目的地节点(object)
+   * @param {object} args.workflowConfig 工作流配置(object)
    * @param {Object} options 配置参数
    * @param {Boolean} options.silent 是否禁止错误弹层
    * @returns {Promise<Boolean, ErrorModel>}
@@ -207,6 +258,7 @@ var taskFlow = {
    * @param {string} args.owner 所属用户id
    * @param {object} args.sourceNode 源表节点(object)
    * @param {object} args.destNode 目的地节点(object)
+   * @param {object} args.workflowConfig 工作流配置(object)
    * @param {Object} options 配置参数
    * @param {Boolean} options.silent 是否禁止错误弹层
    * @returns {Promise<Boolean, ErrorModel>}
@@ -231,6 +283,25 @@ var taskFlow = {
     base.ajaxOptions.url = base.server(options) + 'taskFlow/getTaskFlow';
     base.ajaxOptions.type = 'POST';
     return $.api(controllerName, 'taskFlowgetTaskFlow', JSON.stringify(args), $.extend(base, options));
+  },
+
+  /**
+   * 重命名节点
+   *
+   * @param {Object} args 请求参数
+   * @param {string} args.projectId 组织id
+   * @param {string} args.flowId 任务流id
+   * @param {string} args.nodeId 当前节点id
+   * @param {string} args.name 节点名称
+   * @param {string} args.description 描述
+   * @param {Object} options 配置参数
+   * @param {Boolean} options.silent 是否禁止错误弹层
+   * @returns {Promise<Boolean, ErrorModel>}
+   **/
+  renameNode: function (args, options) {
+    base.ajaxOptions.url = base.server(options) + 'taskFlow/renameNode';
+    base.ajaxOptions.type = 'POST';
+    return $.api(controllerName, 'taskFlowrenameNode', JSON.stringify(args), $.extend(base, options));
   },
 
   /**

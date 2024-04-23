@@ -1,9 +1,11 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import styled from 'styled-components';
 import { Select } from 'antd';
 import cx from 'classnames';
 import _ from 'lodash';
 import datasourceApi from '../../../../api/datasource';
+import SelectTables from '../../../components/SelectTables';
+import { DATABASE_TYPE } from '../../../constant';
 
 const Wrapper = styled.div`
   .selectItem {
@@ -13,6 +15,10 @@ const Wrapper = styled.div`
       min-height: 36px;
       padding: 2px 11px !important;
       border-radius: 3px !important;
+    }
+    .ant-select-selection-search {
+      margin-inline-start: 0px !important;
+      -webkit-margin-start: 0px !important;
     }
     &.disabled {
       .ant-select-selector {
@@ -26,8 +32,6 @@ export default function SelectDataObjForm(props) {
   const { source, tableList, dataObj, setDataObj } = props;
   const { hasSchema } = source;
   const [selectedTables, setSelectedTables] = useState([]);
-  const [selectOpen, setSelectOpen] = useState(false);
-  const tableRef = useRef(null);
 
   useEffect(() => {
     // 获取数据源下数据库列表
@@ -71,17 +75,7 @@ export default function SelectDataObjForm(props) {
             }
           });
       } else {
-        //获取指定数据库下数据表列表
-        datasourceApi
-          .getTables({ projectId: props.currentProjectId, datasourceId: source.id, dbName: db })
-          .then(res => {
-            if (res) {
-              const tableOptionList = res.map(item => {
-                return { label: item, value: item, disabled: getAddedTables().indexOf(item) !== -1 };
-              });
-              setDataObj({ db, tables: [], tableOptionList });
-            }
-          });
+        setDataObj({ db, tables: [] });
       }
     }
   };
@@ -92,21 +86,18 @@ export default function SelectDataObjForm(props) {
     if (!schema) {
       setDataObj({ schema: null, tables: [], tableOptionList: [] });
     } else {
-      datasourceApi
-        .getTables({ projectId: props.currentProjectId, datasourceId: source.id, schema, dbName: dataObj.db })
-        .then(res => {
-          if (res) {
-            const tableOptionList = res.map(item => {
-              return { label: item, value: item, disabled: getAddedTables().indexOf(item) !== -1 };
-            });
-            setDataObj({ schema, tables: [], tableOptionList });
-          }
-        });
+      setDataObj({ schema, tables: [] });
     }
   };
 
   const onChangeTable = data => {
-    if (data.length > selectedTables.length) {
+    const supportTypes = [DATABASE_TYPE.MYSQL, DATABASE_TYPE.ALIYUN_MYSQL, DATABASE_TYPE.TENCENT_MYSQL];
+    const sqlServerTypes = [DATABASE_TYPE.SQL_SERVER, DATABASE_TYPE.ALIYUN_SQLSERVER, DATABASE_TYPE.TENCENT_SQLSERVER];
+
+    if (_.includes(supportTypes, source.type) || data.length <= selectedTables.length) {
+      setSelectedTables(data);
+      setDataObj({ tables: data });
+    } else {
       const addTable = _.differenceBy(data, selectedTables, 'value')[0];
       const params = {
         projectId: props.currentProjectId,
@@ -115,27 +106,23 @@ export default function SelectDataObjForm(props) {
         schema: dataObj.schema,
         tableName: addTable.value,
       };
-      datasourceApi
-        .getTableFields(params)
-        .then(res => {
-          if (res) {
-            const arr = res.filter(item => item.isPk);
-            if (arr.length === 1) {
+      datasourceApi.getTableFields(params).then(res => {
+        if (res) {
+          const arr = res.filter(item => item.isPk);
+          switch (true) {
+            case arr.length === 1 || (_.includes(sqlServerTypes, source.type) && arr.length > 1):
               setSelectedTables([...selectedTables, addTable]);
               setDataObj({ tables: [...selectedTables, addTable] });
-            } else if (arr.length > 1) {
+              break;
+            case arr.length > 1:
               alert(_l('该表有多个主键，暂时不支持同步'), 2);
-              tableRef.current.blur();
-            } else {
+              break;
+            default:
               alert(_l('该表没有主键，无法同步'), 2);
-              tableRef.current.blur();
-            }
+              break;
           }
-        })
-        .fail(() => tableRef.current.blur());
-    } else {
-      setSelectedTables(data);
-      setDataObj({ tables: data });
+        }
+      });
     }
   };
 
@@ -154,7 +141,7 @@ export default function SelectDataObjForm(props) {
       />
       {hasSchema && (
         <React.Fragment>
-          <p className="mTop24 mBottom8">{_l('Schema')}</p>
+          <p className="mTop24 mBottom8">schema</p>
           <Select
             className={cx('selectItem', { disabled: !dataObj.db })}
             disabled={!dataObj.db}
@@ -169,22 +156,19 @@ export default function SelectDataObjForm(props) {
         </React.Fragment>
       )}
       <p className="mTop24 mBottom8">{_l('数据对象')}</p>
-      <Select
-        ref={tableRef}
+      <SelectTables
         className={cx('selectItem', { disabled: hasSchema ? !dataObj.db || !dataObj.schema : !dataObj.db })}
-        mode="multiple"
-        allowClear={true}
-        labelInValue={true}
-        placeholder={_l('请选择')}
-        notFoundContent={_l('暂无数据')}
-        open={selectOpen}
-        options={dataObj.tableOptionList}
-        disabled={hasSchema ? !dataObj.db || !dataObj.schema : !dataObj.db}
         value={dataObj.tables}
-        onFocus={() => setSelectOpen(true)}
-        onBlur={() => setSelectOpen(false)}
-        onChange={onChangeTable}
-        onClear={() => onChangeTable([])}
+        options={dataObj.tableOptionList}
+        onChangeOptions={tableOptionList => setDataObj({ tableOptionList })}
+        onChangeTable={onChangeTable}
+        projectId={props.currentProjectId}
+        datasourceId={source.id}
+        dbName={dataObj.db}
+        schema={dataObj.schema}
+        isMultiple={true}
+        disabled={hasSchema ? !dataObj.db || !dataObj.schema : !dataObj.db}
+        addedTableIds={getAddedTables()}
       />
     </Wrapper>
   );

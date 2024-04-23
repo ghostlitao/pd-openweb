@@ -50,6 +50,9 @@ export default class RecordItem extends React.PureComponent {
 
   constructor(props) {
     super(props);
+    this.state = {
+      coverError: false,
+    };
   }
 
   get cover() {
@@ -70,7 +73,7 @@ export default class RecordItem extends React.PureComponent {
     const { controls, showControls } = this.props;
     const allControls = [
       { controlId: 'ownerid', controlName: _l('拥有者'), type: 26 },
-      { controlId: 'caid', controlName: _l('创建者'), type: 26 },
+      { controlId: 'caid', controlName: _l('创建人'), type: 26 },
       { controlId: 'ctime', controlName: _l('创建时间'), type: 16 },
       { controlId: 'utime', controlName: _l('最近修改时间'), type: 16 },
     ].concat(controls);
@@ -104,8 +107,19 @@ export default class RecordItem extends React.PureComponent {
   }
 
   render() {
-    const { active, multiple, coverCid, control, showControls, data, selected, showCoverAndControls, onClick } =
-      this.props;
+    const {
+      titleIsBold,
+      active,
+      multiple,
+      coverCid,
+      control,
+      showControls,
+      data,
+      selected,
+      showCoverAndControls,
+      onClick,
+    } = this.props;
+    const { coverError } = this.state;
     const { cover } = this;
     const titleText = getTitleTextFromRelateControl(control, data);
     const size = showCoverAndControls && showControls.length ? SIZE.BIG : SIZE.NORMAL;
@@ -124,8 +138,7 @@ export default class RecordItem extends React.PureComponent {
     let coverUrl;
     if (cover) {
       coverUrl = File.isPicture(cover.ext)
-        ? cover.previewUrl.slice(0, cover.previewUrl.indexOf('?')) +
-          `?imageMogr2/auto-orient|imageView2/1/w/${coverSize}/h/${coverSize}/q/90`
+        ? cover.previewUrl.replace(/imageView2\/1\/w\/\d+\/h\/\d+/, `|imageView2/1/w/${coverSize}/h/${coverSize}`)
         : cover.previewUrl;
     }
     return (
@@ -139,10 +152,14 @@ export default class RecordItem extends React.PureComponent {
         onClick={onClick}
         style={{ ...style, minHeight: height }}
       >
-        {showCoverAndControls && coverCid && <Cover size={coverSize}>{coverUrl && <img src={coverUrl} />}</Cover>}
+        {showCoverAndControls && coverCid && (
+          <Cover size={coverSize}>
+            {coverUrl && !coverError && <img src={coverUrl} onError={() => this.setState({ coverError: true })} />}
+          </Cover>
+        )}
         <div className="flex overflowHidden">
           <div
-            className="title"
+            className={cx('title', { Bold: titleIsBold })}
             title={titleText}
             style={{
               color: '#333',

@@ -9,7 +9,6 @@ import styled from 'styled-components';
 import PrivateKeyDialog from './PrivateKeyDialog';
 import DetailedDialog from './DetailedDialog';
 import Projects from './Projects';
-import weixinCode from '../../images/weixin.png';
 import moment from 'moment';
 
 const Wrap = styled.div`
@@ -139,7 +138,7 @@ const Wrap = styled.div`
 `;
 
 
-const LicenseVersions = [_l('社区版'), _l('标准版'), _l('专业版'), _l('大型企业版'), _l('教学版')];
+const LicenseVersions = [_l('社区版'), _l('标准版'), _l('专业版'), _l('大型企业版'), _l('教学版'), _l('专业版试用')];
 
 const formatDate = date => {
   const year = moment(date).format('YYYY');
@@ -210,7 +209,7 @@ const PrivateKey = props => {
     });
   }
 
-  const moreQueryParams = ('&ltv=' + serverInfo.licenseTemplateVersion);
+  const moreQueryParams = ('&v=' + serverInfo.systemVersion + '&ltv=' + serverInfo.licenseTemplateVersion);
 
   const renderLicenseItem = (item, index) => {
     const { serverId, licenseCode, startDate, expirationDate, licenseVersion, visible, state, technicalSupport, projectNum, projectUserNum, externalUserNum, applicationNum, workflowNum, worktableNum, worktableRowNum } = item;
@@ -322,27 +321,6 @@ const PrivateKey = props => {
         <Icon icon="enterprise_network" />
         <span>{_l('付费升级')}</span>
       </div>
-      <div className="personalEntrypointInfo flexRow valignWrapper">
-        {_l('密钥是用于激活')}
-        <a className="pointer" href="https://www.mingdao.com/privateDeployment.htm" target="_blank">
-          {_l('私有部署版本')}
-        </a>
-        ，{_l('建议您添加私有版微信客服，获得各类支持与问题解答')}
-        <Trigger
-          action={['hover']}
-          popup={<img className="card z-depth-2" style={{ width: 300 }} src={weixinCode} />}
-          popupAlign={{
-            offset: [0, 7],
-            points: ['tc', 'bc'],
-            overflow: { adjustX: 1, adjustY: 2 },
-          }}
-        >
-          <div className="addWeiXin pointer">
-            <Icon icon="weixin" className="mRight2" />
-            {_l('添加微信')}
-          </div>
-        </Trigger>
-      </div>
       <div className="btnWrapper flexRow valignWrapper">
         <Button type="primary" onClick={() => setPrivateKeyDialogVisible(true)}>
           <Icon icon="add" />
@@ -364,7 +342,7 @@ const PrivateKey = props => {
           <div className="Bold Gray_75">{_l('工作表')}</div>
           <div className="Bold Gray_75">{_l('行记录/表')}</div>
           <div className="Bold Gray_75">{_l('工作流执行/月')}</div>
-          <div className="Bold Gray_75">{_l('关联组织')}</div>
+          <div className="Bold Gray_75">{_l('绑定组织')}</div>
         </div>
         {
           listLoading ? (

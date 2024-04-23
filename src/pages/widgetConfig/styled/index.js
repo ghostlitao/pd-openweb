@@ -8,6 +8,10 @@ export const SettingItem = styled.div`
     color: #333;
     line-height: 26px;
     border-radius: 3px;
+    &.inputError {
+      border-color: #ff0000;
+      box-shadow: none;
+    }
   }
   .checkboxWrap {
     display: flex;
@@ -36,21 +40,9 @@ export const SettingItem = styled.div`
     align-items: center;
     margin-bottom: 8px;
     font-weight: bold;
+    color: #515151;
     .icon-help {
       margin-left: 5px;
-    }
-  }
-  .labelWrap {
-    display: flex;
-    margin-top: 10px;
-    .icon-help {
-      margin-left: 4px;
-    }
-    .ming.Checkbox .Checkbox-box {
-      margin-right: 10px;
-      .icon-help {
-        margin-left: 4px;
-      }
     }
   }
   .Dropdown {
@@ -91,11 +83,6 @@ export const SettingItem = styled.div`
   }
   .subTitle {
     margin-bottom: 6px;
-  }
-  .labelBetween {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
   }
   .Calendar-column-header {
     flex: 1;
@@ -177,6 +164,11 @@ export const EditInfo = styled(InfoWrap)`
     border-color: #f44336;
     background: #fef2f4;
     color: #f44336;
+  }
+  &.disabled {
+    cursor: not-allowed;
+    background: #f7f7f7 !important;
+    height: 36px;
   }
 `;
 
@@ -388,22 +380,24 @@ export const OptionsWrap = styled.div`
   flex-direction: column;
   &.horizontal {
     flex-direction: row;
-    .option {
-      width: 140px;
-    }
   }
   flex-wrap: wrap;
   .option {
     display: flex;
-    align-items: center;
-    max-width: 100%;
-    margin-right: 16px;
-    margin-top: 8px;
+    .optionItem {
+      display: flex;
+      max-width: 100%;
+      margin-right: 16px;
+      margin-top: 8px;
+      ${props => (props.direction === '0' ? `width: ${props.width}px;` : 'width: fit-content;')}
+    }
     .ming.Radio {
       margin: 0;
+      line-height: 22px;
     }
     .ming.Checkbox {
       flex-shrink: 0;
+      line-height: 22px;
     }
   }
 `;
@@ -412,11 +406,11 @@ export const OptionWrap = styled.div`
   line-height: 24px;
   border-radius: 18px;
   color: #fff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  ${props =>
+    props.direction !== '0' ? 'white-space: normal' : 'white-space: nowrap;overflow: hidden;text-overflow: ellipsis;'};
+
   &.horizontal {
-    max-width: 140px;
+    ${props => (props.direction === '0' ? `max-width: ${props.width}px;` : '')}
   }
   &.light {
     color: #333;
@@ -427,13 +421,10 @@ export const OptionWrap = styled.div`
     padding: 0 4px;
   }
   background-color: ${props => props.color || '#2196f3'};
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 `;
 
 export const EditModelWrap = styled.div`
-  padding: 0px 0 20px 0;
+  ${props => (props.isTab ? 'padding: 8px 20px;' : '')}
   .desc {
     line-height: 13px;
     &.subList {
@@ -512,70 +503,101 @@ export const ControlTag = styled.div`
   }
 `;
 
+export const IntroMenu = styled.div`
+  width: 160px;
+  padding: 5px 0;
+  background: #fff;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.13), 0 2px 6px rgba(0, 0, 0, 0.1);
+  .menuItem {
+    display: flex;
+    align-items: center;
+    line-height: 36px;
+    padding: 0 16px;
+    cursor: pointer;
+    &:hover {
+      background: #2196f3;
+      color: #fff;
+      i {
+        color: #fff;
+      }
+    }
+    i {
+      margin-right: 10px;
+      color: #757575;
+      font-size: 16px;
+    }
+  }
+`;
+
 export const WidgetIntroWrap = styled.div`
-  /* padding: 12px 16px; */
-  border-radius: 4px;
+  margin: 11px 20px 0 20px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid #eaeaea;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  .title {
+    display: flex;
+    align-items: center;
+    .switchType {
+      padding: 6px;
+      background: #fff;
+      border-radius: 3px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      &.disabled {
+        cursor: default;
+      }
+      &:hover:not(.disabled) {
+        background: #f5f5f5;
+      }
+      span {
+        margin-left: 8px;
+        font-size: 15px;
+        font-weight: 600;
+      }
+    }
+  }
   .iconWrap {
     &:hover {
       color: #2196f3;
     }
   }
-  .Dropdown--input {
-    background-color: #fff;
-  }
-  .title {
+
+  .introOptions {
     display: flex;
     align-items: center;
-    .icon {
-      font-size: 18px;
-      color: #757575;
-    }
-    > span {
-      margin-left: 8px;
-      font-size: 15px;
-      font-weight: 700;
-    }
-  }
-  .introText {
-    margin-top: 8px;
-    color: #9e9e9e;
-    font-size: 12px;
-    .Font13 {
-      font-size: 12px !important;
-    }
-  }
-  .introSwitch {
-    position: absolute;
-    top: 0;
-    right: 0;
-  }
-  .transferToSheet {
-    position: absolute;
-    top: -6px;
-    right: 0;
-    height: 26px;
-    line-height: 26px;
-    padding: 0px 12px;
-    border: 1px solid #e0e0e0;
-    border-radius: 30px;
-    background-color: #fff;
-    cursor: pointer;
-    color: #757575;
-    &:hover {
-      color: #2196f3;
-    }
-  }
-  .introSwitchMenu {
-    width: 160px;
-    left: -138px !important;
-    .Item-content {
-      padding-left: 16px !important;
+    .optionIcon {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #fff;
+      border-radius: 3px;
+      margin-right: 10px;
+      cursor: pointer;
+      &:last-child {
+        margin-right: 0;
+      }
       i {
-        margin-right: 10px;
+        color: #9e9e9e;
+      }
+      &:hover {
+        background: #f5f5f5;
+      }
+      &.active {
+        background: #f5f5f5;
+        i {
+          color: #2196f3;
+        }
       }
     }
   }
 `;
+
+export const WidgetIntroWrap2 = styled.div``;
 
 export const DropdownContent = styled.div`
   min-height: 36px;
@@ -632,11 +654,12 @@ export const TitleContentWrap = styled.div`
   border-radius: 3px;
   display: flex;
   flex-direction: ${props => (props.displayRow ? 'row' : 'column')};
+  ${props => (props.readOnly ? 'opacity: 0.6;' : '')}
   .nameAndStatus {
     display: flex;
-    line-height: 18px;
+    ${props => (props.displayRow ? 'line-height: 18px;' : 'align-items: center;')}
     margin-right: ${props => (props.displayRow ? '1px' : '0px')};
-    margin-bottom: ${props => (props.displayRow ? '0px' : '8px')};
+    margin-bottom: ${props => (props.displayRow ? '0px' : '6px')};
     padding-top: ${props => (props.displayRow ? '7px' : '0px')};
     .required {
       position: absolute;
@@ -659,7 +682,15 @@ export const TitleContentWrap = styled.div`
     }
     .controlName {
       margin-left: 6px;
+      font-weight: 700;
       text-align: ${props => (props.textAlign === '1' ? 'left' : 'right')};
+      font-size: ${props => props.titleSize};
+      line-height: ${props => (parseInt(props.titleSize) > 18 ? props.titleSize : '18px')};
+      color: ${props => props.titleColor || '#757575'};
+      ${props => props.titleStyle || ''};
+      &.hideTitle {
+        color: #9e9e9e !important;
+      }
     }
     .isSplitLine {
       font-size: 15px;
@@ -670,10 +701,146 @@ export const TitleContentWrap = styled.div`
     }
   }
 
+  .tabHeaderTileWrap {
+    width: 100%;
+    box-size: border-box;
+    background: #f8f8f8;
+    border-radius: 8px 8px 0 0;
+    & > div {
+      &:first-child {
+        border-radius: 5px 0 0 0;
+      }
+    }
+  }
+
   .desc {
     color: #9e9e9e;
     margin-top: 8px;
     line-height: 13px;
+  }
+`;
+
+export const RelateDetail = styled.div`
+  display: flex;
+  align-items: center;
+  margin-top: 12px;
+  .text {
+    margin: 0 6px;
+  }
+  .name {
+    flex: 1;
+    &.needLink {
+      cursor: pointer;
+      color: #2196f3;
+    }
+  }
+`;
+
+export const AnimationWrap = styled.div`
+  display: flex;
+  padding: 2px;
+  background: #f8f8f8;
+  border-radius: 3px;
+  .animaItem {
+    height: 32px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-weight: bold;
+    color: #757575;
+    flex: 1;
+    margin-left: 2px;
+    &:first-child {
+      margin-left: 0;
+    }
+    &:hover {
+      color: #2196f3;
+      i {
+        color: #2196f3;
+      }
+    }
+    i {
+      color: #757575;
+    }
+    &.active {
+      background: #ffffff;
+      color: #2196f3;
+      i {
+        color: #2196f3;
+      }
+    }
+    &.disabled {
+      color: #bdbdbd !important;
+      cursor: not-allowed;
+    }
+  }
+`;
+
+export const SheetViewWrap = styled.div`
+  display: flex;
+  border-radius: 3px;
+  border: 1px solid #dddddd;
+  margin-top: 8px;
+  .Dropdown--input {
+    border: none !important;
+  }
+  .ming.Dropdown.disabled {
+    background-color: #fff !important;
+  }
+  .ming.Dropdown {
+    .ming.Menu {
+      width: 100%;
+    }
+  }
+  .viewCon {
+    padding: 0 16px;
+    background: #fafafa;
+    line-height: 34px;
+    text-align: center;
+    color: #757575;
+  }
+  .filterEditIcon {
+    width: 36px;
+    text-align: center;
+    cursor: pointer;
+    border-left: 1px solid #dddddd;
+    color: #989898;
+    &:hover {
+      background: #f5f5f5;
+      color: #2196f3;
+    }
+  }
+`;
+
+export const NumberRange = styled.div`
+  margin-top: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  span {
+    margin: 0 8px;
+    color: #9e9e9e;
+  }
+  input {
+    width: 100%;
+  }
+`;
+
+export const BothRelateInfo = styled.div`
+  border: 1px solid #e0e0e0;
+  border-radius: 3px;
+  padding: 10px 12px;
+  background-color: #fff;
+  .displayType {
+    margin-top: 8px;
+  }
+  span {
+    margin: 0 4px;
+  }
+  .sourceName {
+    color: #2196f3;
   }
 `;
 

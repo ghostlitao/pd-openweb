@@ -9,8 +9,9 @@ import { browserIsMobile } from 'src/util';
 import _ from 'lodash';
 import OtherInput from './OtherInput';
 import { getCheckAndOther } from '../../tools/utils';
+import autoSize from 'ming-ui/decorators/autoSize';
 
-export default class Widgets extends Component {
+class Widgets extends Component {
   static propTypes = {
     from: PropTypes.number,
     disabled: PropTypes.bool,
@@ -36,21 +37,25 @@ export default class Widgets extends Component {
   renderList = (item, noMaxWidth) => {
     const { enumDefault2, from, advancedSetting, value, disabled } = this.props;
     const { otherValue } = getCheckAndOther(value);
-    const { checktype } = advancedSetting || {};
+    const { checktype, direction } = advancedSetting || {};
 
     return (
       <span
         className={cx(
-          'ellipsis customRadioItem',
-          { White: enumDefault2 === 1 && !isLightColor(item.color) },
-          { 'pLeft12 pRight12': enumDefault2 === 1 },
+          'customRadioItem WordBreak',
+          { White: enumDefault2 === 1 && !isLightColor(item.color), ellipsis: !browserIsMobile() },
+          {
+            'pLeft12 pRight12': enumDefault2 === 1,
+            horizonArrangementItem: checktype == '2' && (direction === '0' || direction === '2') && browserIsMobile(),
+            showRadioTxtAll: browserIsMobile(),
+          },
         )}
         style={{
           background: enumDefault2 === 1 ? item.color : '',
           maxWidth: noMaxWidth
             ? 'auto'
-            : _.includes([FROM.H5_ADD, FROM.H5_EDIT], from) || (checktype === '1' && browserIsMobile())
-            ? 280
+            : _.includes([FROM.H5_ADD, FROM.H5_EDIT], from) || browserIsMobile()
+            ? 'unset'
             : 140,
         }}
       >
@@ -64,7 +69,7 @@ export default class Widgets extends Component {
     const checkIds = JSON.parse(value || '[]');
 
     if (checked) {
-      _.remove(checkIds, item => item === key);
+      _.remove(checkIds, item => (key === 'other' ? item.startsWith(key) : item === key));
     } else {
       checkIds.push(key);
     }
@@ -76,42 +81,64 @@ export default class Widgets extends Component {
     this.props.onChange(JSON.stringify(values));
   };
 
-  pcContent(checkIds) {
-    const { disabled, options, value } = this.props;
-    return options
-      .filter(item => !item.isDeleted && ((disabled && _.includes(checkIds, item.key)) || !disabled))
-      .map(item => {
-        if (item.key === 'other' && disabled && browserIsMobile()) {
-          return (
-            <div className="flexColumn">
-              <Checkbox
-                key={item.key}
-                disabled={disabled}
-                title={item.value}
-                text={this.renderList(item)}
-                value={item.key}
-                checked={_.includes(checkIds, item.key)}
-                onClick={this.onChange}
-              />
-            </div>
-          );
-        }
+  getItemWidth(displayOptions) {
+    const { width = '200', direction = '2' } = this.props.advancedSetting;
 
+    let itemWidth = 100;
+    const boxWidth = this.props.width;
+    if (boxWidth && direction === '0') {
+      const num = Math.floor(boxWidth / Number(width)) || 1;
+      itemWidth = 100 / (num > displayOptions.length ? displayOptions.length : num);
+    }
+    return `${itemWidth}%`;
+  }
+
+  pcContent(checkIds) {
+    const { disabled, options, value, advancedSetting } = this.props;
+    const { direction = '2', width = '200' } = advancedSetting || {};
+
+    const displayOptions = options.filter(
+      item => !item.isDeleted && ((disabled && _.includes(checkIds, item.key)) || !disabled),
+    );
+    const noMaxWidth = direction === '0' && !browserIsMobile() && width;
+    return displayOptions.map(item => {
+      if (item.key === 'other' && disabled && browserIsMobile()) {
         return (
-          <div className="flexColumn">
+          <div className="flexColumn" style={direction === '0' && !browserIsMobile() ? { width: `${width}px` } : {}}>
             <Checkbox
               key={item.key}
               disabled={disabled}
               title={item.value}
-              text={this.renderList(item)}
+              text={this.renderList(item, noMaxWidth)}
+              value={item.key}
+              checked={_.includes(checkIds, item.key)}
+              onClick={this.onChange}
+            />
+          </div>
+        );
+      }
+
+      return (
+        <div
+          className="flexColumn"
+          style={direction === '0' && !browserIsMobile() ? { width: this.getItemWidth(displayOptions) } : {}}
+        >
+          <div className="flexColumn" style={direction === '0' && !browserIsMobile() ? { width: `${width}px` } : {}}>
+            <Checkbox
+              className={cx('w100', { flexWidth: noMaxWidth })}
+              key={item.key}
+              disabled={disabled}
+              title={item.value}
+              text={this.renderList(item, noMaxWidth)}
               value={item.key}
               checked={_.includes(checkIds, item.key)}
               onClick={this.onChange}
             />
             {item.key === 'other' && <OtherInput {...this.props} isSelect={browserIsMobile() ? true : false} />}
           </div>
-        );
-      });
+        </div>
+      );
+    });
   }
 
   wxContent(checkIds) {
@@ -147,7 +174,16 @@ export default class Widgets extends Component {
   }
 
   dropdownContent(checkIds) {
-    const { disabled, hint, options, dropdownClassName, advancedSetting = {}, selectProps, onChange } = this.props;
+    const {
+      isSheet,
+      disabled,
+      hint,
+      options,
+      dropdownClassName,
+      advancedSetting = {},
+      selectProps,
+      onChange,
+    } = this.props;
     let noDelOptions = options.filter(item => !item.isDeleted);
     const { keywords } = this.state;
 
@@ -159,7 +195,11 @@ export default class Widgets extends Component {
 
     // 搜索
     if (keywords.length) {
-      noDelOptions = noDelOptions.filter(item => (item.value || '').toString().indexOf(keywords) > -1);
+      noDelOptions = noDelOptions.filter(
+        item =>
+          (item.value || '').search(new RegExp(keywords.trim().replace(/([,.+?:()*\[\]^$|{}\\-])/g, '\\$1'), 'i')) !==
+          -1,
+      );
     }
 
     return (
@@ -223,7 +263,7 @@ export default class Widgets extends Component {
               </Select.Option>
             )}
         </Select>
-        <OtherInput {...this.props} isSelect={true} />
+        {!isSheet && <OtherInput {...this.props} isSelect={true} />}
       </Fragment>
     );
   }
@@ -270,7 +310,7 @@ export default class Widgets extends Component {
   };
 
   render() {
-    const { disabled, options, advancedSetting, value } = this.props;
+    const { isSheet, disabled, options, advancedSetting, value, controlName } = this.props;
     const { checkIds, otherValue } = getCheckAndOther(value);
     const { checktype, direction, allowadd } = advancedSetting || {};
     const isMobile = checktype === '1' && browserIsMobile();
@@ -291,20 +331,28 @@ export default class Widgets extends Component {
           callback={this.onSave}
           renderText={this.renderList}
           otherValue={otherValue}
+          controlName={controlName}
         >
           <div
             className={cx('customFormControlBox', { formBoxNoBorder: !isMobile }, { controlDisabled: disabled })}
             style={{ height: 'auto' }}
           >
-            <div className={cx('ming CheckboxGroup', { groupColumn: direction === '1' || browserIsMobile() })}>
+            <div
+              className={cx('ming CheckboxGroup', {
+                groupColumn: direction === '1' || (checktype === '1' && isMobile),
+                groupRow: direction === '2' && !isMobile,
+              })}
+            >
               {isMobile ? this.wxContent(checkIds) : this.pcContent(checkIds)}
             </div>
           </div>
         </Comp>
-        {isMobile && JSON.parse(value || '[]').some(it => _.includes(it, 'other')) && !disabled && (
+        {isMobile && JSON.parse(value || '[]').some(it => _.includes(it, 'other')) && !disabled && !isSheet && (
           <OtherInput {...this.props} className="mTop5" isSelect={true} />
         )}
       </Fragment>
     );
   }
 }
+
+export default autoSize(Widgets, { onlyWidth: true });

@@ -1,15 +1,15 @@
 import React from 'react';
 import ReactDom from 'react-dom';
 import Constant from './constant';
-import { createLinksForMessage } from 'src/components/common/function';
+import { createLinksForMessage } from 'src/util';
 import RelationControl from 'src/components/relationControl/relationControl';
 import 'src/components/createTask/createTask';
-import 'src/components/createCalendar/createCalendar';
-import s from 'src/components/common/mstc/s/s';
+import createCalendar from 'src/components/createCalendar/createCalendar';
+import createFeed from 'src/pages/feed/components/createFeed';
 import moment from 'moment';
 
 const _initPost = function(acceptor, options, callback) {
-  s({
+  createFeed({
     defaultPostType: options.defaultType,
     showType: options.showType,
     createShare: options.showSuccessTip || false,
@@ -129,7 +129,7 @@ export const newSchedule = (acceptor, options = {}) => {
         },
       ];
     }
-    $.CreateCalendar({
+    createCalendar({
       MemberArray: members,
       createShare: options.showSuccessTip,
       Message: options.description || '',

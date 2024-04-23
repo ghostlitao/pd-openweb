@@ -5,8 +5,8 @@ import Icon from 'ming-ui/components/Icon';
 import './index.less';
 
 const STATUS2TEXT = {
-  active: _l('运行中'),
-  close: _l('已关闭'),
+  active: _l('运行中%03001'),
+  close: _l('已关闭%03002'),
 };
 
 export default class Switch extends Component {
@@ -69,7 +69,7 @@ export default class Switch extends Component {
       <div className={cx('workflowStatusWrap', className)}>
         {isNew ? (
           <div className="publishFlowWrap" onClick={() => !disabled && this.handleClick('publish')}>
-            <div className="publishFlow">{pending ? _l('发布中...') : _l('发布流程')}</div>
+            <div className="publishFlow">{pending ? _l('发布中...') : _l('发布流程%03088')}</div>
           </div>
         ) : (
           <Fragment>

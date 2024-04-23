@@ -5,6 +5,7 @@ import addRecord from 'worksheet/common/newRecord/addRecord';
 import { openRecordInfo } from 'worksheet/common/recordInfo';
 import _ from 'lodash';
 import mdNotification from 'ming-ui/functions/notify';
+import { emitter } from 'worksheet/util';
 
 const getWorksheetInfo = worksheetId => {
   return new Promise((resolve, reject) => {
@@ -27,6 +28,8 @@ const getAppSimpleInfo = workSheetId => {
 };
 
 export default () => {
+  if (!window.IM) return;
+
   md.global.Config.pushUniqueId = (+new Date()).toString();
 
   IM.socket.on('workflow_push', result => {
@@ -57,14 +60,23 @@ export default () => {
         getWorksheetInfo(worksheetId).then(appId => {
           if (appId) {
             if (openMode === 2) {
-              window.open(`/app/${appId}/${worksheetId}/${viewId || 'undefined'}/row/${rowId}`);
+              window.open(`${window.subPath || ''}/app/${appId}/${worksheetId}/${viewId || 'undefined'}/row/${rowId}`);
             } else {
-              openRecordInfo({
-                appId: appId,
-                worksheetId: worksheetId,
-                recordId: rowId,
-                viewId,
-              });
+              // 已经打开记录的直接刷新
+              if ($(`.recordInfoCon[data-record-id="${rowId}"][data-view-id="${viewId}"]`).length) {
+                emitter.emit('RELOAD_RECORD_INFO', {
+                  worksheetId,
+                  recordId: rowId,
+                  closeWhenNotViewData: true,
+                });
+              } else {
+                openRecordInfo({
+                  appId: appId,
+                  worksheetId: worksheetId,
+                  recordId: rowId,
+                  viewId,
+                });
+              }
             }
           }
         });
@@ -73,7 +85,7 @@ export default () => {
       if (_.includes([PUSH_TYPE.VIEW, PUSH_TYPE.PAGE], pushType)) {
         getAppSimpleInfo(worksheetId).then(({ appId, appSectionId }) => {
           if (appId && appSectionId) {
-            const url = `/app/${appId}/${appSectionId}/${worksheetId}/${viewId}`;
+            const url = `${window.subPath || ''}/app/${appId}/${appSectionId}/${worksheetId}/${viewId}`;
 
             if (openMode === 1) {
               location.href = url;

@@ -1,12 +1,13 @@
 import React, { Fragment, Component, forwardRef, useMemo, useEffect } from 'react';
 import AppPermissions from '../components/AppPermissions';
-import RecordInfo from './RecordInfo';
+import RecordInfo from 'mobile/components/RecordInfo/RecordInfo';
 import styled from 'styled-components';
 import cx from 'classnames';
 import { Modal } from 'antd-mobile';
-import TouchHandler from 'mobile/components/TouchHandler';
 import { Provider } from 'react-redux';
 import { configureStore } from 'src/redux/configureStore';
+import functionWrap from 'ming-ui/components/FunctionWrap';
+import { RECORD_INFO_FROM } from 'worksheet/constants/enum';
 
 const ModalWrap = styled(Modal)`
   height: 95%;
@@ -23,7 +24,21 @@ const ModalWrap = styled(Modal)`
   }
 `;
 
-export default AppPermissions(RecordInfo);
+const RecordInfoPage = props => {
+  const { params } = props.match;
+  const { appId, worksheetId, viewId, rowId } = params;
+  return (
+    <RecordInfo
+      appId={appId}
+      worksheetId={worksheetId}
+      viewId={viewId}
+      recordId={rowId}
+      from={RECORD_INFO_FROM.WORKSHEET_ROW_LAND}
+    />
+  );
+};
+
+export default AppPermissions(RecordInfoPage);
 
 export const RecordInfoModal = forwardRef((props, ref) => {
   const {
@@ -36,6 +51,10 @@ export const RecordInfoModal = forwardRef((props, ref) => {
     from,
     getDraftData = () => {},
     notModal = false,
+    editable,
+    hideOtherOperate,
+    allowEmptySubmit,
+    updateSuccess,
   } = props;
   const { className, visible, onClose } = props;
   const store = useMemo(configureStore, []);
@@ -45,14 +64,20 @@ export const RecordInfoModal = forwardRef((props, ref) => {
   const Content = (
     <Provider store={store}>
       <RecordInfo
+        {...props}
         isModal={true}
-        ids={{ appId, worksheetId, viewId, rowId }}
-        match={{ params: {} }}
-        sheetSwitchPermit={sheetSwitchPermit}
+        from={from}
+        appId={appId}
+        worksheetId={worksheetId}
+        viewId={viewId}
+        recordId={rowId}
         onClose={onClose}
         getDataType={getDataType}
         getDraftData={getDraftData}
-        from={from}
+        editable={editable}
+        hideOtherOperate={hideOtherOperate}
+        allowEmptySubmit={allowEmptySubmit}
+        updateSuccess={updateSuccess}
       />
     </Provider>
   );
@@ -69,11 +94,9 @@ export const RecordInfoModal = forwardRef((props, ref) => {
       onClose={onClose}
       visible={visible}
     >
-      {rowId && (
-        <TouchHandler onClose={onClose} touchClassName=".RecordInfoModal">
-          {Content}
-        </TouchHandler>
-      )}
+      {rowId && Content}
     </ModalWrap>
   );
 });
+
+export const openMobileRecordInfo = props => functionWrap(RecordInfoModal, { ...props });

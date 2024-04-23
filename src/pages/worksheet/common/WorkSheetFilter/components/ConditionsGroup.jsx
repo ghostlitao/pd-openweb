@@ -71,6 +71,7 @@ const Con = styled.div`
     .conditionItemContent {
       position: relative;
       .conditionValue {
+        flex: 1;
         input {
           font-size: 13px;
         }
@@ -174,6 +175,7 @@ export default function ConditionsGroup(props) {
     filterAddConditionControls = () => {},
     filterError = [],
     isRules,
+    showCustom,
   } = props;
   return (
     <Con className={cx({ isSingleFilter })}>
@@ -194,7 +196,7 @@ export default function ConditionsGroup(props) {
                   isAppendToBody
                   menuStyle={{ width: 'auto' }}
                   data={[
-                    { text: _l('且'), value: FILTER_RELATION_TYPE.AND },
+                    { text: _l('且%25000'), value: FILTER_RELATION_TYPE.AND },
                     { text: _l('或'), value: FILTER_RELATION_TYPE.OR },
                   ]}
                   onChange={value => {
@@ -206,7 +208,7 @@ export default function ConditionsGroup(props) {
                 <span className="text">
                   {
                     {
-                      [FILTER_RELATION_TYPE.AND]: _l('且'),
+                      [FILTER_RELATION_TYPE.AND]: _l('且%25000'),
                       [FILTER_RELATION_TYPE.OR]: _l('或'),
                     }[conditionSpliceType]
                   }
@@ -219,6 +221,7 @@ export default function ConditionsGroup(props) {
               projectId={projectId}
               appId={appId}
               key={condition.keyStr}
+              showCustom={showCustom}
               index={i}
               condition={condition}
               conditionGroupType={conditionGroupType}

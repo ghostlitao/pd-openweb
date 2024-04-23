@@ -1,8 +1,8 @@
-import { ajax, login, browserIsMobile, getRequest, checkLogin } from 'src/util/sso';
+import { ajax, login, browserIsMobile, getRequest, checkLogin, formatOtherParam, addOtherParam } from 'src/util/sso';
 import { setPssId } from 'src/util/pssId';
-import _ from 'lodash';
+import preall from 'src/common/preall';
 
-const { code, state, url, p } = getRequest();
+const { code, state, url, p, ...otherParam } = getRequest();
 const isMobile = browserIsMobile();
 
 if (code) {
@@ -23,6 +23,7 @@ if (code) {
       succees: result => {
         const { accountResult, sessionId } = result.data;
         if (accountResult === 1) {
+          preall({ type: 'function' });
           setPssId(sessionId);
           if (url) {
             location.href = decodeURIComponent(url);
@@ -35,9 +36,11 @@ if (code) {
     });
   }
 } else {
+  const otherParamString = formatOtherParam(otherParam);
+  const newUrl = addOtherParam(url, otherParamString);
   if (checkLogin()) {
-    if (url) {
-      location.href = url;
+    if (newUrl) {
+      location.href = newUrl;
     } else {
       location.href = isMobile ? `/mobile` : `/app`;
     }
@@ -51,11 +54,12 @@ if (code) {
       },
       async: true,
       succees: result => {
-        const { agentId, state } = result.data;
+        const { agentId, state, callBackUrl } = result.data;
+        const defaultCallBackUrl = 'https://open.feishu.cn/open-apis';
         const redirect_uri = encodeURIComponent(
-          `${location.origin}/auth/feishu?url=${url ? encodeURIComponent(url) : ''}`,
+          `${location.origin}/auth/feishu?url=${newUrl ? encodeURIComponent(newUrl) : ''}`,
         );
-        location.href = `https://open.feishu.cn/open-apis/authen/v1/index?redirect_uri=${redirect_uri}&app_id=${agentId}&state=${state}`;
+        location.href = `${callBackUrl || defaultCallBackUrl}/authen/v1/index?redirect_uri=${redirect_uri}&app_id=${agentId}&state=${state}`;
       },
       error: login,
     });

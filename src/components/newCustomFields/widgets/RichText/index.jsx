@@ -3,7 +3,6 @@ import React, { Component } from 'react';
 import cx from 'classnames';
 import { RichText } from 'ming-ui';
 import { browserIsMobile } from 'src/util';
-import autoSize from 'ming-ui/decorators/autoSize';
 import _ from 'lodash';
 
 export default class Widgets extends Component {
@@ -35,11 +34,14 @@ export default class Widgets extends Component {
 
   render() {
     const { disabled, value, type, flag, richTextControlCount = 0, widgetStyle = {} } = this.props;
+    const { projectId, appId, worksheetId } = this.props;
     const { titlelayout_pc = '1', titlelayout_app = '1' } = widgetStyle;
     const displayRow = browserIsMobile() ? titlelayout_app === '2' : titlelayout_pc === '2';
-
     return (
       <RichText
+        projectId={projectId}
+        appId={appId}
+        worksheetId={worksheetId}
         clickInit={richTextControlCount >= 3}
         maxWidth={this.state.width}
         id={flag}

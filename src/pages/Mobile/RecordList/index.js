@@ -20,6 +20,7 @@ import cx from 'classnames';
 import FixedPage from 'mobile/App/FixedPage.jsx';
 import { openAddRecord } from 'mobile/Record/addRecord';
 import alreadyDelete from './State/assets/alreadyDelete.png';
+import { AddRecordBtn, BatchOperationBtn } from 'mobile/components/RecordActions';
 import _ from 'lodash';
 
 @withRouter
@@ -55,9 +56,10 @@ class RecordList extends Component {
   componentWillReceiveProps(nextProps) {
     const { params: newParams } = nextProps.match;
     const { params } = this.props.match;
+    const viewType = (_.find(nextProps.worksheetInfo.views, v => v.viewId === newParams.viewId) || {}).viewType;
     if (newParams.viewId !== params.viewId) {
       this.props.updateBase({ viewId: newParams.viewId });
-      this.props.resetSheetView();
+      _.includes([0, 6], viewType) && this.props.resetSheetView();
     }
     if (newParams.worksheetId !== params.worksheetId) {
       this.props.emptySheetRows();
@@ -81,9 +83,9 @@ class RecordList extends Component {
   handleChangeView = view => {
     const { match, now } = this.props;
     const { params } = match;
+    this.props.updateBase({ viewId: view.viewId });
     if (now) {
-      this.props.updateBase({ viewId: view.viewId });
-      this.props.resetSheetView();
+      _.includes([0, 6], view.viewType) && this.props.resetSheetView();
     } else {
       window.mobileNavigateTo(
         `/mobile/recordList/${params.appId}/${params.groupId}/${params.worksheetId}/${view.viewId}`,
@@ -106,10 +108,11 @@ class RecordList extends Component {
       appColor,
       history,
       appDetail,
+      debugRoles,
     } = this.props;
     const { viewId } = base;
     const { detail } = appDetail;
-    const { appNaviStyle } = detail;
+    const { appNaviStyle, debugRole } = detail;
 
     const { name, advancedSetting = {} } = worksheetInfo;
     let views = worksheetInfo.views.filter(
@@ -136,7 +139,7 @@ class RecordList extends Component {
       calendarcids[0].begin &&
       calendarInfo.length > 0 &&
       (!calendarInfo[0].startData || !calendarInfo[0].startData.controlId);
-    const isHaveSelectControl = _.includes([1, 2, 4, 5], view.viewType)
+    const isHaveSelectControl = _.includes([1, 2, 4, 5, 7], view.viewType)
       ? viewControl === 'create' ||
         (viewControl && _.find(worksheetControls, item => item.controlId === viewControl)) ||
         !_.isEmpty(viewControls) ||
@@ -154,6 +157,20 @@ class RecordList extends Component {
         </div>
       );
     }
+    const hasDebugRoles = (debugRole || {}).canDebug && !_.isEmpty(debugRoles);
+    const bottom20 = hasDebugRoles ? '60px' : '20px';
+    const bottom70 = hasDebugRoles ? '110px' : '70px';
+    const bottom78 = hasDebugRoles ? '118px' : '78px';
+    const bottom130 = hasDebugRoles ? '170px' : '130px';
+
+    const styles =
+      view.viewType === 6 && view.childType === 1
+        ? {
+            paddingBottom: 'calc(constant(safe-area-inset-bottom) - 20px)',
+            paddingBottom: 'calc(env(safe-area-inset-bottom) - 20px)',
+          }
+        : {};
+
     return (
       <Fragment>
         <div
@@ -178,89 +195,106 @@ class RecordList extends Component {
               ></Tabs>
             </div>
           )}
-          <View view={view} key={worksheetInfo.worksheetId} routerParams={params} />
-          {!batchOptVisible && (!md.global.Account.isPortal || (md.global.Account.isPortal && appNaviStyle !== 2)) && (
-            <Back
-              style={
-                !isHideTabBar && location.href.includes('mobile/app')
-                  ? [1, 3, 4].includes(view.viewType) ||
-                    (appNaviStyle === 2 && !_.isEmpty(view.navGroup) && view.navGroup.length)
-                    ? { bottom: '78px' }
-                    : { bottom: '130px' }
-                  : [1, 3, 4].includes(view.viewType) ||
-                    (!_.isEmpty(view.navGroup) && view.navGroup.length) ||
-                    !(canDelete || showCusTomBtn)
-                  ? { bottom: '20px' }
-                  : { bottom: '78px' }
-              }
-              onClick={() => {
-                if (!isHideTabBar && location.href.includes('mobile/app')) {
-                  let currentGroupInfo =
-                    localStorage.getItem('currentGroupInfo') && JSON.parse(localStorage.getItem('currentGroupInfo'));
-                  if (_.isEmpty(currentGroupInfo)) {
-                    window.mobileNavigateTo('/mobile/appHome');
-                  } else {
-                    window.mobileNavigateTo(
-                      `/mobile/groupAppList/${currentGroupInfo.id}/${currentGroupInfo.groupType}`,
-                    );
-                  }
-                  localStorage.removeItem('currentNavWorksheetId');
-                } else {
-                  window.mobileNavigateTo(`/mobile/app/${params.appId}`);
+          <View
+            view={view}
+            key={worksheetInfo.worksheetId}
+            routerParams={params}
+            appNaviStyle={appNaviStyle}
+            hasDebugRoles={hasDebugRoles}
+          />
+          {!batchOptVisible &&
+            !(appNaviStyle === 2 && location.href.includes('mobile/app') && md.global.Account.isPortal) && (
+              <Back
+                icon={appNaviStyle === 2 && location.href.includes('mobile/app') ? 'home' : 'back'}
+                style={
+                  !isHideTabBar && appNaviStyle === 2 && location.href.includes('mobile/app')
+                    ? {
+                        bottom:
+                          view.childType === 1 && view.viewType === 6
+                            ? 140
+                            : _.includes([1, 3, 4, 6, 21, 8], view.viewType) ||
+                              (!_.isEmpty(view.navGroup) && view.navGroup.length)
+                            ? bottom70
+                            : bottom130,
+                        ...styles,
+                      }
+                    : {
+                        bottom:
+                          view.childType === 1 && view.viewType === 6
+                            ? 100
+                            : [1, 3, 4, 6, 21, 8].includes(view.viewType) ||
+                              (!_.isEmpty(view.navGroup) && view.navGroup.length && _.includes([0], view.viewType)) ||
+                              !(canDelete || showCusTomBtn)
+                            ? bottom20
+                            : bottom78,
+                        ...styles,
+                      }
                 }
-              }}
-            />
-          )}
+                onClick={() => {
+                  if (!isHideTabBar && location.href.includes('mobile/app')) {
+                    let currentGroupInfo =
+                      localStorage.getItem('currentGroupInfo') && JSON.parse(localStorage.getItem('currentGroupInfo'));
+                    if (_.isEmpty(currentGroupInfo)) {
+                      window.mobileNavigateTo('/mobile/dashboard');
+                    } else {
+                      window.mobileNavigateTo(
+                        `/mobile/groupAppList/${currentGroupInfo.id}/${currentGroupInfo.groupType}`,
+                      );
+                    }
+                    localStorage.removeItem('currentNavWorksheetId');
+                  } else {
+                    window.mobileNavigateTo(`/mobile/app/${params.appId}`);
+                  }
+                }}
+              />
+            )}
           {(canDelete || showCusTomBtn) && view.viewType === 0 && !batchOptVisible && _.isEmpty(view.navGroup) && (
-            <div
-              className={cx('batchOperation', { bottom70: appNaviStyle === 2 && location.href.includes('mobile/app') })}
+            <BatchOperationBtn
+              style={{
+                bottom: appNaviStyle === 2 && location.href.includes('mobile/app') ? bottom70 : bottom20,
+              }}
               onClick={() => this.props.changeBatchOptVisible(true)}
-            >
-              <Icon icon={'task-complete'} className="Font24" />
-            </div>
+            />
           )}
           {isOpenPermit(permitList.createButtonSwitch, sheetSwitchPermit) &&
           worksheetInfo.allowAdd &&
           isHaveSelectControl &&
-          !batchOptVisible ? (
-            <div className="addRecordItemWrapper">
-              <Button
-                style={{ backgroundColor: appColor }}
-                className={cx('addRecordBtn flex valignWrapper', {
-                  Right: ([2, 5].includes(view.viewType) && currentSheetRows.length) || [2].includes(view.viewType),
-                  mRight16: ([2, 5].includes(view.viewType) && currentSheetRows.length) || [2].includes(view.viewType),
-                })}
-                onClick={() => {
-                  openAddRecord({
-                    className: 'full',
-                    worksheetInfo,
-                    appId: params.appId,
-                    worksheetId: worksheetInfo.worksheetId,
-                    viewId: view.viewId,
-                    addType: 2,
-                    entityName: worksheetInfo.entityName,
-                    needCache: true,
-                    openRecord: this.sheetViewOpenRecord,
-                    onAdd: data => {
-                      if (_.isEmpty(data)) {
-                        return;
-                      }
+          !batchOptVisible &&
+          ((view.viewType === 6 && view.childType !== 1) || view.viewType !== 6) ? (
+            <AddRecordBtn
+              entityName={worksheetInfo.entityName}
+              backgroundColor={appColor}
+              warpStyle={{ bottom: !isHideTabBar && appNaviStyle === 2 ? bottom70 : bottom20 }}
+              btnClassName={cx({
+                Right: ([2, 5, 7].includes(view.viewType) && currentSheetRows.length) || [2].includes(view.viewType),
+                mRight16: ([2, 5, 7].includes(view.viewType) && currentSheetRows.length) || [2].includes(view.viewType),
+              })}
+              onClick={() => {
+                openAddRecord({
+                  className: 'full',
+                  worksheetInfo,
+                  appId: params.appId,
+                  worksheetId: worksheetInfo.worksheetId,
+                  viewId: view.viewId,
+                  addType: 2,
+                  entityName: worksheetInfo.entityName,
+                  openRecord: this.sheetViewOpenRecord,
+                  onAdd: data => {
+                    if (_.isEmpty(data)) {
+                      return;
+                    }
 
-                      if (view.viewType) {
-                        this.props.addNewRecord(data, view);
-                      } else {
-                        this.props.unshiftSheetRow(data);
-                      }
-                    },
-                    showDraftsEntry: true,
-                    sheetSwitchPermit,
-                  });
-                }}
-              >
-                <Icon icon="add" className="Font22 mRight5" />
-                {worksheetInfo.entityName}
-              </Button>
-            </div>
+                    if (view.viewType) {
+                      this.props.addNewRecord(data, view);
+                    } else {
+                      this.props.unshiftSheetRow(data);
+                    }
+                  },
+                  showDraftsEntry: true,
+                  sheetSwitchPermit,
+                });
+              }}
+            />
           ) : null}
         </div>
         <RecordInfoModal
@@ -327,6 +361,7 @@ export default connect(
       'batchOptVisible',
       'isCharge',
       'appDetail',
+      'debugRoles',
     ),
     calendarview: state.sheet.calendarview,
   }),

@@ -7,6 +7,9 @@ import ConfigForm from '../../../components/configForm';
 import ConfigGuide from '../../../components/configGuide';
 import UsageDetail from '../UsageDetail';
 import dataSourceApi from '../../../../api/datasource';
+import { getCurrentProject } from 'src/util';
+import { navigateTo } from 'src/router/navigateTo';
+import { getExtraParams } from '../../../utils';
 
 const AddOrEditSourceWrapper = styled.div`
   position: fixed;
@@ -107,19 +110,21 @@ const ContentWrapper = styled.div`
 
 let postParams;
 export default function AddOrEditSource(props) {
-  const { source, onRefresh, isEdit, editType, sourceRecord, onClose } = props;
-  const [currentTab, setCurrentTab] = useState(editType);
-  const [dataSource, setDataSource] = useState(!isEdit ? source : sourceRecord.dsTypeInfo);
+  const { source, onRefresh, isCreateDialog, onClose } = props;
+  const { sourceId, type } = (props.match || {}).params || {};
+  const currentProject = getCurrentProject(localStorage.getItem('currentProjectId')) || {};
+  const [currentTab, setCurrentTab] = useState(type);
+  const [dataSource, setDataSource] = useState(isCreateDialog ? source : {});
   const [saveDisabled, setSaveDisabled] = useState(true);
   const [dialogVisible, setDialogVisible] = useState(false);
 
   useEffect(() => {
-    if (isEdit) {
+    if (!isCreateDialog) {
       // 获取数据源详情信息
       dataSourceApi
         .getDatasource({
-          projectId: props.currentProjectId,
-          datasourceId: sourceRecord.id,
+          projectId: currentProject.projectId,
+          datasourceId: sourceId,
         })
         .then(res => {
           if (res) {
@@ -127,12 +132,12 @@ export default function AddOrEditSource(props) {
               ...res,
               address: res.hosts[0].split(':')[0],
               post: res.hosts[0].split(':')[1],
-              type: sourceRecord.dsTypeInfo,
+              type: res.dsTypeInfo,
               roleType: JSON.stringify(
                 res.roleType ? (res.roleType === 'ALL' ? [ROLE_TYPE.SOURCE, ROLE_TYPE.DEST] : [res.roleType]) : [],
               ),
             };
-            setDataSource(Object.assign({}, dataSource, { formData: detail }));
+            setDataSource({ formData: detail, ...res.dsTypeInfo });
           }
         });
     }
@@ -143,24 +148,22 @@ export default function AddOrEditSource(props) {
     const roleTypeArr = JSON.parse(formData.roleType);
 
     postParams = {
-      projectId: props.currentProjectId,
+      projectId: currentProject.projectId,
       name: formData.name,
       hosts: [`${formData.address}:${formData.post}`],
       user: formData.user,
       password: formData.password,
       initDb: formData.initDb,
       connectOptions: formData.connectOptions,
+      cdcParams: formData.cdcParams,
       type: dataSource.type,
       fromType: dataSource.fromType,
       roleType: roleTypeArr.length > 1 ? 'ALL' : roleTypeArr[0],
-      extraParams:
-        dataSource.type === DATABASE_TYPE.ORACLE
-          ? { [JSON.parse(formData.serviceType)[0] === 'ServiceName' ? 'serviceName' : 'SID']: formData.serviceName }
-          : dataSource.type === DATABASE_TYPE.MONGO_DB
-          ? { isSrvProtocol: !!parseInt(formData.isSrvProtocol) }
-          : {},
+      extraParams: getExtraParams(dataSource.type, formData),
+      enableSsh: formData.enableSsh,
+      sshConfigId: formData.sshConfigId,
     };
-    if (isEdit) {
+    if (!isCreateDialog) {
       setDialogVisible(true);
     } else {
       await dataSourceApi.addDatasource(postParams).then(res => res && onClose());
@@ -172,19 +175,21 @@ export default function AddOrEditSource(props) {
   return (
     <AddOrEditSourceWrapper>
       <HeaderWrapper>
-        <div className="headerLeft" onClick={onClose}>
+        <div className="headerLeft" onClick={isCreateDialog ? onClose : () => navigateTo('/integration/source')}>
           <Icon icon="arrow_back" className="Gray_75 Font22 bold" />
-          <span className="Gray Font16 bold pLeft10">{isEdit ? _l('编辑数据源') : _l('创建数据源')}</span>
+          <span className="Gray Font16 bold pLeft10">{isCreateDialog ? _l('创建数据源') : _l('编辑数据源')}</span>
         </div>
 
-        {isEdit && (
+        {!isCreateDialog && (
           <div className="headerMiddle">
             <ul>
               {SOURCE_DETAIL_TAB_LIST.map((item, index) => {
                 return (
                   <li
                     key={index}
-                    className={cx({ isCur: item.key === currentTab })}
+                    className={cx({
+                      isCur: item.key === currentTab || (!currentTab && item.key === DETAIL_TYPE.SETTING),
+                    })}
                     onClick={() => {
                       if (currentTab === item.key) {
                         return;
@@ -231,11 +236,10 @@ export default function AddOrEditSource(props) {
               }
               okText={_l('修改')}
               onOk={async () => {
-                const params = { ...postParams, id: sourceRecord.id };
-                await dataSourceApi.updateDatasource(params).then(res => res && onClose());
+                const params = { ...postParams, id: sourceId };
+                await dataSourceApi.updateDatasource(params).then(res => res && navigateTo('/integration/source'));
                 alert(_l('数据源修改成功'));
                 setDialogVisible(false);
-                onRefresh();
               }}
               onCancel={() => setDialogVisible(false)}
             />
@@ -244,17 +248,18 @@ export default function AddOrEditSource(props) {
       </HeaderWrapper>
 
       {currentTab === DETAIL_TYPE.USE_DETAIL ? (
-        <UsageDetail projectId={props.currentProjectId} sourceId={props.sourceRecord.id} />
+        <UsageDetail projectId={currentProject.projectId} sourceId={sourceId} />
       ) : (
         <ContentWrapper>
           <div className="configForm">
             <ConfigForm
               {...props}
+              currentProjectId={currentProject.projectId}
               connectorConfigData={{ source: dataSource }}
               setConnectorConfigData={result => setDataSource(result.source)}
               roleType="source"
               isCreateConnector={false}
-              isEditSource={isEdit}
+              isEditSource={!isCreateDialog}
               setSaveDisabled={setSaveDisabled}
             />
           </div>

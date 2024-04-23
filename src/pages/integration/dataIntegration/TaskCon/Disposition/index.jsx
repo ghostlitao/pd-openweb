@@ -9,6 +9,7 @@ import _ from 'lodash';
 import TaskFlow from 'src/pages/integration/api/taskFlow.js';
 import Account from 'src/pages/integration/api/account';
 import cx from 'classnames';
+import { DATABASE_TYPE } from 'src/pages/integration/dataIntegration/constant.js';
 // const TRIGGER_TYPE = {
 //   ALLOW: 0,
 //   ONLY_WORKFLOW: 1,
@@ -162,21 +163,28 @@ const WrapCon = styled.div`
 `;
 //配置
 function Disposition(props) {
-  const [{ loading, flowId, flowData, ownerInfoList, flowConfigClone, cloneFlowData }, setState] = useSetState({
-    loading: false,
-    flowId: props.flowId,
-    flowData: props.flowData || {},
-    ownerInfoList: [],
-    flowConfigClone: (props.flowData || {}).workflowConfig,
-    cloneFlowData: {
-      workflowConfig: _.get(props.flowData || {}, 'workflowConfig'),
-      ownerList: _.get(props.flowData || {}, 'ownerList'),
-    },
-  });
-
-  const { flowNodes } = flowData;
+  const [{ loading, flowId, flowData, ownerInfoList, flowConfigClone, cloneFlowData, flowNodes }, setState] =
+    useSetState({
+      loading: false,
+      flowId: props.flowId,
+      flowData: props.flowData || {},
+      ownerInfoList: [],
+      flowConfigClone: (props.flowData || {}).workflowConfig,
+      cloneFlowData: {
+        workflowConfig: _.get(props.flowData || {}, 'workflowConfig'),
+        ownerList: _.get(props.flowData || {}, 'ownerList'),
+      },
+      flowNodes: _.get(flowData, 'flowNodes'),
+    });
+  useEffect(() => {
+    const flowData = props.flowData || {};
+    setState({
+      flowData,
+      flowNodes: _.get(flowData, 'flowNodes'),
+    });
+  }, [props.flowData]);
   const destData = _.values(flowNodes).find(o => _.get(o, 'nodeType') === 'DEST_TABLE') || {};
-  const showFlowSet = _.get(destData, 'nodeConfig.config.dsType') === 'MING_DAO_YUN';
+  const showFlowSet = _.get(destData, 'nodeConfig.config.dsType') === DATABASE_TYPE.APPLICATION_WORKSHEET;
   const saveProcessConfigInfo = () => {
     const { currentProjectId: projectId } = props;
     const data = {
@@ -291,8 +299,10 @@ function Disposition(props) {
                 });
                 updateSource({ ownerList: members });
               }}
-              from="integration"
-              isSingle
+              companyId={props.currentProjectId}
+              leastOne
+              inline
+              chatButton={false}
             />
             <br />
             <span

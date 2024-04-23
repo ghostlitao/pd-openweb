@@ -1,4 +1,4 @@
-import React, { Fragment, useEffect, useRef, useState } from 'react';
+import React, { Fragment, useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import { arrayOf, bool, func, shape } from 'prop-types';
 import styled from 'styled-components';
 import { Switch } from 'ming-ui';
@@ -71,8 +71,9 @@ const ActiveJsSwitchCon = styled.div`
   }
 `;
 
-export default function Func(props) {
+function Func(props, ref) {
   const {
+    control = {},
     supportJavaScript,
     value,
     value: { expression } = {},
@@ -82,6 +83,7 @@ export default function Func(props) {
     controlGroups,
     onSave,
     className,
+    onChange,
   } = props;
   const [type, setType] = useState(value.type || 'mdfunction');
   const [codeEditorLoading, setCodeEditorLoading] = useState(false);
@@ -109,7 +111,7 @@ export default function Func(props) {
         controlIds.filter(
           id =>
             !_.find(controls, {
-              controlId: /^[a-zA-Z0-9]+-.+$/.test(id) ? id.replace(/[a-zA-Z0-9]+-/, '') : id,
+              controlId: /^[a-zA-Z0-9]+-\w+$/.test(id) ? id.replace(/[a-zA-Z0-9]+-/, '') : id,
             }),
         ).length
       ) {
@@ -125,6 +127,10 @@ export default function Func(props) {
       onClose();
     }
   }
+  useImperativeHandle(ref, () => ({
+    codeEditor: codeEditor.current,
+    handleSave,
+  }));
   return (
     <Con className={cx('functionEditor', className)}>
       <Header>
@@ -136,12 +142,13 @@ export default function Func(props) {
               checked={type === 'javascript'}
               onClick={checked => {
                 setType(checked ? 'mdfunction' : 'javascript');
+                const tempValue = codeEditor.current ? codeEditor.current.getValue() : '';
                 setCodeEditorLoading(true);
                 setTimeout(() => {
                   setCodeEditorLoading(false);
                 }, 10);
                 setTimeout(() => {
-                  codeEditor.current.setValue('');
+                  codeEditor.current.setValue(tempValue);
                 }, 20);
               }}
             />
@@ -163,12 +170,14 @@ export default function Func(props) {
           <CodeEditCon>
             {!codeEditorLoading && (
               <CodeEdit
+                control={control}
                 type={type}
                 value={expression}
                 title={title}
                 controls={controls}
                 ref={codeEditor}
                 renderTag={renderTag}
+                onChange={onChange}
               />
             )}
           </CodeEditCon>
@@ -182,7 +191,10 @@ export default function Func(props) {
   );
 }
 
+export default forwardRef(Func);
+
 Func.propTypes = {
+  control: shape({}),
   supportJavaScript: bool,
   value: shape({}),
   control: shape({}),
@@ -191,4 +203,5 @@ Func.propTypes = {
   renderTag: func,
   onClose: func,
   onSave: func,
+  onChange: func,
 };

@@ -50,14 +50,17 @@ export default class PBC extends Component {
    */
   getNodeDetail(props, { appId } = {}) {
     const { processId, selectNodeId, selectNodeType } = props;
+    const { data } = this.state;
 
     flowNode.getNodeDetail({ processId, nodeId: selectNodeId, flowNodeType: selectNodeType, appId }).then(result => {
       if (result.actionId === ACTION_ID.PBC_OUT && !result.fields.length) {
         result.fields = [{ fieldName: '', desc: '', type: 2, fieldId: uuidv4() }];
       }
 
-      if (appId && result.name === _l('调用业务流程')) {
+      if (appId && result.name === _l('调用封装业务流程')) {
         result.name = result.appList.find(item => item.id === appId).name;
+      } else if (appId) {
+        result.name = data.name;
       }
 
       if (result.subProcessVariables.length) {
@@ -242,6 +245,7 @@ export default class PBC extends Component {
             <div className="flex mLeft10" style={{ minWidth: 0 }}>
               <SingleControlValue
                 companyId={this.props.companyId}
+                relationId={this.props.relationId}
                 processId={this.props.processId}
                 selectNodeId={this.props.selectNodeId}
                 sourceNodeId={item.dataSource ? parentNode.nodeId : ''}
@@ -386,7 +390,10 @@ export default class PBC extends Component {
    */
   renderContent() {
     const { data } = this.state;
-    const MODES = [{ text: _l('执行单次'), value: 0 }, { text: _l('执行多次'), value: 1 }];
+    const MODES = [
+      { text: _l('执行单次'), value: 0 },
+      { text: _l('执行多次'), value: 1 },
+    ];
     const executeTypes = [
       {
         text: _l('并行'),
@@ -522,7 +529,10 @@ export default class PBC extends Component {
    */
   renderExecCount() {
     const { data, execCountType } = this.state;
-    const EXEC_COUNT = [{ text: _l('依据字段值'), value: 1 }, { text: _l('依据多条数据对象的数据量'), value: 2 }];
+    const EXEC_COUNT = [
+      { text: _l('依据字段值'), value: 1 },
+      { text: _l('依据多条数据对象的数据量'), value: 2 },
+    ];
 
     return (
       <Fragment>
@@ -531,12 +541,17 @@ export default class PBC extends Component {
           data={EXEC_COUNT}
           value={execCountType}
           border
-          onChange={execCountType => this.setState({ execCountType })}
+          onChange={execCountType => {
+            this.updateSource({ selectNodeId: '' });
+            this.setState({ execCountType });
+          }}
         />
         {execCountType === 1 ? (
           <div className="mTop10">
             <SpecificFieldsValue
+              projectId={this.props.companyId}
               processId={this.props.processId}
+              relationId={this.props.relationId}
               selectNodeId={this.props.selectNodeId}
               updateSource={number => this.updateSource({ number })}
               type="number"
@@ -579,7 +594,7 @@ export default class PBC extends Component {
           bg="BGBlueAsh"
           updateSource={this.updateSource}
         />
-        <div className="flex mTop20">
+        <div className="flex">
           <ScrollView>
             <div className="workflowDetailBox">{isPBCOut ? this.renderExportContent() : this.renderContent()}</div>
           </ScrollView>

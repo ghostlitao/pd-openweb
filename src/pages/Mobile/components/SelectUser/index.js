@@ -2,6 +2,7 @@ import React, { Component, Fragment } from 'react';
 import cx from 'classnames';
 import { Icon, ScrollView, LoadDiv, Switch } from 'ming-ui';
 import { Modal, Button, WingBlank, List, Checkbox, Toast } from 'antd-mobile';
+import functionWrap from 'ming-ui/components/FunctionWrap';
 import userAjax from 'src/api/user';
 import departmentAjax from 'src/api/department';
 import externalPortalAjax from 'src/api/externalPortal';
@@ -24,6 +25,7 @@ const isChecked = (id, ids) => {
 export default class SelectUser extends Component {
   constructor(props) {
     super(props);
+    const { selectedUsers } = props;
     this.state = {
       searchValue: '',
       departmentVisible: false,
@@ -35,14 +37,15 @@ export default class SelectUser extends Component {
       loading: false,
       isMore: true,
       pageIndex: 1,
-      pageSize: 20,
+      pageSize: 50,
       users: [],
-      selectedUsers: [],
+      selectedUsers: selectedUsers || [],
       onlyJoinDepartmentChecked: false,
       depPageIndex: 1,
       isMoreDep: true,
       rootData: [],
       treeData: [],
+      selectUserDepPath: [],
     };
   }
   componentDidMount() {
@@ -170,27 +173,38 @@ export default class SelectUser extends Component {
     }
   };
   requestContactProjectDepartments = () => {
-    const { loading, depPageIndex, pageSize, departments, isMoreDep, onlyJoinDepartmentChecked = false } = this.state;
-    if (!isMoreDep) {
-      return;
-    }
+    const {
+      loading,
+      depPageIndex,
+      pageSize,
+      departments,
+      isMoreDep,
+      onlyJoinDepartmentChecked = false,
+      department,
+    } = this.state;
+    this.setState({
+      departmentUsersLoading: true,
+    });
+
     if (this.request && this.request.state() === 'pending') {
       this.request.abort();
     }
     const { projectId } = this.props;
-    this.request = departmentAjax.getProjectDepartmentByPage({
+    this.request = departmentAjax.getMembersAndSubs({
       projectId,
       pageIndex: depPageIndex,
-      pageSize,
+      pageSize: 100,
       onlyMyJoin: onlyJoinDepartmentChecked,
+      filterAccountIds: [],
+      departmentId: department ? department.departmentId : undefined,
     });
-
-    this.request.then(result => {
+    this.request.then(({ subDepts = [], members = [] }) => {
+      const temp = subDepts.map(it => ({ departmentId: it.id, departmentName: it.name, isDep: true }));
       this.setState({
-        departments: departments.concat(result.list),
+        departments: temp,
         loading: false,
-        depPageIndex: depPageIndex + 1,
-        isMoreDep: result.list.length === pageSize,
+        departmentUsers: temp.concat(members),
+        departmentUsersLoading: false,
       });
     });
   };
@@ -222,16 +236,18 @@ export default class SelectUser extends Component {
   };
   handleSelectSubDepartment = (department, index) => {
     const { departmentId } = department;
-    const { projectId, selectDepartmentType } = this.props;
+    const { projectId, selectDepartmentType, allPath } = this.props;
     const { departmentPath, loading, selectedUsers, rootData = [], treeData = [] } = this.state;
-    if (index) {
+    const copyDepartmentPath =
+      index || index === 0 ? departmentPath.slice(0, index + 1) : departmentPath.concat(department);
+    if (index || index === 0) {
       this.setState({
-        departmentPath: departmentPath.slice(0, index),
+        departmentPath: copyDepartmentPath,
         loading: true,
       });
     } else {
       this.setState({
-        departmentPath: departmentPath.concat(department),
+        departmentPath: copyDepartmentPath,
         loading: true,
       });
     }
@@ -249,6 +265,13 @@ export default class SelectUser extends Component {
               (selectDepartmentType === 'all' &&
                 _.findIndex(selectedUsers, item => item.departmentId === departmentId) > -1) ||
               department.disabledSubDepartment,
+            departmentPath: allPath
+              ? copyDepartmentPath.map((it, i) => ({
+                  departmentId: it.departmentId,
+                  departmentName: it.departmentName,
+                  depth: i + 1,
+                }))
+              : [],
           })),
           loading: false,
           treeData: _.isEmpty(treeData)
@@ -294,27 +317,6 @@ export default class SelectUser extends Component {
     arr && flatTree(arr);
     return _.isArray(result) && !_.isEmpty(result) ? result.map(item => item.departmentId) : [];
   };
-  requestGetDepartmentUsers = () => {
-    const { department } = this.state;
-    const { projectId, filterAccountIds = [] } = this.props;
-
-    this.setState({
-      departmentUsersLoading: true,
-    });
-
-    departmentAjax
-      .getDepartmentUsers({
-        departmentId: department.departmentId,
-        projectId,
-        filterAccountIds,
-      })
-      .then(result => {
-        this.setState({
-          departmentUsers: result.list,
-          departmentUsersLoading: false,
-        });
-      });
-  };
   handleSave = () => {
     const { type } = this.props;
     const { selectedUsers } = this.state;
@@ -322,7 +324,7 @@ export default class SelectUser extends Component {
       this.props.onClose();
       this.props.onSave(selectedUsers);
     } else {
-      Toast.info(_l('请选择%0', type === 'user' ? _l('人员') : _l('部门')));
+      Toast.info(type === 'user' ? _l('请选择人员') : _l('请选择部门'));
     }
   };
   handleSearch = () => {
@@ -427,8 +429,10 @@ export default class SelectUser extends Component {
       departmentPath,
       onlyJoinDepartmentChecked,
       selectedAllUsers = [],
+      selectUserDepPath,
     } = this.state;
     const { type, selectDepartmentType, filterAccountIds = [] } = this.props;
+
     if (departmentVisible) {
       return (
         <List
@@ -443,6 +447,7 @@ export default class SelectUser extends Component {
                       departmentVisible: false,
                       department: null,
                       departmentUsers: [],
+                      selectUserDepPath: [],
                     });
                   }}
                 >
@@ -452,22 +457,35 @@ export default class SelectUser extends Component {
                   className={cx({ avtive: department })}
                   onClick={() => {
                     if (department) {
-                      this.setState({
-                        department: null,
-                        departmentUsers: [],
-                      });
+                      this.setState(
+                        {
+                          department: null,
+                          departmentUsers: [],
+                          selectUserDepPath: [],
+                        },
+                        this.requestContactProjectDepartments,
+                      );
                     }
                   }}
                 >
-                  <i className="mRight3">></i>
+                  <i className="mRight3">{'>'}</i>
                   {_l('按部门选择')}
                 </span>
-                {department ? (
-                  <span>
-                    <i className="mRight3">></i>
+                {selectUserDepPath.map((department, index) => (
+                  <span
+                    className="avtive mLeft5"
+                    key={department.departmentId}
+                    onClick={() => {
+                      this.setState(
+                        { department: department, selectUserDepPath: selectUserDepPath.slice(0, index + 1) },
+                        this.requestContactProjectDepartments,
+                      );
+                    }}
+                  >
+                    <i className="mRight3">&gt;</i>
                     {department.departmentName}
                   </span>
-                ) : null}
+                ))}
               </div>
             ) : (
               <Fragment>
@@ -486,7 +504,7 @@ export default class SelectUser extends Component {
                     className="avtive mLeft5"
                     key={department.departmentId}
                     onClick={() => {
-                      this.handleSelectSubDepartment(department, index + 1);
+                      this.handleSelectSubDepartment(department, index);
                     }}
                   >
                     <i className="mRight3">&gt;</i>
@@ -508,45 +526,68 @@ export default class SelectUser extends Component {
               </div>
             ) : (
               <ScrollView className="flex">
-                {departmentUsers.map((item, index) => (
-                  <CheckboxItem
-                    key={item.accountId}
-                    checked={isChecked(
-                      item.accountId,
-                      this.state.selectedUsers.map(item => item.accountId),
-                    )}
-                    onChange={() => {
-                      const { selectedUsers } = this.state;
-                      const { onlyOne } = this.props;
-                      const isSelected = selectedUsers.filter(user => user.accountId === item.accountId).length;
-                      if (onlyOne) {
-                        this.setState({
-                          selectedUsers: isSelected ? [] : [item],
-                        });
-                        return;
+                {departmentUsers.map((item, index) =>
+                  item.isDep ? (
+                    <List.Item
+                      multipleLine
+                      arrow="horizontal"
+                      thumb={
+                        <div className="groupWrapper">
+                          <Icon icon="group" className="Font22 White" />
+                        </div>
                       }
-                      if (isSelected) {
-                        this.setState({
-                          selectedUsers: selectedUsers.filter(user => user.accountId != item.accountId),
-                        });
-                      } else {
-                        this.setState({
-                          selectedUsers: selectedUsers.concat(item),
-                        });
-                      }
-                    }}
-                  >
-                    <Fragment>
-                      <img src={item.avatar} className="avatar" />
-                      {item.fullname}
-                    </Fragment>
-                  </CheckboxItem>
-                ))}
+                      onClick={() => {
+                        this.setState(
+                          {
+                            department: item,
+                            selectUserDepPath: this.state.selectUserDepPath.concat(item),
+                          },
+                          this.requestContactProjectDepartments,
+                        );
+                      }}
+                    >
+                      {item.departmentName}
+                    </List.Item>
+                  ) : (
+                    <CheckboxItem
+                      key={item.accountId}
+                      checked={isChecked(
+                        item.accountId,
+                        this.state.selectedUsers.map(item => item.accountId),
+                      )}
+                      onChange={() => {
+                        const { selectedUsers } = this.state;
+                        const { onlyOne } = this.props;
+                        const isSelected = selectedUsers.filter(user => user.accountId === item.accountId).length;
+                        if (onlyOne) {
+                          this.setState({
+                            selectedUsers: isSelected ? [] : [item],
+                          });
+                          return;
+                        }
+                        if (isSelected) {
+                          this.setState({
+                            selectedUsers: selectedUsers.filter(user => user.accountId != item.accountId),
+                          });
+                        } else {
+                          this.setState({
+                            selectedUsers: selectedUsers.concat(item),
+                          });
+                        }
+                      }}
+                    >
+                      <Fragment>
+                        <img src={item.avatar} className="avatar" />
+                        {item.fullname}
+                      </Fragment>
+                    </CheckboxItem>
+                  ),
+                )}
                 {_.isEmpty(departmentUsers) ? <div className="pTop30 pBottom30 TxtCenter">{_l('暂无人员')}</div> : null}
               </ScrollView>
             )
           ) : (
-            <ScrollView className="flex" onScrollEnd={this.requestContactProjectDepartments}>
+            <ScrollView className="flex">
               <div className="flexRow onlyShowJoinDepartment">
                 <span>{_l('只看我加入的部门')}</span>
                 <Switch checked={onlyJoinDepartmentChecked} onClick={this.onlyShowJoinDepartment} />
@@ -636,8 +677,9 @@ export default class SelectUser extends Component {
                         this.setState(
                           {
                             department: item,
+                            selectUserDepPath: this.state.selectUserDepPath.concat(item),
                           },
-                          this.requestGetDepartmentUsers,
+                          this.requestContactProjectDepartments,
                         );
                       }}
                     >
@@ -789,3 +831,5 @@ export default class SelectUser extends Component {
     );
   }
 }
+
+export const selectUser = props => functionWrap(SelectUser, { ...props });

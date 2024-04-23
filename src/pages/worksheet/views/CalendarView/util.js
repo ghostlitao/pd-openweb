@@ -8,6 +8,7 @@ import _ from 'lodash';
 import { isOpenPermit } from 'src/pages/FormSet/util.js';
 import { permitList } from 'src/pages/FormSet/config.js';
 import { SYS_CONTROLS_WORKFLOW } from 'src/pages/widgetConfig/config/widget.js';
+import { getRecordColor, getRecordColorConfig } from 'worksheet/util';
 
 const defaultColor = '#C9E6FC';
 export const eventStr = {
@@ -86,7 +87,12 @@ const getStringColor = (calendarData, data, currentView, worksheetControls) => {
   const { colorid = '' } = getAdvanceSetting(currentView);
   let coloridData = data[colorid] ? JSON.parse(data[colorid])[0] : '';
   //未设置颜色时，背景色的默认颜色为：蓝色浅色，黑色文字
-  return coloridData ? (colorOptions.find(it => coloridData === it.key) || []).color || defaultColor : defaultColor;
+  return coloridData
+    ? (
+        colorOptions.find(it => (coloridData && coloridData.startsWith('other') ? 'other' : coloridData) === it.key) ||
+        []
+      ).color || defaultColor
+    : defaultColor;
 };
 
 // type === 16 ? 'YYYY-MM-DD HH:mm' : 'YYYY-MM-DD';
@@ -100,6 +106,21 @@ export const setDataFormat = pram => {
   let titleControls = getTitleControls(worksheetControls);
   //无选项且无默认值，才用默认颜色
   let stringColor = getStringColor(calendarData, data, currentView, worksheetControls);
+  const recordColorConfig = getRecordColorConfig(currentView);
+  let recordColor =
+    recordColorConfig &&
+    getRecordColor({
+      controlId: recordColorConfig.controlId,
+      colorItems: recordColorConfig.colorItems,
+      controls: worksheetControls,
+      row: data,
+    });
+  if (recordColor) {
+    recordColor = {
+      ...recordColorConfig,
+      ...recordColor,
+    };
+  }
   let list = [];
   calendarInfo.map(o => {
     let editable = controlState(o.startData).editable;
@@ -115,6 +136,7 @@ export const setDataFormat = pram => {
         extendedProps: {
           ...data,
           editable,
+          recordColor,
           stringColor,
         },
         title:
@@ -151,6 +173,21 @@ export const setDataFormatByRowId = pram => {
 
   //无选项且无默认值，才用默认颜色
   let stringColor = getStringColor(calendarData, data, currentView, worksheetControls);
+  const recordColorConfig = getRecordColorConfig(currentView);
+  let recordColor =
+    recordColorConfig &&
+    getRecordColor({
+      controlId: recordColorConfig.controlId,
+      colorItems: recordColorConfig.colorItems,
+      controls: worksheetControls,
+      row: data,
+    });
+  if (recordColor) {
+    recordColor = {
+      ...recordColorConfig,
+      ...recordColor,
+    };
+  }
   let timeList = [];
   calendarInfo.map(o => {
     let start = getStart(data, o);
@@ -170,6 +207,7 @@ export const setDataFormatByRowId = pram => {
       extendedProps: {
         ...data,
         stringColor,
+        recordColor,
       },
       title:
         renderCellText({

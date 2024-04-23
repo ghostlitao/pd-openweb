@@ -56,15 +56,15 @@ export default class extends Component {
   }
 
   componentDidMount() {
-    this.getData();
+    this.getData(this.props);
     this.removeEventBind = this.bindEvent();
     window.updateAppGroups = this.getData;
   }
 
   componentWillReceiveProps(nextProps) {
     this.ids = getIds(nextProps);
-    if (compareProps(nextProps.match.params, this.props.match.params, ['appId'])) {
-      this.getData();
+    if (compareProps(nextProps.appPkg, this.props.appPkg, ['id'])) {
+      this.getData(nextProps);
     }
   }
 
@@ -75,34 +75,40 @@ export default class extends Component {
   // 当前处理的分组id
   handledAppItemId = '';
 
-  getData = () => {
+  getData = (props = this.props) => {
     let { appId } = this.ids;
     if (md.global.Account.isPortal) {
       appId = md.global.Account.appId;
     }
     if (!appId) return;
-    api.getAppInfo({ appId }).then(({ appRoleType, isLock, appSectionDetail: data = [] }) => {
-      const isCharge = canEditApp(appRoleType, isLock);
-      this.props.updateIsCharge(isCharge);
-      this.props.updateAppPkgData({ appRoleType, isLock });
-      data = isCharge
-        ? data
-        : data
-            .map(item => {
-              return {
-                ...item,
-                workSheetInfo: item.workSheetInfo.filter(o => o.status === 1 && !o.navigateHide),
-              };
-            })
-            .filter(o => o.workSheetInfo && o.workSheetInfo.length > 0);
-      this.props.updateAppGroup(data);
-      window[`app_${appId}_is_charge`] = isCharge;
-      this.setState({ appRoleType, data }, () => {
+    const { appPkg } = props;
+    const { sections, permissionType, isLock } = appPkg;
+    const isCharge = canEditApp(permissionType, isLock);
+    this.props.updateIsCharge(isCharge);
+    this.props.updateAppPkgData({ appRoleType: permissionType, isLock });
+    const filterSections = isCharge
+      ? sections
+      : sections
+          .map(item => {
+            return {
+              ...item,
+              workSheetInfo: item.workSheetInfo.filter(o => o.status === 1 && !o.navigateHide),
+            };
+          })
+          .filter(o => o.workSheetInfo && o.workSheetInfo.length > 0);
+    this.props.updateAppGroup(filterSections);
+    window[`app_${appId}_is_charge`] = isCharge;
+    this.setState(
+      {
+        appRoleType: permissionType,
+        data: filterSections,
+      },
+      () => {
         setTimeout(() => {
           this.ensurePointerVisible();
         }, 500);
-      });
-    });
+      },
+    );
   };
 
   // 函数节流
@@ -262,7 +268,7 @@ export default class extends Component {
     const { data } = this.state;
     const { appSectionId } = data[0] || {};
     const temp = _.cloneDeep(data);
-    temp[0] = { ...temp[0], name: '未命名分组', type: DEFAULT_CREATE };
+    temp[0] = { ...temp[0], name: _l('未命名分组'), type: DEFAULT_CREATE };
     this.setState({ focusGroupId: appSectionId, data: temp });
     this.props.updateAppGroup(temp);
   };
@@ -336,7 +342,15 @@ export default class extends Component {
       .map(({ appSectionId, name }) => ({ value: appSectionId, text: name }));
 
   render() {
-    const { permissionType, appStatus, isLock, appPkg } = this.props;
+    const {
+      permissionType,
+      appStatus,
+      isLock,
+      appPkg,
+      showRoleDebug = () => {},
+      roleSelectValue = [],
+      otherAllShow = true,
+    } = this.props;
     const {
       delAppItemVisible,
       appItemIntroVisible,
@@ -359,16 +373,19 @@ export default class extends Component {
     const renderContent = (count, onClick) => {
       return (
         <VCenterIconText
+          data-tip={_l('流程待办')}
           onClick={onClick}
           className="appExtensionItem"
           icon="task_alt"
           iconSize={20}
           textSize={14}
+          iconStyle={{ margin: 0 }}
           text={
-            <div className="flexRow alignItemsCenter">
-              <span>{_l('待办')}</span>
-              {!!count && <div className="count mLeft5">{count}</div>}
-            </div>
+            !!count && (
+              <div className="flexRow alignItemsCenter mLeft6">
+                <div className="count">{count}</div>
+              </div>
+            )
           }
         />
       );
@@ -378,63 +395,70 @@ export default class extends Component {
     const { tb, tr } = getAppFeaturesVisible();
     return (
       <Fragment>
-        {isOnlyDefaultGroup && tb ? (
-          <div className="emptyAppItemWrap">
-            {canEditApp(permissionType, isLock) && (
-              <Fragment>
-                <div
-                  className={cx('emptyAppItem active')}
-                  style={
-                    ['light'].includes(appPkg.themeType) ? { backgroundColor: convertColor(appPkg.iconColor) } : null
-                  }
-                  onClick={e => {
-                    this.switchVisible({ appItemIntroVisible: true });
-                  }}
-                >
-                  <Icon className="emptyGroupIcon" icon="group_inactive" />
-                </div>
-                <AppGroupIntro
-                  className={cx({ appItemIntroVisible })}
-                  addAppGroup={this.handleAddAppGroupFromEmpty}
-                  onClickAway={() => this.switchVisible({ appItemIntroVisible: false })}
-                  onClose={() => this.switchVisible({ appItemIntroVisible: false })}
-                />
-              </Fragment>
-            )}
-          </div>
-        ) : tb ? (
-          <div className="appItemsOuterWrap">
-            {_.includes([1, 5], appStatus) && (
-              <div className="appItemsInnerWrap" onScroll={throttledEnsurePointerStatus}>
-                <SortableAppList
-                  items={renderedData}
-                  onSortEnd={this.onSortEnd}
-                  axis={'x'}
-                  lockAxis={'x'}
-                  distance={5}
-                  transitionDuration={0}
-                  helperClass="appGroupSortHelperClass"
-                  focusGroupId={focusGroupId}
-                  isAppItemOverflow={isAppItemOverflow}
-                  onScroll={throttledEnsurePointerStatus}
-                  activeAppItemId={activeAppItemId}
-                  onClickAway={() => {
-                    if (activeAppItemId !== '') {
-                      this.setState({ activeAppItemId: '' });
-                    }
-                  }}
-                  ensurePointerVisible={this.ensurePointerVisible}
-                  onAppItemConfigClick={this.handleAppItemConfigClick}
-                  renameAppGroup={this.handleRenameAppGroup}
-                  handleAddAppGroup={this.handleAddAppGroup}
-                  {...this.props}
-                />
+        {otherAllShow ? (
+          <Fragment>
+            {isOnlyDefaultGroup && tb ? (
+              <div className="emptyAppItemWrap">
+                {canEditApp(permissionType, isLock) && (
+                  <Fragment>
+                    <div
+                      className={cx('emptyAppItem active')}
+                      style={
+                        ['light'].includes(appPkg.themeType)
+                          ? { backgroundColor: convertColor(appPkg.iconColor) }
+                          : null
+                      }
+                      onClick={e => {
+                        this.switchVisible({ appItemIntroVisible: true });
+                      }}
+                    >
+                      <Icon className="emptyGroupIcon" icon="group_inactive" />
+                    </div>
+                    <AppGroupIntro
+                      className={cx({ appItemIntroVisible })}
+                      addAppGroup={this.handleAddAppGroupFromEmpty}
+                      onClickAway={() => this.switchVisible({ appItemIntroVisible: false })}
+                      onClose={() => this.switchVisible({ appItemIntroVisible: false })}
+                    />
+                  </Fragment>
+                )}
               </div>
+            ) : tb ? (
+              <div className="appItemsOuterWrap">
+                {_.includes([1, 5], appStatus) && (
+                  <div className="appItemsInnerWrap" onScroll={throttledEnsurePointerStatus}>
+                    <SortableAppList
+                      items={renderedData}
+                      onSortEnd={this.onSortEnd}
+                      axis={'x'}
+                      lockAxis={'x'}
+                      distance={5}
+                      transitionDuration={0}
+                      helperClass="appGroupSortHelperClass"
+                      focusGroupId={focusGroupId}
+                      isAppItemOverflow={isAppItemOverflow}
+                      onScroll={throttledEnsurePointerStatus}
+                      activeAppItemId={activeAppItemId}
+                      onClickAway={() => {
+                        if (activeAppItemId !== '') {
+                          this.setState({ activeAppItemId: '' });
+                        }
+                      }}
+                      ensurePointerVisible={this.ensurePointerVisible}
+                      onAppItemConfigClick={this.handleAppItemConfigClick}
+                      renameAppGroup={this.handleRenameAppGroup}
+                      handleAddAppGroup={this.handleAddAppGroup}
+                      {...this.props}
+                    />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="appItemsOuterWrap"></div>
             )}
-          </div>
-        ) : (
-          <div className="appItemsOuterWrap"></div>
-        )}
+          </Fragment>
+        ) : <span className='flex'></span>}
+
         {tr && (
           <Fragment>
             <div
@@ -444,15 +468,25 @@ export default class extends Component {
               <div className={cx('leftPointer appItemPointer', { disable: disabledPointer === 'left' })} />
               <div className={cx('rightPointer appItemPointer', { disable: disabledPointer === 'right' })} />
             </div>
-            {!md.global.Account.isPortal && !window.isPublicApp && (
+            {otherAllShow && !md.global.Account.isPortal && !window.isPublicApp && appPkg.appStatus !== 4 && (
               <div className="appExtensionWrap">
                 <MyProcessEntry type="appPkg" renderContent={renderContent} />
               </div>
             )}
             {_.includes([1, 5], appStatus) && !md.global.Account.isPortal && (
-              <AppExtension appId={appId} permissionType={permissionType} isLock={isLock} />
+              <AppExtension
+                appId={appId}
+                permissionType={permissionType}
+                isLock={isLock}
+                navColor={appPkg.navColor}
+                iconColor={appPkg.iconColor}
+                showRoleDebug={showRoleDebug}
+                debugRole={appPkg.debugRole}
+                roleSelectValue={roleSelectValue}
+                otherAllShow={otherAllShow}
+              />
             )}
-            {delAppItemVisible && (
+            {otherAllShow && delAppItemVisible && (
               <DelAppGroup
                 data={data.filter(data => data.appSectionId !== this.handledAppItemId)}
                 onOk={id => this.handleDelAppSection(id)}

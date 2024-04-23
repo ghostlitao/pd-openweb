@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import styled from 'styled-components';
 import _ from 'lodash';
 import cx from 'classnames';
+import Trigger from 'rc-trigger';
 import { Icon } from 'ming-ui';
 import TextHeightLine from './TextHeightLine';
 import { GLOBAL_SEARCH_LIST_SETTING, SEARCH_APP_ITEM_TYPE } from '../enum';
@@ -9,6 +10,9 @@ import SvgIcon from 'src/components/SvgIcon';
 import { createTimeSpan } from 'src/pages/chat/utils';
 import renderText from 'src/pages/worksheet/components/CellControls/renderText.js';
 import { getAppResultCodeText } from '../utils';
+import { transferExternalLinkUrl } from 'src/pages/AppHomepage/AppCenter/utils';
+import { addBehaviorLog } from 'src/util';
+import smartSearchAjax from 'src/api/smartSearch';
 
 const Box = styled.div`
   padding-bottom: 12px;
@@ -33,11 +37,40 @@ const Box = styled.div`
     height: 56px;
     cursor: pointer;
     position: relative;
+    .moreActionMask {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 200px;
+      height: 100%;
+      background: linear-gradient(271deg, #ffffff 0%, rgba(255, 255, 255, 0) 100%);
+      border-radius: 4px;
+      align-items: center;
+      justify-content: end;
+      display: none;
+      .moreAction {
+        width: 28px;
+        height: 28px;
+        background: #ffffff;
+        box-shadow: 0px 2px 4px 1px rgba(0, 0, 0, 0.06);
+        border-radius: 5px 5px 5px 5px;
+        border: 1px solid #eaeaea;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        &:hover {
+          background: #f7f7f7;
+        }
+      }
+    }
   }
   .list .listItem:hover,
   .list .listItem.highlight,
   .showMore.highlight {
     background: #f7f7f7;
+    .moreActionMask {
+      display: flex;
+    }
   }
   .list .listItem .avatarCon {
     margin-right: 8px;
@@ -108,6 +141,25 @@ const Box = styled.div`
   }
 `;
 
+const MoreOperateMenu = styled.ul`
+  background: #fff;
+  box-shadow: 0px 4px 16px 1px rgba(0, 0, 0, 0.24);
+  border-radius: 3px 3px 3px 3px;
+  width: 160px;
+  font-size: 13px;
+  color: #333;
+  padding: 4px 0;
+  li {
+    line-height: 36px;
+    padding: 0 24px;
+    cursor: pointer;
+    &:hover {
+      background-color: #2196f3;
+      color: #fff;
+    }
+  }
+`;
+
 export default function AppList(props) {
   const {
     data = {},
@@ -132,6 +184,8 @@ export default function AppList(props) {
     viewName = true,
     loadMore = false,
     getNextPage = () => {},
+    currentProjectId,
+    update = () => {},
   } = props;
 
   const settingInfo = GLOBAL_SEARCH_LIST_SETTING[dataKey];
@@ -146,6 +200,7 @@ export default function AppList(props) {
   const [timeKey, setTimeKey] = useState(sortTime);
   const [id, setId] = useState();
   const [nextPage, setNextPage] = useState(false);
+  const [optionVisibleId, setOptionVisibleId] = useState(-1);
   let count = 0;
 
   useEffect(() => {
@@ -275,16 +330,42 @@ export default function AppList(props) {
   const skipHandle = item => {
     let url = '';
     if (dataKey === 'app') {
+      //埋点
+      const typeObj = { 0: 'worksheet', 1: 'customPage', 2: 'app', 3: 'app' };
+      addBehaviorLog(typeObj[item.itemType], item.itemType === 3 || item.itemType === 2 ? item.appId : item.itemId);
+
       const parameter = [
         item.appId,
         item.sectionId,
-        !_.includes([item.appId, item.sectionId], item.itemId) ? item.itemId : '',
+        !_.includes([item.appId, item.sectionId], item.itemId) && item.itemType !== 2 ? item.itemId : '',
       ];
-      url = encodeURI(`/app/${parameter.filter(o => o).join('/')}`);
+      url =
+        item.createType === 1
+          ? transferExternalLinkUrl(item.urlTemplate, currentProjectId, item.appId)
+          : encodeURI(`/app/${parameter.filter(o => o).join('/')}`);
     } else {
       url = encodeURI(`/app/${item.appId}/${item.itemId}/row/${item.rowId}`);
     }
     window.open(url);
+  };
+
+  const setFilter = (item, isApp) => {
+    const { itemType, itemId, appId } = item;
+
+    smartSearchAjax
+      .setFilter({
+        projectId: currentProjectId,
+        itemType: isApp ? 3 : itemType,
+        appId,
+        itemId: isApp ? appId : itemId,
+      })
+      .then(res => {
+        if (!!res) {
+          alert(_l('成功'));
+          update();
+        } else alert(_l('失败'), 2);
+      });
+    setOptionVisibleId(-1);
   };
 
   const renderEmpty = () => {
@@ -294,7 +375,7 @@ export default function AppList(props) {
     }
     return (
       <div className="noData">{`${
-        dataKey === 'app' ? _l('没有搜索到相关应用和应用像') : _l('没有搜索到相关记录')
+        dataKey === 'app' ? _l('没有搜索到相关应用和应用项') : _l('没有搜索到相关记录')
       }，${_l('可尝试更换关键字搜索')}`}</div>
     );
   };
@@ -313,7 +394,9 @@ export default function AppList(props) {
           list.map((item, index) => {
             return (
               <li
-                className={cx('listItem valignWrapper', { highlight: start && current === index })}
+                className={cx('listItem valignWrapper', {
+                  highlight: (start && current === index) || optionVisibleId === item.rowId,
+                })}
                 key={`globalSearchAllList-${item.rowId || item.appId}-${dataKey}${index}`}
                 onClick={() => skipHandle(item)}
               >
@@ -373,6 +456,33 @@ export default function AppList(props) {
                     </div>
                   )}
                 </div>
+                {dataKey === 'record' && (
+                  <div class="moreActionMask" onClick={e => e.stopPropagation()}>
+                    <Trigger
+                      popupVisible={optionVisibleId === item.rowId}
+                      action={['click']}
+                      popupAlign={{ points: ['tr', 'br'] }}
+                      onPopupVisibleChange={visible => setOptionVisibleId(visible ? item.rowId : -1)}
+                      mask={true}
+                      popup={
+                        <MoreOperateMenu>
+                          {viewName && (
+                            <li key="MoreOperateMenu-list-0" onClick={() => setFilter(item, true)}>
+                              {_l('不再搜索此应用')}
+                            </li>
+                          )}
+                          <li key="MoreOperateMenu-list-1" onClick={() => setFilter(item)}>
+                            {_l('不再搜索此表')}
+                          </li>
+                        </MoreOperateMenu>
+                      }
+                    >
+                      <div className="moreAction">
+                        <Icon icon="moreop" className="Font18 Gray_9e" />
+                      </div>
+                    </Trigger>
+                  </div>
+                )}
               </li>
             );
           })}

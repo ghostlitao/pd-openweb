@@ -1,6 +1,6 @@
 import PropTypes from 'prop-types';
 import React, { Component } from 'react';
-import { selectOrgRole as selectOrgRolePc } from 'src/components/DialogSelectOrgRole';
+import selectOrgRolePc from 'src/components/dialogSelectOrgRole';
 import SelectOrgRole from 'mobile/components/SelectOrgRole';
 import cx from 'classnames';
 import { browserIsMobile } from 'src/util';
@@ -66,18 +66,7 @@ export default class Widgets extends Component {
     const { showMobileOrgRole } = this.state;
 
     return (
-      <div
-        className="customFormControlBox"
-        style={{
-          flexWrap: 'wrap',
-          minWidth: 0,
-          alignItems: 'center',
-          height: 'auto',
-          background: '#fff',
-          borderColor: '#fff',
-          padding: 0,
-        }}
-      >
+      <div className="customFormControlBox customFormControlUser">
         {value.map((item, index) => {
           return (
             <div className={cx('customFormControlTags', { selected: browserIsMobile() && !disabled })} key={index}>

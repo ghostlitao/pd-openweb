@@ -38,6 +38,11 @@ function Setting(props) {
   const { filters = [], setFilters, setActiveId } = props;
   const { appId, appPkg = {}, pageId, components } = props;
 
+  const allControls = filters.map(data => {
+    const { control, objectControls } = data;
+    return control || _.get(objectControls[0], 'control');
+  });
+
   const changeGlobal = (e) => {
     const { checked } = e.target;
     const { filterId, objectControls } = filter;
@@ -84,10 +89,13 @@ function Setting(props) {
           const target = _.find(f.objectControls, { worksheetId: o.worksheetId });
           return {
             ...o,
-            controlId: target ? target.controlId : '',
-            control: target ? target.control : undefined
+            controlId: target && target.controlId ? target.controlId : '',
+            control: target && target.control ? target.control : undefined
           }
         })
+      }
+      if (!data.objectControls.length) {
+        data.dataType = 0;
       }
       return data;
     });
@@ -132,7 +140,12 @@ function Setting(props) {
         pageId={pageId}
         components={components}
         filter={filter}
-        setFilter={setFilter}
+        setFilter={(data) => {
+          if (!data.objectControls.length) {
+            data.dataType = 0;
+          }
+          setFilter(data);
+        }}
         changeGlobal={changeGlobal}
         changeAllFilterObjectControls={changeAllFilterObjectControls}
       />
@@ -142,6 +155,7 @@ function Setting(props) {
           <FilterControl
             filter={filter}
             setFilter={setFilter}
+            allControls={allControls}
           />
         </Fragment>
       )}

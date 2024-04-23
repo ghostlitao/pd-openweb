@@ -1,12 +1,15 @@
-import React, { Fragment } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import cx from 'classnames';
+import { getAppFeaturesPath } from 'src/util';
 
-export default ({ item }) => {
+const isWxWork = window.navigator.userAgent.toLowerCase().includes('wxwork');
+
+export default ({ item, type }) => {
   return (
     <Link
-      to={`/workflowedit/${item.id}`}
-      target="_blank"
+      to={`/workflowedit/${item.id}?${getAppFeaturesPath()}#type=${type}`}
+      target={isWxWork ? '_self' : '_blank'}
       className={cx('flexColumn nameBox ThemeColor3', { unable: !item.enabled })}
     >
       <div className="ellipsis Font14">{item.name}</div>

@@ -37,7 +37,6 @@ const Btn = styled.span`
 `;
 
 const Popup = styled.div`
-  width: 160px;
   border-radius: 3px;
   box-shadow: 0px 4px 16px rgba(0, 0, 0, 0.24);
   background: #fff;
@@ -65,7 +64,6 @@ const PageSizeConfig = styled.div`
   padding: 0 14px;
   .Dropdown--input {
     height: 28px !important;
-    width: 90px;
   }
 `;
 const JumpPage = styled.div`
@@ -88,6 +86,7 @@ const pageSizeNums = [
 
 export default class Pagination extends React.Component {
   static propTypes = {
+    disabled: PropTypes.bool,
     abnormalMode: PropTypes.bool,
     className: PropTypes.string,
     allowChangePageSize: PropTypes.bool,
@@ -223,7 +222,7 @@ export default class Pagination extends React.Component {
   }
 
   render() {
-    const { abnormalMode, className = '', pageIndex, maxCount, allCount, onPrev, onNext } = this.props;
+    const { disabled, abnormalMode, className = '', pageIndex, maxCount, allCount, onPrev, onNext } = this.props;
     const { popupVisible } = this.state;
     if (maxCount) {
       return (
@@ -243,7 +242,7 @@ export default class Pagination extends React.Component {
       <Con className={className} ref={this.conRef}>
         <Trigger
           action={['click']}
-          popupVisible={popupVisible}
+          popupVisible={!disabled && popupVisible}
           onPopupVisibleChange={value => this.setState({ popupVisible: value })}
           destroyPopupOnHide
           popupAlign={{

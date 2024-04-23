@@ -1,5 +1,5 @@
 import { formatColumnToText } from 'src/pages/widgetConfig/util/data.js';
-import { calcDate } from 'src/pages/worksheet/util';
+import { calcDate, filterEmptyChildTableRows } from 'src/pages/worksheet/util';
 import { Parser } from 'hot-formula-parser';
 import nzh from 'nzh';
 import { v4 as uuidv4 } from 'uuid';
@@ -7,8 +7,9 @@ import { FORM_ERROR_TYPE, FROM, TIME_UNIT, FORM_ERROR_TYPE_TEXT, SYSTEM_ENUM } f
 import { isRelateRecordTableControl, checkCellIsEmpty } from 'worksheet/util';
 import execValueFunction from 'src/pages/widgetConfig/widgetSetting/components/FunctionEditorDialog/Func/exec';
 import { transferValue } from 'src/pages/widgetConfig/widgetSetting/components/DynamicDefaultValue/util';
-import { getDatePickerConfigs } from 'src/pages/widgetConfig/util/setting.js';
-import { SYSTEM_CONTROLS } from 'worksheet/constants/enum';
+import { getDefaultCount } from 'src/pages/widgetConfig/widgetSetting/components/SearchWorksheet/SearchWorksheetDialog.jsx';
+import { getDatePickerConfigs, getShowFormat } from 'src/pages/widgetConfig/util/setting.js';
+import { RELATE_RECORD_SHOW_TYPE, SYSTEM_CONTROLS } from 'worksheet/constants/enum';
 import {
   Validator,
   getRangeErrorType,
@@ -18,17 +19,21 @@ import {
   compareWithTime,
   getEmbedValue,
   unTextSearch,
+  controlState,
+  getArrBySpliceType,
 } from './utils';
 import intlTelInput from '@mdfe/intl-tel-input';
 import utils from '@mdfe/intl-tel-input/build/js/utils';
 import moment from 'moment';
 import MapLoader from 'ming-ui/components/amap/MapLoader';
+import MapHandler from 'ming-ui/components/amap/MapHandler';
 import departmentAjax from 'src/api/department';
 import organizeAjax from 'src/api/organize';
-import worksheetAjax from 'src/api/worksheet';
-import { getCurrentProject } from 'src/util';
+import { browserIsMobile, getCurrentProject, toFixed } from 'src/util';
 import { checkRuleLocked } from './filterFn';
 import _ from 'lodash';
+import { createRequestPool } from 'worksheet/api/standard';
+import renderCellText from 'src/pages/worksheet/components/CellControls/renderText';
 
 export const initIntlTelInput = () => {
   if (window.initIntlTelInput) {
@@ -63,6 +68,15 @@ const formatTimeValue = (control = {}, isCurrent = false, value) => {
 
 // 处理静态默认值
 const parseStaticValue = (item, staticValue) => {
+  // 手机 当前用户
+  if (item.type === 3 && _.get(safeParse(staticValue), 'accountId') === 'user-self') {
+    return _.get(md, 'global.Account.mobilePhone');
+  }
+  // 邮箱 当前用户
+  if (item.type === 5 && _.get(safeParse(staticValue), 'accountId') === 'user-self') {
+    return _.get(md, 'global.Account.email');
+  }
+
   // 日期 || 日期时间
   if (item.type === 15 || item.type === 16) {
     const unit = TIME_UNIT[item.unit] || 'd';
@@ -94,15 +108,21 @@ const parseStaticValue = (item, staticValue) => {
     return _.isEmpty(value) ? '' : value;
   }
 
-  // 关联表
-  if (item.type === 29) {
+  // 关联表、级联
+  if (_.includes([29, 35], item.type)) {
+    const titleControl = _.find(_.get(item, 'relationControls'), i => i.attribute === 1);
     staticValue = safeParse(staticValue)[0];
+    const name =
+      safeParse(staticValue).name ||
+      (titleControl
+        ? renderCellText({ ...titleControl, value: safeParse(staticValue)[titleControl.controlId] }) || _l('未命名')
+        : undefined);
     return JSON.stringify([
       {
         sourcevalue: staticValue,
         type: 8,
         sid: safeParse(staticValue).rowid,
-        name: safeParse(staticValue).name,
+        name: name,
       },
     ]);
   }
@@ -125,7 +145,7 @@ export const getDynamicValue = (data, currentItem, masterData, embedData) => {
 
     // 关联他表字段
     if (item.rcid) {
-      if (currentItem.isQueryWorksheetFill && currentItem.value) {
+      if (currentItem.isQueryWorksheetFill && !checkCellIsEmpty(currentItem.value)) {
         return currentItem.value;
       }
       try {
@@ -179,10 +199,10 @@ export const getDynamicValue = (data, currentItem, masterData, embedData) => {
         ) {
           try {
             let cValue = 0;
-            const { options } = _.find(parentControl.relationControls, o => o.controlId === item.cid);
+            const { options, enumDefault } = _.find(parentControl.relationControls, o => o.controlId === item.cid);
 
             safeParse(sourcevalue).forEach(key => {
-              cValue += options.find(o => o.key === key).score;
+              cValue += !!enumDefault ? options.find(o => o.key === key).score : 0;
             });
 
             return cValue;
@@ -192,12 +212,21 @@ export const getDynamicValue = (data, currentItem, masterData, embedData) => {
         }
 
         //文本类控件(默认值为选项、成员、部门等异化)
-        if (_.includes([2], currentItem.type)) {
+        if (_.includes([2, 41], currentItem.type)) {
           let currentControl = _.find(parentControl.relationControls || [], re => re.controlId === item.cid);
-          if (!currentControl && _.includes(['ownerid', 'caid', 'uaid', 'wfcuaids', 'wfcaid'], item.cid)) {
-            currentControl = { type: 26 };
+          if (!currentControl) {
+            if (_.includes(['ownerid', 'caid', 'uaid', 'wfcuaids', 'wfcaid'], item.cid)) {
+              currentControl = { type: 26 };
+            } else if (_.includes(['wfstatus'], item.cid)) {
+              currentControl = { type: 11, controlId: 'wfstatus' };
+            }
           }
           return getCurrentValue(currentControl, sourcevalue, currentItem);
+        }
+
+        // 选项处理
+        if (_.includes([9, 10, 11], currentItem.type)) {
+          return getControlValue(parentControl.relationControls || [], currentItem, item.cid, sourcevalue);
         }
 
         return sourcevalue;
@@ -261,7 +290,7 @@ export const getDynamicValue = (data, currentItem, masterData, embedData) => {
       }
 
       //文本类控件、嵌入控件(默认值为选项、成员、部门等多异化)
-      if (_.includes([2], currentItem.type) || (currentItem.type === 45 && currentItem.enumDefault === 1)) {
+      if (_.includes([2, 41], currentItem.type) || (currentItem.type === 45 && currentItem.enumDefault === 1)) {
         const currentControl = _.find(data, c => c.controlId === item.cid);
         return getCurrentValue(currentControl, (currentControl || {}).value, currentItem);
       }
@@ -297,6 +326,12 @@ export const getDynamicValue = (data, currentItem, masterData, embedData) => {
     // 筛选出不重复的用户
     if (currentItem.type === 26) {
       source = _.uniqBy(source, user => user.accountId);
+    } else if (
+      currentItem.type === 29 &&
+      currentItem.enumDefault === 2 &&
+      _.get(currentItem, 'advancedSetting.showtype') === String(RELATE_RECORD_SHOW_TYPE.CARD)
+    ) {
+      source = source.map(r => ({ ...r, isNew: true, isFromDefault: true }));
     } else {
       source = _.uniqBy(source);
     }
@@ -330,10 +365,15 @@ const getOtherWorksheetFieldValue = ({ data, dataSource, sourceControlId }) => {
 };
 
 // 处理公式
-const parseNewFormula = (data, formulaStr, dot = 2, nullzero = '0', isPercent) => {
+const parseNewFormula = (data, currentItem = {}) => {
+  const { dot = 2 } = currentItem;
+  const nullzero = _.includes([2, 3, 6], currentItem.enumDefault)
+    ? '1'
+    : _.get(currentItem, 'advancedSetting.nullzero') || '0';
+  const isPercent = _.get(currentItem, 'advancedSetting.numshow') === '1';
   let columnIsUndefined;
 
-  formulaStr = formulaStr
+  const formulaStr = currentItem.dataSource
     .replace(/cSUM/gi, 'SUM')
     .replace(/cAVG/gi, 'AVERAGE')
     .replace(/cMIN/gi, 'MIN')
@@ -386,11 +426,26 @@ const parseNewFormula = (data, formulaStr, dot = 2, nullzero = '0', isPercent) =
     );
   });
   const parser = new Parser();
+  parser.setFunction('MOD', function (params) {
+    return params[0] % params[1];
+  });
   const result = parser.parse(expression);
   return columnIsUndefined
     ? { columnIsUndefined }
     : {
-        result: typeof result.result === 'number' ? parseFloat(result.result.toFixed(isPercent ? dot + 2 : dot)) : null,
+        result:
+          typeof result.result === 'number'
+            ? parseFloat(
+                handleDotAndRound(
+                  {
+                    ...currentItem,
+                    dot: isPercent ? dot + 2 : dot,
+                  },
+                  result.result,
+                  false,
+                ),
+              )
+            : null,
       };
 };
 
@@ -430,8 +485,38 @@ const parseValueIframe = (data, currentItem, masterData, embedData) => {
   );
 };
 
+/**
+ * ignoreAddZero 不走补零逻辑
+ */
+export function handleDotAndRound(currentItem, value, ignoreAddZero = true) {
+  const isNegative = value < 0;
+  value = Math.abs(value);
+  const roundType = currentItem.advancedSetting.roundtype || (_.includes([6, 8, 31, 37], currentItem.type) ? '2' : '0');
+  // 取整方式 空或者0 向下取整 1 向上取整 2 代表四舍五入
+  let dot = Number(currentItem.dot);
+  if (!dot || _.isNaN(dot)) {
+    dot = 0;
+  }
+  if (roundType === '2') {
+    value = String((Math.round(value * Math.pow(10, dot)) / Math.pow(10, dot)) * (isNegative ? -1 : 1));
+  } else if (roundType === '1') {
+    value = String((Math.ceil(value * Math.pow(10, dot)) / Math.pow(10, dot)) * (isNegative ? -1 : 1));
+  } else {
+    value = String(toFixed(Math.floor(value * Math.pow(10, dot)) / Math.pow(10, dot), dot) * (isNegative ? -1 : 1));
+  }
+  const ignoreZero = currentItem.advancedSetting.dotformat === '1';
+  if (!ignoreZero && dot !== 0 && ignoreAddZero) {
+    value = (value + (value.indexOf('.') > -1 ? '' : '.') + '0000000000000').replace(
+      new RegExp(`(\.\\d{${dot}})(0+)`),
+      '$1',
+    );
+  }
+  return value;
+}
+
 // 处理日期公式
 const parseDateFormula = (data, currentItem, recordCreateTime) => {
+  const roundType = currentItem.advancedSetting.roundtype || '0';
   const getTime = (str, pos) => {
     if (str === '$ctime$') {
       return recordCreateTime || new Date();
@@ -469,7 +554,7 @@ const parseDateFormula = (data, currentItem, recordCreateTime) => {
             });
           }
         } else if (column.type === 46) {
-          timestr = moment('2000-1-1 ' + timestr);
+          timestr = moment('2000/1/1 ' + timestr);
         }
         return timestr;
       }
@@ -558,19 +643,10 @@ const parseDateFormula = (data, currentItem, recordCreateTime) => {
     } else {
       value = moment(endTime).diff(startTime, TIME_UNIT[currentItem.unit] || 'm', true);
     }
-
-    if (currentItem.dot) {
-      value = value.toString();
-      const strIndex = value.indexOf('.');
-
-      if (strIndex > -1) {
-        value = value.substring(0, strIndex + currentItem.dot + 1);
-      }
-    } else {
-      value = String(Math.floor(value));
-    }
+    value = handleDotAndRound(currentItem, value);
   } else if (currentItem.enumDefault === 2) {
     let dateColumnType = 0;
+    let formatMode = 'YYYY-MM-DD HH:mm:ss';
     let formulaResult;
     let date;
     let hasUndefinedColumn;
@@ -582,6 +658,9 @@ const parseDateFormula = (data, currentItem, recordCreateTime) => {
         return;
       } else {
         dateColumnType = column.type;
+        try {
+          formatMode = getShowFormat(column);
+        } catch (err) {}
         date = formatColumnToText(column, true, true);
       }
     } else if (currentItem.sourceControlId === '$ctime$') {
@@ -617,17 +696,12 @@ const parseDateFormula = (data, currentItem, recordCreateTime) => {
 
       return parseFloat(formatColumnToText(matchedColumn, true, true), 10);
     });
-
-    formulaResult = hasUndefinedColumn ? {} : calcDate(moment(date, 'YYYY-MM-DD HH:mm:ss'), expression);
+    formulaResult = hasUndefinedColumn ? {} : calcDate(date ? moment(date, formatMode) : '', expression);
     value = formulaResult.error || hasUndefinedColumn ? '' : formulaResult.result.format('YYYY-MM-DD HH:mm:ss');
   } else if (currentItem.enumDefault === 3) {
     const unit = TIME_UNIT[currentItem.unit] || 'd';
     let today = moment();
     let time = moment(getTime(currentItem.sourceControlId, 'start'));
-    if (unit === 'd') {
-      today = today.startOf(unit);
-      time = time.startOf(unit);
-    }
     if (!today || !time) {
       return;
     }
@@ -635,36 +709,61 @@ const parseDateFormula = (data, currentItem, recordCreateTime) => {
       currentItem.advancedSetting.dateformulatype === '1' ||
       _.isUndefined(currentItem.advancedSetting.dateformulatype)
     ) {
-      value = String(moment(time).diff(today, unit));
+      value = String(moment(time).diff(today, unit, true));
     } else {
-      value = String(moment(today).diff(time, unit));
+      value = String(moment(today).diff(time, unit, true));
     }
+    value = handleDotAndRound(currentItem, value);
   }
 
   return value;
 };
 
 // 获取控件的值（处理特殊选项控件）
-const getControlValue = (data, currentItem, controlId) => {
+// objValue是外层新值，覆盖obj.value
+const getControlValue = (data, currentItem, controlId, objValue) => {
   const obj = _.find(data, o => o.controlId === controlId) || {};
+  const value = objValue || obj.value;
 
-  // 选项控件的分值可以被数值类控件引用
+  // 非同选项集选项默认值文本匹配
+  if (
+    _.includes([9, 10, 11], obj.type) &&
+    _.includes([9, 10, 11], currentItem.type) &&
+    !(obj.dataSource && obj.dataSource === currentItem.dataSource) &&
+    value
+  ) {
+    const tempValue = safeParse(value || '[]')
+      .map(item => {
+        const isOther = (item || '').includes('other') && _.find(currentItem.options || [], c => c.key === 'other');
+        const itemText = _.get(
+          _.find(obj.options || [], i => i.key === item),
+          'value',
+        );
+
+        const matchOptionKeys = (currentItem.options || []).filter(i => i.value === itemText);
+        return isOther ? item : _.get(_.head(matchOptionKeys), 'key') || '';
+      })
+      .filter(_.identity);
+    return _.isEmpty(tempValue) ? '' : JSON.stringify(tempValue);
+  }
+
   if (
     _.includes([9, 10, 11], obj.type) &&
     (_.includes([6, 8, 28, 31], currentItem.type) || (currentItem.type === 38 && currentItem.enumDefault === 2))
   ) {
-    if (!safeParse(obj.value || '[]').length) return '';
+    // 选项控件的分值可以被数值类控件引用
+    if (!safeParse(value || '[]').length) return '';
 
     let cValue = 0;
-    safeParse(obj.value || '[]').forEach(key => {
+    safeParse(value || '[]').forEach(key => {
       // 新增的项默认0
-      cValue += key.indexOf('add_') > -1 ? 0 : obj.options.find(o => o.key === key).score;
+      cValue += key.indexOf('add_') > -1 || !obj.enumDefault ? 0 : obj.options.find(o => o.key === key).score;
     });
 
     return cValue;
   }
 
-  return _.isUndefined(obj.value) ? '' : obj.value;
+  return _.isUndefined(value) ? '' : value;
 };
 
 // 检测必填
@@ -686,7 +785,8 @@ export const checkRequired = item => {
         _.isArray(safeParse(item.value)) &&
         !safeParse(item.value).length) ||
       (item.type === 29 && typeof item.value === 'string' && item.value.startsWith('deleteRowIds')) ||
-      (item.type === 34 && ((item.value.rows && !item.value.rows.length) || item.value === '0')) ||
+      (item.type === 34 &&
+        ((item.value.rows && !filterEmptyChildTableRows(item.value.rows).length) || item.value === '0')) ||
       (item.type === 36 && item.value === '0'))
   ) {
     errorType = FORM_ERROR_TYPE.REQUIRED;
@@ -716,8 +816,7 @@ export const onValidator = ({ item, data, masterData, ignoreRequired, verifyAllC
           !value ||
           (iti.isValidNumber() && _.get(iti.getSelectedCountryData(), 'dialCode') === '86'
             ? specialTelVerify(_.startsWith(value, '+86') ? value : '+86' + value)
-            : iti.isValidNumber()) ||
-          specialTelVerify(value)
+            : iti.isValidNumber() || specialTelVerify(value))
             ? ''
             : FORM_ERROR_TYPE.MOBILE_PHONE;
       }
@@ -750,8 +849,14 @@ export const onValidator = ({ item, data, masterData, ignoreRequired, verifyAllC
       // 文本
       if (item.type === 2) {
         if (item.advancedSetting && item.advancedSetting.regex) {
-          errorType =
-            !value || new RegExp(safeParse(item.advancedSetting.regex).regex).test(value) ? '' : FORM_ERROR_TYPE.CUSTOM;
+          let reg;
+          try {
+            reg = new RegExp(safeParse(item.advancedSetting.regex).regex, 'gm');
+          } catch (error) {
+            console.log(error);
+          }
+          // 无值或正则配置不对不校验，正则匹配成功不报错
+          errorType = !value || !reg || reg.test(value) ? '' : FORM_ERROR_TYPE.CUSTOM;
         }
         if (!errorType) {
           errorType = getRangeErrorType(item);
@@ -827,10 +932,18 @@ export const onValidator = ({ item, data, masterData, ignoreRequired, verifyAllC
       // 其他选项必填
       if (_.includes([9, 10, 11], item.type) && !ignoreRequired) {
         const hasOtherOption = _.find(item.options, i => i.key === 'other' && !i.isDeleted);
-        const selectOther = _.find(safeParse(item.value || '[]'), i => (i || '').includes('other'));
-        if (hasOtherOption && _.get(item.advancedSetting, 'otherrequired') === '1' && selectOther && !item.isSubList) {
+        const selectOther = /^\[.*\]$/.test(item.value)
+          ? _.find(safeParse(item.value || '[]'), i => (i || '').includes('other'))
+          : false;
+        if (
+          hasOtherOption &&
+          _.get(item.advancedSetting, 'otherrequired') === '1' &&
+          selectOther &&
+          !(item.isSubList && item.type === 10)
+        ) {
           if (selectOther === 'other' || !_.replace(selectOther, 'other:', '')) {
             errorType = FORM_ERROR_TYPE.OTHER_REQUIRED;
+            errorText = FORM_ERROR_TYPE_TEXT.OTHER_REQUIRED(item);
           }
         }
       }
@@ -838,6 +951,24 @@ export const onValidator = ({ item, data, masterData, ignoreRequired, verifyAllC
 
     if (isRelateRecordTableControl(item)) {
       errorType = '';
+    }
+
+    if (item.type === 34) {
+      const { min, max, enablelimit } = item.advancedSetting;
+      if (String(enablelimit) === '1') {
+        const rowsLength = Number(
+          (_.get(item, 'value.rows') && filterEmptyChildTableRows(item.value.rows).length) ||
+            (!_.isObject(item.value) ? item.value : 0) ||
+            0,
+        );
+        if (_.isNumber(rowsLength) && !_.isNaN(rowsLength)) {
+          if (_.isNumber(Number(min)) && !_.isNaN(Number(min)) && rowsLength < Number(min)) {
+            errorType = FORM_ERROR_TYPE.CHILD_TABLE_ROWS_LIMIT;
+          } else if (_.isNumber(Number(max)) && !_.isNaN(Number(max)) && rowsLength > Number(max)) {
+            errorType = FORM_ERROR_TYPE.CHILD_TABLE_ROWS_LIMIT;
+          }
+        }
+      }
     }
   }
 
@@ -874,6 +1005,8 @@ export const onValidator = ({ item, data, masterData, ignoreRequired, verifyAllC
 export default class DataFormat {
   constructor({
     projectId = '',
+    requestPool,
+    abortController,
     data = [],
     rules = [],
     isCreate = false,
@@ -891,6 +1024,7 @@ export default class DataFormat {
     updateLoadingItems = () => {},
     activeTrigger = () => {},
   }) {
+    this.abortController = abortController;
     this.projectId = projectId;
     this.masterRecordRowId = masterRecordRowId;
     this.data = _.cloneDeep(data);
@@ -907,6 +1041,8 @@ export default class DataFormat {
     this.updateLoadingItems = updateLoadingItems;
     this.activeTrigger = activeTrigger;
     this.loopList = [];
+
+    this.requestPool = requestPool || createRequestPool({ abortController });
 
     const departmentIds = [];
     const locationIds = [];
@@ -1010,7 +1146,7 @@ export default class DataFormat {
       });
     }
 
-    if (!(isCreate || ignoreLock) && checkRuleLocked(rules, this.data)) {
+    if (!(isCreate || ignoreLock) && checkRuleLocked(rules, this.data, _.get(this.embedData, 'recordId'))) {
       disabled = true;
     }
 
@@ -1125,7 +1261,13 @@ export default class DataFormat {
             removeUniqueItem(controlId);
             _.remove(this.errorItems, obj => obj.controlId === item.controlId && !obj.errorMessage);
 
-            const { errorType, errorText } = onValidator({ item, data: this.data, masterData: this.masterData });
+            const { errorType, errorText } = onValidator({
+              item,
+              data: this.data,
+              masterData: this.masterData,
+              verifyAllControls: this.from === 21 && browserIsMobile() ? true : undefined,
+            });
+
             if (errorType) {
               this.errorItems.push({
                 controlId: item.controlId,
@@ -1195,14 +1337,7 @@ export default class DataFormat {
 
           // 公式控件
           if (currentItem.type === 31) {
-            const formulaResult = parseNewFormula(
-              this.data,
-              currentItem.dataSource,
-              currentItem.dot,
-              // 求和、平均值、乘积字段值为空按0处理，兼容赋分值选项等操作
-              _.includes([2, 3, 6], currentItem.enumDefault) ? '1' : currentItem.advancedSetting.nullzero,
-              currentItem.advancedSetting.numshow === '1',
-            );
+            const formulaResult = parseNewFormula(this.data, currentItem);
             value = formulaResult.error || formulaResult.columnIsUndefined ? '' : formulaResult.result;
           }
 
@@ -1218,13 +1353,7 @@ export default class DataFormat {
 
               // 公式
               if (singleControl.type === 31) {
-                let formulaResult = parseNewFormula(
-                  this.data,
-                  singleControl.dataSource,
-                  singleControl.dot,
-                  _.includes([2, 3, 6], singleControl.enumDefault) ? '1' : singleControl.advancedSetting.nullzero,
-                  currentItem.advancedSetting.numshow === '1',
-                );
+                let formulaResult = parseNewFormula(this.data, singleControl);
                 if (formulaResult.columnIsUndefined) {
                   return '';
                 }
@@ -1236,7 +1365,7 @@ export default class DataFormat {
                 ) {
                   formulaResult.result = parseFloat(formulaResult.result) * 100;
                 }
-                return formulaResult.error
+                return formulaResult.error || _.isNull(formulaResult.result)
                   ? ''
                   : `${formulaResult.result.toFixed(singleControl.dot)}${singleControl.unit}`;
               }
@@ -1358,6 +1487,7 @@ export default class DataFormat {
                             _.isNumber(parseFloat(v, 10)) && !_.isNaN(parseFloat(v, 10)) ? parseFloat(v, 10) : 0,
                           ),
                       );
+                      value = handleDotAndRound(currentItem, value, false);
                       break;
                     case 1: // 平均
                       value =
@@ -1512,10 +1642,13 @@ export default class DataFormat {
   /**
    * 设置异常控件
    */
-  setErrorControl(controlId, errorType, errorMessage, ruleId, isInit) {
+  setErrorControl(controlId, errorType, errorMessage, ruleItem = {}, isInit) {
     const saveIndex = _.findIndex(
       this.errorItems,
-      e => e.controlId === controlId && e.errorType === errorType && (ruleId ? e.ruleId === ruleId : true),
+      e =>
+        e.controlId === controlId &&
+        e.errorType === errorType &&
+        (ruleItem.ruleId ? e.ruleId === ruleItem.ruleId : true),
     );
 
     if (saveIndex > -1) {
@@ -1537,9 +1670,9 @@ export default class DataFormat {
         this.errorItems.push({
           controlId,
           errorType,
-          showError: true,
+          showError: ruleItem.hintType !== 1,
           errorMessage,
-          ruleId,
+          ruleId: ruleItem.ruleId,
         });
       }
     }
@@ -1676,12 +1809,14 @@ export default class DataFormat {
   getCurrentLocation(ids) {
     if (!ids.length) return;
 
-    new MapLoader().loadJs().then(AMap => {
-      const mapObj = new AMap.Map('iCenter');
-      mapObj.plugin('AMap.Geolocation', () => {
-        const geolocation = new AMap.Geolocation();
-        geolocation.getCurrentPosition();
-        AMap.event.addListener(geolocation, 'complete', res => {
+    new MapLoader().loadJs().then(() => {
+      new MapHandler().getCurrentPos((status, res) => {
+        if (status === 'complete') {
+          // 处理定位回来慢但是用户已经选择了位置
+          ids = ids.filter(controlId => !this.data.find(o => o.controlId === controlId).value);
+
+          if (!ids.length) return;
+
           ids.forEach(controlId => {
             this.updateDataSource({
               controlId,
@@ -1704,7 +1839,7 @@ export default class DataFormat {
               title: (res.addressComponent || {}).building || '',
             }),
           });
-        });
+        }
       });
     });
   }
@@ -1723,7 +1858,7 @@ export default class DataFormat {
       );
     });
 
-    if (hasRelate && !isGet && sid) {
+    if (hasRelate && !isGet && sid && !sid.includes('temp')) {
       this.setLoadingInfo(controlId, true);
 
       let params = {
@@ -1737,12 +1872,13 @@ export default class DataFormat {
         params.getType = 3;
       }
       // 填写链接
-      if (window.isPublicWorksheet && window.recordShareLinkId) {
-        params.shareId = window.recordShareLinkId;
+      if (_.get(window, 'shareState.isPublicWorkflowRecord') && _.get(window, 'shareState.shareId')) {
+        params.shareId = _.get(window, 'shareState.shareId');
         params.getType = 13;
       }
-      worksheetAjax
-        .getRowDetail(params)
+
+      this.requestPool
+        .getRowDetail(params, this.abortController)
         .then(result => {
           this.setLoadingInfo(controlId, false);
 
@@ -1764,7 +1900,7 @@ export default class DataFormat {
             value: formatValue,
           });
         })
-        .always(() => {
+        .finally(() => {
           this.setLoadingInfo(controlId, false);
         });
     }
@@ -1851,32 +1987,39 @@ export default class DataFormat {
 
   /**
    * 能否执行查询（条件字段、字段值存在&&当前变更字段有值）
+   * 查询条件支持且或，分组判断
    */
   getSearchStatus = (filters = [], controls = []) => {
-    return _.every(filters, item => {
-      // 固定值|字段值
-      const isDynamicValue = item.dynamicSource && item.dynamicSource.length > 0;
-      //筛选值字段
-      const fieldResult = (_.find(this.data, da => da.controlId === _.get(item.dynamicSource[0] || {}, 'cid')) || {})
-        .value;
-      //条件字段
-      const conditionExit = _.find(controls.concat(SYSTEM_CONTROLS), con => con.controlId === item.controlId);
-      return isDynamicValue
-        ? fieldResult && fieldResult !== '[]' && fieldResult !== '{}' && fieldResult !== 0
-        : conditionExit;
+    const splitFilters = getArrBySpliceType(filters);
+    return _.some(splitFilters, (items = []) => {
+      return _.every(items, item => {
+        // 固定值|字段值
+        const isDynamicValue = item.dynamicSource && item.dynamicSource.length > 0;
+        //筛选值字段
+        const fieldResult =
+          _.includes(['rowid', 'currenttime'], _.get(item.dynamicSource[0] || {}, 'cid')) ||
+          (_.find(this.data, da => da.controlId === _.get(item.dynamicSource[0] || {}, 'cid')) || {}).value;
+        //条件字段
+        const conditionExit = _.find(controls.concat(SYSTEM_CONTROLS), con => con.controlId === item.controlId);
+        return isDynamicValue ? fieldResult : conditionExit;
+      });
     });
   };
 
   /**
    * 查询记录
    */
-  getFilterRowsData = (filters = [], para, controlId) => {
-    this.setLoadingInfo(controlId, true);
-    if (!_.includes(this.loopList, controlId)) {
-      this.loopList.push(controlId);
+  getFilterRowsData = (filters = [], para, controlId, effectControlId) => {
+    const formatFilters = formatFiltersValue(filters, this.data, _.get(this.embedData, 'recordId'));
+    // 增加查询条件对比，由于一些异步更新，未完成时已被记录id,导致更新完被循环拦截(纯id拦截不准确)
+    const tempFilterValue = formatFilters.map(i => _.pick(i, ['controlId', 'value', 'values', 'maxValue', 'minValue']));
+    const existFilters = this.loopList.filter(i => i.loopId === `${effectControlId}-${controlId}`);
+    if (_.some(existFilters, e => _.isEqual(tempFilterValue, e.loopFilter))) {
+      return Promise.reject();
     }
+    this.setLoadingInfo(controlId, true);
+    this.loopList.push({ loopId: `${effectControlId}-${controlId}`, loopFilter: tempFilterValue });
 
-    const formatFilters = formatFiltersValue(filters, this.data);
     let params = {
       filterControls: formatFilters,
       pageIndex: 1,
@@ -1888,7 +2031,7 @@ export default class DataFormat {
     if (window.isPublicWorksheet) {
       params.formId = window.publicWorksheetShareId;
     }
-    return worksheetAjax.getFilterRowsByQueryDefault(params);
+    return this.requestPool.getFilterRowsByQueryDefault(params, this.abortController);
   };
 
   /**
@@ -1897,9 +2040,22 @@ export default class DataFormat {
   getFilterConfigs = (control = {}, searchType) => {
     switch (searchType) {
       case 'init':
-        return this.searchConfig.filter(({ items = [] }) =>
-          _.every(items, item => (item.dynamicSource || []).length === 0),
-        );
+        return this.searchConfig.filter(({ items = [], controlId }) => {
+          const curValue = _.get(
+            _.find(this.data, d => d.controlId === controlId),
+            'value',
+          );
+          const isNull = checkCellIsEmpty(curValue);
+
+          return (
+            _.every(
+              items,
+              item =>
+                _.includes(['rowid', 'currenttime'], _.get(item.dynamicSource[0] || {}, 'cid')) ||
+                (item.dynamicSource || []).length === 0,
+            ) && isNull
+          );
+        });
       case 'onBlur':
         return this.searchConfig
           .filter(({ controlId }) => controlId !== control.controlId)
@@ -1932,49 +2088,75 @@ export default class DataFormat {
         }
       };
       if (currentConfig) {
-        const { items = [], configs = [], templates = [], sourceId, controlType, controlId, id } = currentConfig;
+        const {
+          items = [],
+          configs = [],
+          templates = [],
+          moreType,
+          moreSort,
+          sourceId,
+          controlType,
+          controlId,
+          id,
+        } = currentConfig;
         const controls = _.get(templates[0] || {}, 'controls') || [];
         //当前配置查询的控件
         const currentControl = _.find(this.data, da => da.controlId === controlId);
+        if (!currentControl) {
+          return;
+        }
+        // 表单类型转换，矫正数量配置
+        let queryCount = getDefaultCount(currentControl, currentConfig.queryCount);
         // 满足查询时机
         const canSearch = this.getSearchStatus(items, controls);
+        // 能配查询多条的是否赋值的控件
+        const canSearchMore =
+          !_.includes([29, 34], currentControl.type) ||
+          (currentControl.type === 29 && currentControl.enumDefault === 1);
         //表删除、没有控件、不符合查询时机、当前配置控件已删除等不执行
         if (
           templates.length > 0 &&
           controls.length > 0 &&
           canSearch &&
           currentControl &&
-          !_.includes(this.loopList, controlId)
+          !_.includes(this.loopList, `${control.controlId}-${controlId}`)
         ) {
-          //关联记录
-          if (_.includes([29], controlType)) {
-            //关联单条取第一条记录
+          //关联记录、或同源级联直接查询赋值
+          if (_.includes([29], controlType) || (controlType === 35 && currentControl.dataSource === sourceId)) {
             this.getFilterRowsData(
               items,
               {
                 worksheetId: sourceId,
-                pageSize:
-                  currentControl.enumDefault === 1
-                    ? 1
-                    : _.get(currentControl.advancedSetting || {}, 'showtype') !== '2'
-                    ? 50
-                    : 200,
+                pageSize: currentControl.enumDefault === 1 ? 1 : queryCount,
                 id,
                 getAllControls: true,
+                sortControls: moreSort,
               },
               controlId,
+              control.controlId,
             ).then(res => {
               this.setLoadingInfo(controlId, false);
               if (res.resultCode === 1) {
+                // 查询多条不赋值
+                if (canSearchMore && res.count > 1 && moreType === 1) return;
+                const titleControl = _.find(_.get(currentControl, 'relationControls'), i => i.attribute === 1);
                 const newValue = (res.data || []).map(item => {
+                  const nameValue = titleControl ? item[titleControl.controlId] : undefined;
                   return {
+                    isNew: true,
+                    isWorksheetQueryFill: _.get(currentControl.advancedSetting || {}, 'showtype') === '1',
                     sourcevalue: JSON.stringify(item),
                     row: item,
                     type: 8,
                     sid: item.rowid,
+                    name: getCurrentValue(titleControl, nameValue, { type: 2 }),
                   };
                 });
-                updateData(JSON.stringify(newValue));
+                if (_.isEmpty(newValue) && _.includes([29], controlType)) {
+                  updateData('deleteRowIds: all');
+                } else {
+                  updateData(JSON.stringify(newValue));
+                }
               }
             });
           } else {
@@ -1989,57 +2171,65 @@ export default class DataFormat {
                 items,
                 {
                   worksheetId: sourceId,
-                  pageSize: controlType === 34 ? 200 : 1,
+                  pageSize: controlType === 34 ? queryCount : 1,
                   id,
                   getAllControls: controlType === 34,
+                  sortControls: moreSort,
                 },
                 controlId,
+                control.controlId,
               ).then(res => {
                 this.setLoadingInfo(controlId, false);
                 if (res.resultCode === 1) {
                   const filterData = res.data || [];
+                  // 查询多条不赋值
+                  if (canSearchMore && res.count > 1 && moreType === 1) return;
                   //子表
                   if (controlType === 34) {
                     const newValue = [];
-                    filterData.forEach(item => {
-                      let row = {};
-                      canMapConfigs.map(({ cid = '', subCid = '' }) => {
-                        const controlVal = _.find(currentControl.relationControls || [], re => re.controlId === cid);
-                        if (controlVal) {
-                          if (subCid === 'rowid') {
+                    if (filterData.length) {
+                      filterData.forEach(item => {
+                        let row = {};
+                        canMapConfigs.map(({ cid = '', subCid = '' }) => {
+                          const controlVal = _.find(currentControl.relationControls || [], re => re.controlId === cid);
+                          if (controlVal) {
+                            if (subCid === 'rowid') {
+                              row[cid] =
+                                controlVal.type === 29
+                                  ? JSON.stringify([
+                                      {
+                                        sourcevalue: JSON.stringify(item),
+                                        row: item,
+                                        type: 8,
+                                        sid: item.rowid,
+                                      },
+                                    ])
+                                  : item.rowid;
+                              return;
+                            }
                             row[cid] =
-                              controlVal.type === 29
-                                ? JSON.stringify([
-                                    {
-                                      sourcevalue: JSON.stringify(item),
-                                      row: item,
-                                      type: 8,
-                                      sid: item.rowid,
-                                    },
-                                  ])
-                                : item.rowid;
-                            return;
+                              controlVal.type === 2
+                                ? getCurrentValue(
+                                    _.find(controls, s => s.controlId === subCid),
+                                    item[subCid],
+                                    controlVal,
+                                  )
+                                : _.includes([9, 10, 11], controlVal.type)
+                                ? getControlValue(controls, controlVal, subCid, item[subCid])
+                                : item[subCid] || '';
                           }
-                          row[cid] =
-                            controlVal.type === 2
-                              ? getCurrentValue(
-                                  _.find(controls, s => s.controlId === subCid),
-                                  item[subCid],
-                                  controlVal,
-                                )
-                              : item[subCid] || '';
+                        });
+                        //映射明细所有字段值不为空
+                        if (_.some(Object.values(row), i => !_.isUndefined(i))) {
+                          newValue.push({
+                            ...row,
+                            rowid: `temprowid-${uuidv4()}`,
+                            allowedit: true,
+                            addTime: new Date().getTime(),
+                          });
                         }
                       });
-                      //映射明细所有字段值不为空
-                      if (_.some(Object.values(row), i => !_.isUndefined(i))) {
-                        newValue.push({
-                          ...row,
-                          rowid: `temprowid-${uuidv4()}`,
-                          allowedit: true,
-                          addTime: new Date().getTime(),
-                        });
-                      }
-                    });
+                    }
                     updateData({
                       action: 'clearAndSet',
                       isDefault: true,
@@ -2050,7 +2240,12 @@ export default class DataFormat {
                     const currentId = _.get(canMapConfigs[0] || {}, 'subCid');
                     //取该控件值去填充
                     const item = _.find(controls, c => c.controlId === currentId);
-                    const value = getCurrentValue(item, (filterData[0] || {})[currentId], currentControl);
+                    const itemData = _.includes([9, 10, 11], item.type)
+                      ? getControlValue(controls, currentControl, currentId, (filterData[0] || {})[currentId])
+                      : (filterData[0] || {})[currentId];
+                    const value = getCurrentValue(item, itemData, currentControl);
+                    // 防止新建的时候无效变更引起的报错提示
+                    if (searchType === 'init' && _.isEqual(value, currentControl.value)) return;
                     updateData(value);
                   }
                 }

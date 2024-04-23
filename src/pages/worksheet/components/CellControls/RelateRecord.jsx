@@ -3,15 +3,19 @@ import PropTypes from 'prop-types';
 import cx from 'classnames';
 import styled from 'styled-components';
 import Trigger from 'rc-trigger';
+import SheetContext from 'worksheet/common/Sheet/SheetContext';
 import { formatRecordToRelateRecord } from 'worksheet/util';
 import { formatControlToServer } from 'src/components/newCustomFields/tools/utils';
 import { WORKSHEETTABLE_FROM_MODULE } from 'worksheet/constants/enum';
 import { RELATE_RECORD_SHOW_TYPE } from 'worksheet/constants/enum';
+import { getTitleTextFromControls, getTitleTextFromRelateControl } from 'src/components/newCustomFields/tools/utils';
 import renderCellText from 'src/pages/worksheet/components/CellControls/renderText';
-import { isKeyBoardInputChar } from 'worksheet/util';
+import { isKeyBoardInputChar, emitter } from 'worksheet/util';
 import RelateRecordTags from './comps/RelateRecordTags';
 import EditableCellCon from '../EditableCellCon';
 import RelateRecordDropdown from 'worksheet/components/RelateRecordDropdown';
+import { openChildTable } from '../ChildTableDialog';
+import { openRelateRelateRecordTable } from '../RelateRecordTableDialog';
 import autobind from 'core-decorators/lib/autobind';
 import _ from 'lodash';
 import { browserIsMobile } from 'src/util';
@@ -20,11 +24,13 @@ const RecordCardCellRelateRecord = styled.div`
   display: inline-block;
   line-height: 21px;
   font-size: 13px;
-  background-color: #e8e8e8;
+  background-color: rgba(0, 100, 240, 0.08);
   padding: 0 10px;
+  border-radius: 3px;
   margin-right: 6px;
 `;
 export default class RelateRecord extends React.Component {
+  static contextType = SheetContext;
   static propTypes = {
     className: PropTypes.string,
     style: PropTypes.shape({}),
@@ -112,7 +118,7 @@ export default class RelateRecord extends React.Component {
         break;
       default:
         (() => {
-          if (isediting || !e.key || !isKeyBoardInputChar(e.key)) {
+          if (!e.isInputValue && (isediting || !e.key || !isKeyBoardInputChar(e.key))) {
             return;
           }
           updateEditingStatus(true);
@@ -140,21 +146,30 @@ export default class RelateRecord extends React.Component {
     return length;
   }
   renderSelected() {
-    const { cell = {} } = this.props;
+    const { isMobileTable, cell = {} } = this.props;
     const { relationControls = [] } = cell;
     const titleControl = _.find(relationControls, c => c.attribute === 1);
     let records = [];
-    try {
-      records = JSON.parse(cell.value);
-    } catch (err) {}
-    if (!_.isArray(records) || !titleControl) {
+    if (!titleControl) {
       return null;
     }
-    return records.map((record, index) => (
-      <RecordCardCellRelateRecord key={index}>
-        {renderCellText({ ...titleControl, value: record.name })}
-      </RecordCardCellRelateRecord>
-    ));
+    if (isMobileTable) {
+      records = this.state.records;
+      return records.map((record, index) => (
+        <RecordCardCellRelateRecord key={index}>
+          {getTitleTextFromRelateControl(cell, record)}
+        </RecordCardCellRelateRecord>
+      ));
+    } else {
+      try {
+        records = JSON.parse(cell.value);
+      } catch (err) {}
+      return records.map((record, index) => (
+        <RecordCardCellRelateRecord key={index}>
+          {renderCellText({ ...titleControl, value: record.name })}
+        </RecordCardCellRelateRecord>
+      ));
+    }
   }
 
   @autobind
@@ -183,8 +198,12 @@ export default class RelateRecord extends React.Component {
   }
 
   @autobind
-  handleRelateRecordTagChange({ addedIds, deletedIds, records = [], count } = {}) {
+  handleRelateRecordTagChange({ changed, addedIds, deletedIds, records = [], count } = {}) {
     const { cell, updateEditingStatus, updateCell, onValidate } = this.props;
+    if (!changed) {
+      updateEditingStatus(false);
+      return;
+    }
     const newValue = records.length
       ? JSON.stringify(formatRecordToRelateRecord(cell.relationControls, records, { addedIds, deletedIds }))
       : `deleteRowIds: ${deletedIds.join(',')}`;
@@ -206,7 +225,7 @@ export default class RelateRecord extends React.Component {
         value: newValue,
       });
     } else {
-      const data = formatControlToServer({ ...cell, value: newValue });
+      const data = formatControlToServer({ ...cell, value: newValue }, { needSourceValue: true });
       updateCell({
         editType: data.editType,
         value: data.value,
@@ -217,15 +236,21 @@ export default class RelateRecord extends React.Component {
 
   render() {
     const {
+      projectId,
+      appId,
+      viewId,
       tableId,
+      isTrash,
       singleLine,
       className,
       style,
+      rowIndex,
       from,
-      rowFormData,
+      rowFormData = () => [],
       recordId,
       worksheetId,
       rowHeightEnum = 0,
+      sheetSwitchPermit,
       count,
       cell,
       editable,
@@ -236,19 +261,74 @@ export default class RelateRecord extends React.Component {
     } = this.props;
     const { addedIds = [], deletedIds = [] } = this.isSubList ? this : {};
     let { records } = this.state;
+    const { isRequestingRelationControls } = this.context || {};
     const { advancedSetting = {} } = cell;
     const isSublist = cell.type === 34;
     const { showtype, allowlink, ddset } = advancedSetting; // 1 卡片 2 列表 3 下拉
-
+    const allowOpenList = from !== 21 && !isTrash && worksheetId && recordId;
     const recordsLength = this.getReordsLength(cell.value);
-
+    let showCount = recordsLength >= 1000 ? '999+' : recordsLength;
+    if (isSublist && recordsLength >= 1000) {
+      showCount = 1000;
+    }
+    if (isRequestingRelationControls) {
+      return <div className={className} style={style} onClick={onClick} />;
+    }
     if (parseInt(showtype, 10) === RELATE_RECORD_SHOW_TYPE.LIST || isSublist) {
       return (
         <div className={className} style={style} onClick={onClick}>
           {recordsLength > 0 && (
-            <div className="cellRelateRecordMultiple">
+            <div
+              className={cx('cellRelateRecordMultiple', { allowOpenList })}
+              onClick={e => {
+                if (!allowOpenList || browserIsMobile()) {
+                  return;
+                }
+                e.stopPropagation();
+                if (isSublist) {
+                  openChildTable({
+                    openFrom: 'cell',
+                    allowEdit: editable && from !== 4,
+                    title: getTitleTextFromControls(_.isFunction(rowFormData) ? rowFormData() : rowFormData),
+                    entityName: cell.sourceEntityName,
+                    appId,
+                    worksheetId,
+                    viewId,
+                    from,
+                    control: { ...cell, isDraft: from === 21 },
+                    controls: cell.relationControls,
+                    recordId,
+                    sheetSwitchPermit,
+                    masterData: {
+                      worksheetId,
+                      formData: (_.isFunction(rowFormData) ? rowFormData() : rowFormData)
+                        .map(c => _.pick(c, ['controlId', 'type', 'value', 'options']))
+                        .filter(c => !!c.value),
+                    },
+                    projectId,
+                  });
+                } else {
+                  openRelateRelateRecordTable({
+                    title: getTitleTextFromControls(_.isFunction(rowFormData) ? rowFormData() : rowFormData),
+                    appId,
+                    viewId,
+                    worksheetId,
+                    recordId,
+                    control: { ...cell, isDraft: from === 21 },
+                    allowEdit: editable,
+                    formdata: _.isFunction(rowFormData) ? rowFormData() : rowFormData,
+                    onUpdateCount: () => {
+                      emitter.emit('RELOAD_RECORD_INFO', {
+                        worksheetId,
+                        recordId,
+                      });
+                    },
+                  });
+                }
+              }}
+            >
               <i className={cx('icon', isSublist ? 'icon-table' : 'icon-link_record')}></i>
-              {recordsLength >= 1000 ? '999+' : recordsLength}
+              {showCount}
             </div>
           )}
         </div>
@@ -258,7 +338,7 @@ export default class RelateRecord extends React.Component {
     } else if (parseInt(showtype, 10) === RELATE_RECORD_SHOW_TYPE.DROPDOWN) {
       return (
         <EditableCellCon
-          className={cx(className, 'cellRelateRecord', { canedit: editable })}
+          className={cx(className, 'cellRelateRecord', { canedit: editable, focusInput: editable })}
           style={style}
           conRef={this.cell}
           hideOutline
@@ -274,7 +354,7 @@ export default class RelateRecord extends React.Component {
             disabled={!editable}
             selected={records}
             cellFrom={from}
-            control={{ ...cell, formData: rowFormData }}
+            control={{ ...cell, formData: rowFormData, worksheetId, recordId }}
             formData={rowFormData}
             viewId={cell.viewId}
             worksheetId={worksheetId}
@@ -309,7 +389,7 @@ export default class RelateRecord extends React.Component {
         </EditableCellCon>
       );
     } else if (parseInt(showtype, 10) === RELATE_RECORD_SHOW_TYPE.CARD) {
-      records = records.slice(0, [5, 10][rowHeightEnum] || 20);
+      records = /^temp|default/.test(recordId) ? records : records.slice(0, [5, 10][rowHeightEnum] || 20);
       if (!isediting) {
         return (
           <EditableCellCon
@@ -323,6 +403,7 @@ export default class RelateRecord extends React.Component {
             onIconClick={() => updateEditingStatus(true)}
           >
             <RelateRecordTags
+              from={from}
               disabled
               count={count}
               style={style}
@@ -342,6 +423,8 @@ export default class RelateRecord extends React.Component {
             zIndex={99}
             popup={
               <RelateRecordTags
+                from={from}
+                rowIndex={rowIndex}
                 ref={this.relateRecordTagsPopup}
                 isediting
                 count={count}

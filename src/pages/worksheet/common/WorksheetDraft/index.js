@@ -1,19 +1,16 @@
-import React, { useState, useReducer, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Modal, Icon, Menu, MenuItem, Button, Tooltip } from 'ming-ui';
 import functionWrap from 'ming-ui/components/FunctionWrap';
 import WorksheetDraftOperate from './WorksheetDraftOperate';
-import WorksheetTable from 'worksheet/components/WorksheetTable/V2';
+import WorksheetTable from 'worksheet/components/WorksheetTable';
 import BaseColumnHead from 'worksheet/components/BaseColumnHead';
 import { RowHead } from 'worksheet/components/WorksheetTable/components/';
 import RecordInfo from 'worksheet/common/recordInfo/RecordInfoWrapper';
 import worksheetAjax from 'src/api/worksheet';
 import { controlState } from 'src/components/newCustomFields/tools/utils';
-import { emitter, fieldCanSort, getSortData } from 'worksheet/util';
-import { CONTROL_FILTER_WHITELIST } from 'worksheet/common/WorkSheetFilter/enum';
 import { SHEET_VIEW_HIDDEN_TYPES } from 'worksheet/constants/enum';
-import { isOtherShowFeild } from 'src/pages/widgetConfig/util';
 import styled from 'styled-components';
-import cx from 'classnames';
+import { BrowserRouter } from 'react-router-dom';
 
 const Con = styled.div`
   width: 100%;
@@ -67,14 +64,16 @@ function DraftModal(props) {
   const {
     onCancel = () => {},
     appId,
-    viewId,
+    view = {},
     worksheetInfo = {},
     sheetSwitchPermit,
     isCharge,
     allowAdd,
     sheetViewData = {},
     updateDraftDataCount = () => {},
+    setHighLightOfRows = () => {},
   } = props;
+
   const { worksheetId, projectId, rules = [], isWorksheetQuery, advancedSetting = {} } = worksheetInfo;
   const { rows } = sheetViewData;
   const [selected, setSelected] = useState([]);
@@ -136,6 +135,8 @@ function DraftModal(props) {
         appId,
         worksheetId,
         getType: 21,
+        pageIndex: 1,
+        pageSize: 10,
       })
       .then(res => {
         updateDraftDataCount(res.data.length);
@@ -176,7 +177,7 @@ function DraftModal(props) {
                 }}
               >
                 <i className="icon icon-eye_off"></i>
-                {_l('解密')}
+                {_l('解码')}
               </MenuItem>
             )}
           </Menu>
@@ -230,168 +231,182 @@ function DraftModal(props) {
   };
 
   return (
-    <Modal
-      visible
-      closable={false}
-      width={document.body.clientWidth * 0.9}
-      type="fixed"
-      bodyStyle={{ paddingTop: 0, position: 'relative' }}
-      closeStyle={{ margin: '16px', width: '30px', height: '30px', lineHeight: '30px' }}
-    >
-      <Con>
-        <WorksheetDraftOperate
-          selected={selected}
-          deleteSelete={deleteSelete}
-          onCancel={() => {
-            setSelected([]);
-          }}
-        />
-        <Header>
-          <div className="title">{records.length ? `${_l('草稿箱')}（${records.length}/10）` : _l('草稿箱')}</div>
-          <span className="closeBtn" onClick={onCancel}>
-            <i className="icon icon-close" />
-          </span>
-        </Header>
-        <Body>
-          <WorksheetTable
-            loading={loading}
-            viewId={viewId || _.get(worksheetInfo, 'views[0].viewId')}
-            worksheetId={worksheetId}
-            appId={appId}
-            lineNumberBegin={0}
-            emptyIcon={<Icon icon="drafts_approval" />}
-            emptyText={_l('暂无草稿')}
-            noRenderEmpty={true}
-            columns={columns}
-            rowHeight={34}
-            selectedIds={selected}
-            data={records}
-            controls={controls}
-            from={21}
-            renderColumnHead={renderColumnHead}
-            renderRowHead={({ className, style, rowIndex }) => (
-              <RowHead
-                isDraft
-                className={className}
-                style={{ ...style, with: String(rowIndex).length * 8 + 64 }}
-                numberWidth={numberWidth}
-                lineNumberBegin={0}
-                allowEdit={false}
-                selectedIds={selected}
-                onSelectAllWorksheet={() => {
-                  setIsAll(true);
-                  setSelected(records.map(row => row.rowid));
-                }}
-                onSelect={newSelected => {
-                  const selectRows = [];
-                  newSelected.forEach(rowId => {
-                    const row = _.find(records, trashRow => trashRow.rowid === rowId);
-                    if (row && (row.allowedit || row.allowEdit)) {
-                      selectRows.push(row);
-                    }
-                  });
-                  setSelected(newSelected);
-                }}
-                rowIndex={rowIndex}
-                data={records}
-              />
-            )}
-            onCellClick={(cell, row, rowIndex) => {
-              if (cell.type === 29 && cell.enumDefault === 2) {
-                setActiveRelateTableControlIdOfRecord(cell.controlId);
-              }
-              setRecordId(row.rowid);
-              setRecordInfoVisible(true);
+    <BrowserRouter>
+      <Modal
+        visible
+        closable={false}
+        width={document.body.clientWidth * 0.9}
+        type="fixed"
+        bodyStyle={{ paddingTop: 0, position: 'relative' }}
+        closeStyle={{ margin: '16px', width: '30px', height: '30px', lineHeight: '30px' }}
+      >
+        <Con>
+          <WorksheetDraftOperate
+            selected={selected}
+            deleteSelete={deleteSelete}
+            onCancel={() => {
+              setSelected([]);
             }}
           />
-        </Body>
-      </Con>
-      {recordInfoVisible && (
-        <RecordInfo
-          ref={recordInfoRef}
-          controls={controls}
-          draftFormControls={controls.filter(
-            item =>
-              !_.includes([...SHEET_VIEW_HIDDEN_TYPES, 33], item.type) &&
-              !_.includes(
-                [
-                  'wfname',
-                  'wfcuaids',
-                  'wfcaid',
-                  'wfctime',
-                  'wfrtime',
-                  'wfftime',
-                  'wfstatus',
-                  'rowid',
-                  'ownerid',
-                  'caid',
-                  'uaid',
-                  'ctime',
-                  'utime',
-                ],
-                item.controlId,
-              ),
-          )}
-          sheetSwitchPermit={sheetSwitchPermit}
-          projectId={projectId}
-          showPrevNext
-          needUpdateRows
-          rules={rules}
-          isWorksheetQuery={isWorksheetQuery}
-          isCharge={isCharge}
-          allowAdd={allowAdd || advancedSetting.closedrafts !== '1'}
-          appId={appId}
-          from={21}
-          visible={recordInfoVisible}
-          hideRecordInfo={closeId => {
-            if (!closeId || closeId === recordId) {
-              setRecordInfoVisible(false);
+          <Header>
+            <div className="title">{records.length ? `${_l('草稿箱')}（${records.length}/10）` : _l('草稿箱')}</div>
+            <span className="closeBtn" onClick={onCancel}>
+              <i className="icon icon-close" />
+            </span>
+          </Header>
+          <Body>
+            <WorksheetTable
+              loading={loading}
+              worksheetId={worksheetId}
+              appId={appId}
+              lineNumberBegin={0}
+              emptyIcon={<Icon icon="drafts_approval" />}
+              emptyText={_l('暂无草稿')}
+              noRenderEmpty={true}
+              columns={columns}
+              rowHeight={34}
+              selectedIds={selected}
+              data={records}
+              controls={controls}
+              from={21}
+              rules={rules}
+              renderColumnHead={renderColumnHead}
+              sheetSwitchPermit={sheetSwitchPermit}
+              projectId={projectId}
+              renderRowHead={({ className, style, rowIndex }) => (
+                <RowHead
+                  isDraft
+                  className={className}
+                  style={{ ...style, with: String(rowIndex).length * 8 + 64 }}
+                  numberWidth={numberWidth}
+                  lineNumberBegin={0}
+                  allowEdit={false}
+                  selectedIds={selected}
+                  onSelectAllWorksheet={() => {
+                    setIsAll(true);
+                    setSelected(records.map(row => row.rowid));
+                  }}
+                  onSelect={newSelected => {
+                    const selectRows = [];
+                    newSelected.forEach(rowId => {
+                      const row = _.find(records, trashRow => trashRow.rowid === rowId);
+                      if (row && (row.allowedit || row.allowEdit)) {
+                        selectRows.push(row);
+                      }
+                    });
+                    setSelected(newSelected);
+                  }}
+                  rowIndex={rowIndex}
+                  data={records}
+                />
+              )}
+              onCellClick={(cell, row, rowIndex) => {
+                if (cell.type === 29 && cell.enumDefault === 2) {
+                  setActiveRelateTableControlIdOfRecord(cell.controlId);
+                }
+                setRecordId(row.rowid);
+                setRecordInfoVisible(true);
+              }}
+            />
+          </Body>
+        </Con>
+        {recordInfoVisible && (
+          <RecordInfo
+            ref={recordInfoRef}
+            controls={controls}
+            draftFormControls={controls.filter(
+              item =>
+                !_.includes([...SHEET_VIEW_HIDDEN_TYPES, 33], item.type) &&
+                !_.includes(
+                  [
+                    'wfname',
+                    'wfcuaids',
+                    'wfcaid',
+                    'wfctime',
+                    'wfrtime',
+                    'wfftime',
+                    'wfstatus',
+                    'rowid',
+                    'ownerid',
+                    'caid',
+                    'uaid',
+                    'ctime',
+                    'utime',
+                  ],
+                  item.controlId,
+                ),
+            )}
+            sheetSwitchPermit={sheetSwitchPermit}
+            projectId={projectId}
+            showPrevNext
+            needUpdateRows
+            rules={rules}
+            isWorksheetQuery={isWorksheetQuery}
+            isCharge={isCharge}
+            allowAdd={allowAdd || advancedSetting.closedrafts !== '1'}
+            appId={appId}
+            view={view}
+            from={21}
+            visible={recordInfoVisible}
+            hideRecordInfo={closeId => {
+              if (!closeId || closeId === recordId) {
+                setRecordInfoVisible(false);
+              }
+            }}
+            recordId={recordId}
+            activeRelateTableControlId={activeRelateTableControlIdOfRecord}
+            worksheetId={worksheetId}
+            header={
+              <div className="flex flexRow w100 alignItemsCenter">
+                <div className="flex Font17 bold pLeft15">{`${advancedSetting.title || '创建记录'}（${_l(
+                  '草稿',
+                )}）`}</div>
+                <DraftButton
+                  className="ming Button--medium Button mRight12"
+                  onClick={_.throttle(() => {
+                    if (recordInfoRef.current) {
+                      recordInfoRef.current.saveDraftData({ draftType: 'draft' });
+                    }
+                  }, 1000)}
+                >
+                  {_l('存草稿')}
+                </DraftButton>
+                <Button
+                  className="mRight12"
+                  onClick={_.throttle(() => {
+                    if (recordInfoRef.current) {
+                      recordInfoRef.current.saveDraftData({ draftType: 'submit' });
+                    }
+                  }, 1000)}
+                >
+                  {advancedSetting.sub || _l('提交')}
+                </Button>
+              </div>
             }
-          }}
-          recordId={recordId}
-          activeRelateTableControlId={activeRelateTableControlIdOfRecord}
-          worksheetId={worksheetId}
-          header={
-            <div className="flex flexRow w100 alignItemsCenter">
-              <div className="flex Font17 bold pLeft15">{`${advancedSetting.title || '创建记录'}（${_l(
-                '草稿',
-              )}）`}</div>
-              <DraftButton
-                className="ming Button--medium Button mRight12"
-                onClick={() => {
-                  if (recordInfoRef.current) {
-                    recordInfoRef.current.saveDraftData({ draftType: 'draft' });
-                  }
-                }}
-              >
-                {_l('存草稿')}
-              </DraftButton>
-              <Button
-                className="mRight12"
-                onClick={() => {
-                  if (recordInfoRef.current) {
-                    recordInfoRef.current.saveDraftData({ draftType: 'submit' });
-                  }
-                }}
-              >
-                {advancedSetting.sub || _l('提交')}
-              </Button>
-            </div>
-          }
-          rowStatus={21}
-          loadDraftList={loadRows}
-          currentSheetRows={records}
-          addNewRecord={props.addNewRecord}
-        />
-      )}
-    </Modal>
+            rowStatus={21}
+            loadDraftList={loadRows}
+            currentSheetRows={records}
+            addNewRecord={props.addNewRecord}
+            setHighLightOfRows={setHighLightOfRows}
+          />
+        )}
+      </Modal>
+    </BrowserRouter>
   );
 }
 export const openWorkSheetDraft = props => functionWrap(DraftModal, { ...props, closeFnName: 'onCancel' });
 
 function WorksheetDraft(props) {
-  const { appId, viewId, worksheetInfo = {}, sheetSwitchPermit, isCharge, sheetViewData = {},  allowAdd } = props;
-  const { worksheetId } = worksheetInfo;
+  const {
+    appId,
+    view = {},
+    worksheetInfo = {},
+    sheetSwitchPermit,
+    isCharge,
+    sheetViewData = {},
+    allowAdd,
+    setHighLightOfRows,
+  } = props;
   const [draftDataCount, setDraftDataCount] = useState(props.draftDataCount);
 
   useEffect(() => {
@@ -404,18 +419,18 @@ function WorksheetDraft(props) {
         className="mRight16 mTop4 Relative"
         onClick={() => {
           openWorkSheetDraft({
+            view,
             appId,
-            viewId,
             worksheetInfo,
             sheetSwitchPermit,
             isCharge,
-            sheetViewData,
             sheetViewData,
             allowAdd,
             addNewRecord: props.addNewRecord,
             updateDraftDataCount: draftDataCount => {
               setDraftDataCount(draftDataCount);
             },
+            setHighLightOfRows,
           });
         }}
       >

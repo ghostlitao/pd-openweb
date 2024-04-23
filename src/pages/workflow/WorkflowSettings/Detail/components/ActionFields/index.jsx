@@ -37,6 +37,7 @@ export default class ActionFields extends Component {
             field: PropTypes.string,
             text: PropTypes.string,
             cAlias: PropTypes.any,
+            sourceType: PropTypes.any,
           }).isRequired,
         ).isRequired,
       }).isRequired,
@@ -70,6 +71,7 @@ export default class ActionFields extends Component {
   handleClick = index => {
     if (this.state.activeIndex === index) index = -1;
     this.setState({ activeIndex: index });
+    this.search && this.search.focus();
   };
 
   render() {
@@ -127,7 +129,7 @@ export default class ActionFields extends Component {
               />
             </div>
           )}
-          <div className="conditionWrap">
+          <div className={cx('conditionWrap', { 'pTop6 pBottom6': condition.length || noData || keywords })}>
             <div className="conditionScrollWrap">
               {!condition.length && keywords && (
                 <div className="conditionDetail flexRow Gray_9e">{_l('无搜索结果')}</div>
@@ -153,9 +155,10 @@ export default class ActionFields extends Component {
                     />
                     <div className="flex mLeft10 ellipsis">{item.isSourceApp ? _l('选择映射字段') : item.text}</div>
                     {_.includes([APP_TYPE.SHEET, APP_TYPE.CUSTOM_ACTION, APP_TYPE.WORKSHEET_LOG], item.appType) && (
-                      <div className="mLeft15 mRight10 Gray_9e ellipsis" style={{ maxWidth: 150 }}>{`${
-                        item.appTypeName
-                      }“${item.appName}”`}</div>
+                      <div
+                        className="mLeft15 mRight10 Gray_9e ellipsis"
+                        style={{ maxWidth: 150 }}
+                      >{`${item.appTypeName}“${item.appName}”`}</div>
                     )}
                     <Icon
                       icon={index === activeIndex || keywords ? 'arrow-up-border' : 'arrow-down-border'}
@@ -187,6 +190,7 @@ export default class ActionFields extends Component {
                               isSourceApp: item.isSourceApp,
                               nAlias: item.nAlias,
                               cAlias: obj.cAlias,
+                              sourceType: obj.sourceType,
                             });
                           }}
                         >

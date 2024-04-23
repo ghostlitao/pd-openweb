@@ -4,9 +4,11 @@ import classNames from 'classnames';
 import moment from 'moment';
 import Panel from './Panel';
 import PositionContainer from 'ming-ui/components/PositionContainer';
-import { getComputedStyle } from 'ming-ui/utils/DomUtils';
-import { isDescendant } from 'ming-ui/utils/DomHelpers';
 import '../less/TimePicker.less';
+
+const getComputedStyle = (element, attr) => {
+  return window.getComputedStyle(element, null).getPropertyValue(attr);
+};
 
 class TimePicker extends Component {
   static propTypes = {
@@ -163,7 +165,7 @@ class TimePicker extends Component {
   };
 
   withClickAway = event => {
-    if (this._panel && !isDescendant(this._panel, event.target) && this._timepicker !== event.target) {
+    if (this._panel && !$(event.target).closest($(this._panel)).length && this._timepicker !== event.target) {
       this.handleClose();
     }
   };

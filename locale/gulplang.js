@@ -4,13 +4,35 @@ const path = require('path');
 const each = require('gulp-each');
 const gettextToI18next = require('i18next-conv').gettextToI18next;
 const UglifyJS = require('uglify-js');
+const _ = require('lodash');
+const moment = require('moment');
 const langs = eval(
   fs
     .readFileSync(path.join(__dirname, '../src/common/langConfig.js'))
     .toString()
     .replace('export default config;', 'module.exports = config;'),
 );
-const langPackage = require('./zh-Hans/mdTranslation.js');
+const getTranslationJS = function(langPath) {
+  let fileContent = fs.readFileSync(path.join(__dirname, langPath), 'utf-8');
+  return eval(fileContent + 'module.exports = translations;');
+};
+const langPackage = {
+  en: getTranslationJS('./en/mdTranslation.js'),
+  ja: getTranslationJS('./ja/mdTranslation.js'),
+  'zh-Hans': getTranslationJS('./zh-Hans/mdTranslation.js'),
+  'zh-Hant': getTranslationJS('./zh-Hant/mdTranslation.js'),
+};
+
+// " 转义处理 并不含 \"
+const escapeSymbol = function(key) {
+  key = key || '';
+
+  if (key.indexOf('"') > -1 && key.indexOf('\\"') === -1) {
+    key = key.replace(new RegExp('"', 'g'), '\\"');
+  }
+
+  return key;
+};
 
 // 提取key
 let langKeys = [];
@@ -24,8 +46,9 @@ const getDPLangKey = function(done) {
     .pipe(
       each(function(content, file, callback) {
         content = content.replace(/_l\([\n|\r\n]\s*/g, '_l(').replace(/,[\n|\r\n]\s*\)/g, ')');
-        // [[[xxxx %0 xxxx %1 ||| p1 ||| p2 ]]]  ||  _l('xxxx %0 xxxx %1', p1, p2)
-        let regStr = /(\[\[\[(.+?)(?:\|\|\|(.+?))*(?:\/\/\/(.+?))?\]\]\])|(_l\(['|"](.+?)['|"](['|"]?(\s*)?,(\s*)['|"]?(.+?))*\))/;
+        // _l('xxxx %0 xxxx %1', p1, p2)
+        // let regStr = /(\[\[\[(.+?)(?:\|\|\|(.+?))*(?:\/\/\/(.+?))?\]\]\])|(_l\(['|"](.+?)['|"](['|"]?(\s*)?,(\s*)['|"]?(.+?))*\))/;
+        let regStr = /(\[\[\[(.+?)\]\]\])|(_l\(('(.+?)'|"(.+?)"|`(.+?)`)(['"]?(\s*)?,(\s*)['"]?(.+?))*\))/;
 
         let reg = new RegExp(regStr, 'g');
         let reg1 = new RegExp(regStr);
@@ -34,7 +57,7 @@ const getDPLangKey = function(done) {
           matchs.forEach(function(item) {
             let groups = reg1.exec(item);
             if (groups) {
-              key = groups[2] || groups[6];
+              key = groups[2] || groups[5] || groups[6] || groups[7];
               if (key != 'undefined' && langKeys.indexOf(key) === -1) {
                 langKeys.push(key);
               }
@@ -59,15 +82,11 @@ const buildDPPot = function(done) {
   let cnContent = '';
   let otherContent = '';
 
-  langKeys.map(function(key) {
-    let isExist = langPackage[key];
+  _.uniq(langKeys).map(function(key) {
+    let isExist = langPackage['zh-Hans'][key];
 
     if (!isExist) {
-      // " 转义处理 并不含 \"
-      if (key.indexOf('"') > -1 && key.indexOf('\\"') === -1) {
-        key = key.replace(new RegExp('"', 'g'), '\\"');
-      }
-
+      key = escapeSymbol(key);
       cnContent += `#: Disabled references:1\nmsgid "${key}"\nmsgstr "${key.replace(/%\d{5}$/, '')}"\n\n`;
       otherContent += `#: Disabled references:1\nmsgid "${key}"\nmsgstr ""\n\n`;
     }
@@ -79,13 +98,16 @@ const buildDPPot = function(done) {
 
     if (!poText) return;
 
-    fs.writeFileSync(
-      filePath,
-      poText.toString().trim() + '\n\n' + (item.key === 'zh-Hans' ? cnContent : otherContent),
-      function(err) {
-        console.log(`${item.key} mdTranslation po 构建${err ? '失败' : '成功'}`);
-      },
-    );
+    try {
+      fs.writeFileSync(
+        filePath,
+        poText.toString().trim() + '\n\n' + (item.key === 'zh-Hans' ? cnContent : otherContent),
+      );
+
+      console.log(`${item.key} mdTranslation po 构建成功`);
+    } catch (err) {
+      console.log(`${item.key} mdTranslation po 构建失败`);
+    }
   });
 
   done();
@@ -100,12 +122,7 @@ const buildPoToJs = function(done) {
 
     gettextToI18next(item.key, poText).then(
       function(result) {
-        fs.writeFileSync(
-          filePath + '.js',
-          UglifyJS.minify(
-            `var mdTranslation=${result};if (typeof module !== "undefined") { module.exports = mdTranslation; }`,
-          ).code,
-        );
+        fs.writeFileSync(filePath + '.js', UglifyJS.minify(`var translations=${result};`).code);
         console.log(filePath + '.js 构建成功');
       },
       function(err) {
@@ -113,6 +130,46 @@ const buildPoToJs = function(done) {
         console.error(err);
       },
     );
+  });
+
+  done();
+};
+
+// 清理无效的key
+const clearPoLangKey = function(done) {
+  const content = {};
+
+  _.uniq(langKeys).map(function(key) {
+    langs.forEach(item => {
+      const value =
+        escapeSymbol(langPackage[item.key][key]) ||
+        (item.key === 'zh-Hans' ? escapeSymbol(key).replace(/%\d{5}$/, '') : '');
+
+      content[item.key] += `#: Disabled references:1\nmsgid "${escapeSymbol(key)}"\nmsgstr "${value}"\n\n`;
+    });
+  });
+
+  langs.forEach(item => {
+    const filePath = `locale/${item.key}/mdTranslation.po`;
+    const poText = fs.readFileSync(filePath);
+
+    if (!poText) return;
+
+    try {
+      fs.writeFileSync(
+        filePath,
+        `msgid ""\nmsgstr ""\n"Project-Id-Version: "\n"POT-Creation-Date: ${moment().format(
+          'YYYY-MM-DD HH:mm:ss',
+        )}"\n"Language-Team: ${item.languageTeam}"\n"Language: ${
+          item.language
+        }"\n"MIME-Version: 1.0"\n"Content-Type: text/plain; charset=utf-8"\n"Content-Transfer-Encoding: 8bit"\n"X-Generator: i18n.POTGenerator"\n\n` +
+          content[item.key],
+      );
+
+      console.log(`${item.key} mdTranslation po 清理成功`);
+    } catch (err) {
+      console.log(`${item.key} mdTranslation po 清理失败`);
+    }
   });
 
   done();
@@ -126,3 +183,6 @@ gulp.task('buildDPPot', gulp.series(['getDPLangKey'], buildDPPot));
 
 // po文件转js文件，供_l('xxxx')使用
 gulp.task('buildPoToJs', buildPoToJs);
+
+// 清理无效的语言key
+gulp.task('clearPoLangKey', gulp.series(['getDPLangKey'], clearPoLangKey));

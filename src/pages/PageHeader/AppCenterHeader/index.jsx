@@ -1,11 +1,10 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { withRouter } from 'react-router-dom';
 import styled from 'styled-components';
 import Trigger from 'rc-trigger';
 import cx from 'classnames';
-import { emitter, getProject } from 'src/util';
-import { ScrollView, Menu, MenuItem, MdLink } from 'ming-ui';
-import { navigateTo } from 'src/router/navigateTo';
+import { emitter, getCurrentProject } from 'src/util';
+import { ScrollView, Menu, MenuItem } from 'ming-ui';
 import { VerticalMiddle } from 'worksheet/components/Basics';
 import CommonUserHandle from '../components/CommonUserHandle';
 import _ from 'lodash';
@@ -15,7 +14,7 @@ const Con = styled.div`
   align-items: center;
   background: #fff;
   height: 50px;
-  padding-left: 24px;
+  padding-left: 20px;
   box-shadow: 0px 1px 3px rgba(0, 0, 0, 0.16);
 `;
 
@@ -35,31 +34,12 @@ const ProjectSwitch = styled(VerticalMiddle)`
     color: #9d9d9d;
   }
   &:hover {
-    background: #f2f2f2;
+    background: rgba(0, 0, 0, 0.05);
   }
 `;
 
 const Flex = styled.div`
   flex: 1;
-`;
-
-const AdminEntry = styled(VerticalMiddle)`
-  cursor: pointer;
-  height: 32px;
-  line-height: 32px;
-  padding: 0 12px 0 14px;
-  border-radius: 32px;
-  border: 1px solid #ddd;
-  color: #333;
-  margin: 0px 10px 0px 20px;
-  .icon {
-    margin-right: 5px;
-    color: #757575;
-    font-size: 20px;
-  }
-  &:hover {
-    background: #f5f5f5;
-  }
 `;
 
 const ProjectsMenuCon = styled.div`
@@ -118,8 +98,19 @@ function AppCenterHeader(props) {
   const projects = md.global.Account.projects;
   const createRef = useRef();
   const [currentProject, setCurrentProject] = useState(
-    getProject(projectId || localStorage.getItem('currentProjectId')),
+    getCurrentProject(projectId || localStorage.getItem('currentProjectId')),
   );
+  useEffect(() => {
+    const project = getCurrentProject(projectId || localStorage.getItem('currentProjectId'));
+    if (_.isEmpty(project)) {
+      if (projects[0] && projects[0].projectId) {
+        setCurrentProject(projects[0]);
+        safeLocalStorageSetItem('currentProjectId', projects[0].projectId);
+      } else {
+        setCurrentProject({ companyName: _l('外部协作'), projectId: 'external' });
+      }
+    }
+  }, []);
   const [popupVisible, setPopupVisible] = useState();
   let menuContent = (
     <ProjectsMenu>
@@ -150,7 +141,7 @@ function AppCenterHeader(props) {
     menuContent = <ScrollCon height={Math.ceil((window.innerHeight - 160) / 40) * 40}>{menuContent}</ScrollCon>;
   }
   return (
-    <Con>
+    <Con className="appCenterHeader">
       {currentProject && (
         <Trigger
           popupVisible={popupVisible}
@@ -172,12 +163,9 @@ function AppCenterHeader(props) {
                 }}
                 popup={
                   <Menu className="Relative">
-                    <NewMenuItem onClick={() => window.open('/enterpriseRegister.htm?type=add')}>
+                    <NewMenuItem onClick={() => window.open('/enterpriseRegister?type=add')}>
                       {_l('加入组织')}
                     </NewMenuItem>
-                    {/* <NewMenuItem onClick={() => window.open('/enterpriseRegister.htm?type=create')}>
-                          {_l('创建组织')}
-                        </NewMenuItem> */}
                   </Menu>
                 }
                 getPopupContainer={() => createRef.current}
@@ -201,15 +189,8 @@ function AppCenterHeader(props) {
         </Trigger>
       )}
       <Flex />
-      {currentProject && currentProject.isProjectAdmin && (
-        <MdLink to={`/admin/home/${currentProject.projectId}`}>
-          <AdminEntry>
-            <i className="icon icon-business"></i>
-            {_l('组织管理')}
-          </AdminEntry>
-        </MdLink>
-      )}
-      <CommonUserHandle />
+
+      <CommonUserHandle type="dashboard" currentProject={currentProject} />
     </Con>
   );
 }

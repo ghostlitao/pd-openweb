@@ -31,6 +31,10 @@ const ConditionsWrap = styled.div`
     left: -38px;
     line-height: 36px;
   }
+  .ming.Dropdown,
+  .dropdownTrigger {
+    overflow: hidden;
+  }
 `;
 
 const SortHandle = SortableHandle(() => <Icon className="mRight5 Font14 Hand" icon="drag" />);
@@ -42,7 +46,7 @@ const Item = SortableElement(props => {
   const control = _.find(columns, i => i.controlId === condition.controlId);
   let controlType = control ? (control.type === 30 ? control.sourceControlType : control.type) : '';
   return (
-    <div className="flexRow alignItemsCenter mBottom10" style={{}}>
+    <div className="flexRow alignItemsCenter mBottom10">
       <SortHandle />
       <div className="flexRow flex" style={{ position: 'relative' }} key={condition.controlId}>
         {[9, 10, 11].includes(controlType) && (
@@ -56,7 +60,7 @@ const Item = SortableElement(props => {
                 <Support
                   className="InlineBlock"
                   type={3}
-                  href="https://help.mingdao.com/zh/sheet43.html"
+                  href="https://help.mingdao.com/sheet43"
                   text={_l('点击了解更多')}
                 />
               </span>
@@ -167,7 +171,7 @@ export default class SortConditions extends React.Component {
 
   getNewState = props => {
     props = props || this.props;
-    const { showSystemControls, sortConditions } = props;
+    const { showSystemControls, sortConditions, isSubList } = props;
     let { columns } = props;
     if (showSystemControls) {
       columns = columns
@@ -176,7 +180,8 @@ export default class SortConditions extends React.Component {
     }
     return {
       columns,
-      sortConditions: sortConditions && sortConditions.length ? sortConditions : [{ controlId: 'ctime', isAsc: true }],
+      sortConditions:
+        sortConditions && sortConditions.length ? sortConditions : [{ controlId: 'ctime', isAsc: !!isSubList }], //子表默认旧的在前，视图默认新的在前
     };
   };
 
@@ -247,24 +252,17 @@ export default class SortConditions extends React.Component {
     const sortConditionControls = sortConditions
       .map(c => _.find(columns, column => column.controlId === c.controlId))
       .filter(_.identity);
-    const optionCondition = _.find(
-      sortConditionControls,
-      scc =>
-        ([9, 10, 11].includes(scc.type) && !scc.strDefault) || //选项字段只有当strDefault值不为空（等于index）的时候才允许多个排序
-        ([9, 10, 11].includes(scc.sourceControlType) && scc.type === 30), //他表字段，是不能多个字段排序的，他表字段只能按照原来的方式排序
-    );
-    const userCondition = _.find(sortConditionControls, scc => scc.type === 26);
-    const groupCondition = _.find(sortConditionControls, scc => scc.type === 27);
-    const existControls = [optionCondition, userCondition, groupCondition].filter(_.identity);
+    // 人员，部门，关联，组织角色，附件，级联选择此类支持多选的数组格式，都只能选择一个排序
+    const list = [26, 27, 29, 48, 35, 14, 9, 10, 11];
+    // const optionTypes = [9, 10, 11];
+    const isExist = !!sortConditionControls.find(o => list.includes(o.type) || list.includes(o.sourceControlType));
     return filterOnlyShowField(columns)
-      .filter(o => ![42, 47, 49].includes(o.type)) //排除签名字段 扫码 接口查询按钮
+      .filter(o => ![42, 47, 49, 51, 52].includes(o.type)) //排除签名字段 扫码 接口查询按钮 查询记录
       .filter(
         c =>
           (!_.find(sortConditions, sc => sc.controlId === c.controlId) || c.controlId === controlId) &&
-          (!(
-            existControls.length && _.find([9, 11, 10, 26, 27], type => [c.type, c.sourceControlType].includes(type))
-          ) ||
-            (control && _.find([9, 11, 10, 26, 27], type => [control.type, control.sourceControlType].includes(type)))),
+          (!(isExist && _.find(list, type => [c.type, c.sourceControlType].includes(type))) ||
+            (control && _.find(list, type => [control.type, control.sourceControlType].includes(type)))),
       )
       .map(c => ({
         text: c.controlName,
@@ -295,7 +293,7 @@ export default class SortConditions extends React.Component {
         columns={columns}
         useDragHandle
         onSortEnd={this.handleSortEnd}
-        helperClass={'sortConditionsViewControl'}
+        helperClass={cx('sortConditionsViewControl', this.props.helperClass)}
         handleChangeSortControl={this.handleChangeSortControl}
         handleChangeSortType={this.handleChangeSortType}
         handleDeleteCondition={this.handleDeleteCondition}

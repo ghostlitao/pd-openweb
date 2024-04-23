@@ -1,5 +1,5 @@
 import _ from 'lodash';
-import { NODE_TYPE, APP_TYPE, ACTION_ID, TRIGGER_ID, CONDITION_TYPE } from './enum';
+import { NODE_TYPE, APP_TYPE, ACTION_ID, TRIGGER_ID, CONDITION_TYPE, GLOBAL_VARIABLE } from './enum';
 
 /**
  * 遍历获取统计id
@@ -64,16 +64,24 @@ export const getIcons = (type, appType, actionId) => {
         icon = 'icon-custom_assignment';
       } else if (appType === APP_TYPE.PROCESS) {
         icon = 'icon-parameter';
+      } else if (appType === APP_TYPE.GLOBAL_VARIABLE) {
+        icon = 'icon-global_variable';
       } else if (appType === APP_TYPE.SHEET && actionId === ACTION_ID.EDIT) {
         icon = 'icon-workflow_update';
       } else if (appType === APP_TYPE.SHEET && actionId === ACTION_ID.ADD) {
         icon = 'icon-workflow_new';
+      } else if (appType === APP_TYPE.SHEET && actionId === ACTION_ID.DELETE) {
+        icon = 'icon-hr_delete';
       } else if (appType === APP_TYPE.SHEET && actionId === ACTION_ID.RELATION) {
         icon = 'icon-workflow_search';
       } else if (appType === APP_TYPE.EXTERNAL_USER && actionId === ACTION_ID.EDIT) {
         icon = 'icon-update_information';
       } else if (appType === APP_TYPE.EXTERNAL_USER && actionId === ACTION_ID.ADD) {
         icon = 'icon-invited_users';
+      } else if (appType === APP_TYPE.CALENDAR) {
+        icon = 'icon-sidebar_calendar';
+      } else if (appType === APP_TYPE.SNAPSHOT) {
+        icon = 'icon-camera_alt';
       }
       break;
     case NODE_TYPE.SEARCH:
@@ -83,7 +91,11 @@ export const getIcons = (type, appType, actionId) => {
       icon = 'icon-workflow_webhook';
       break;
     case NODE_TYPE.FORMULA:
-      icon = 'icon-workflow_function';
+      if (_.includes([ACTION_ID.OBJECT_TOTAL, ACTION_ID.WORKSHEET_TOTAL, ACTION_ID.CUSTOM_ACTION_TOTAL], actionId)) {
+        icon = 'icon-sigma';
+      } else {
+        icon = 'icon-workflow_function';
+      }
       break;
     case NODE_TYPE.MESSAGE:
       icon = 'icon-workflow_sms';
@@ -142,6 +154,10 @@ export const getIcons = (type, appType, actionId) => {
     case NODE_TYPE.SYSTEM:
       if (appType === APP_TYPE.PROCESS) {
         icon = 'icon-parameter';
+      } else if (appType === APP_TYPE.WORKSHEET_LOG) {
+        icon = 'icon-custom_actions';
+      } else if (appType === APP_TYPE.GLOBAL_VARIABLE) {
+        icon = 'icon-global_variable';
       } else {
         icon = 'icon-application_custom';
       }
@@ -238,10 +254,8 @@ export const replaceField = (text, fieldMap, connector = '>') => {
   const reg = /\$(\w+-\w+)\$/;
   if (!reg.test(text)) return text;
   const handledText = text.replace(reg, ($0, $1) => {
-    const value = $1
-      .split(/([a-zA-Z0-9#]{24,32})-/)
-      .filter(item => item)
-      .map(v => fieldMap[v].name);
+    const ids = $1.split(/([a-zA-Z0-9#]{24,32})-/).filter(item => item);
+    const value = ids.map((v, index) => fieldMap[index === 0 ? v : ids.join('-')].name);
     return ` (${value.join(connector)}) `;
   });
   return replaceField(handledText, fieldMap);
@@ -322,7 +336,7 @@ export const getConditionList = (type, enumDefault) => {
       if (enumDefault === 0) {
         list = { ids: ['9', '10', '1', '2', '35', '36', '48', '49', '8', '7'], defaultConditionId: '9' };
       } else {
-        list = { ids: ['9', '10', '3', '4', '35', '36', '48', '49', '43', '8', '7'], defaultConditionId: '9' };
+        list = { ids: ['9', '10', '100', '101', '35', '36', '48', '49', '43', '8', '7'], defaultConditionId: '9' };
       }
       break;
     case 29:
@@ -341,6 +355,10 @@ export const getConditionList = (type, enumDefault) => {
       } else {
         list = { ids: ['9', '10', '41', '39', '42', '40', '37', '38', '8', '7'], defaultConditionId: '9' };
       }
+      break;
+    case 10000007:
+    case 10000008:
+      list = { ids: ['8', '7'], defaultConditionId: '7' };
       break;
   }
 
@@ -381,6 +399,8 @@ export const getConditionNumber = id => {
     case '45':
     case '48':
     case '49':
+    case '100':
+    case '101':
       count = 1;
       break;
     case '7':
@@ -481,7 +501,75 @@ export const switchFilterConditions = conditions => {
   return [
     {
       conditions,
-      spliceType: 1,
+      spliceType: 2,
     },
   ];
+};
+
+/**
+ * 处理全局变量名称
+ */
+export const handleGlobalVariableName = (nodeId, sourceType, name) => {
+  if (nodeId === GLOBAL_VARIABLE) {
+    return sourceType === 1 ? _l('全局变量(应用)') : _l('全局变量(组织)');
+  }
+
+  return name || '';
+};
+
+/**
+ * 检测筛选条件是否允许值为空
+ */
+export const checkConditionAllowEmpty = (type, conditionId) => {
+  let list;
+
+  switch (type) {
+    case 1:
+    case 2:
+    case 3:
+    case 4:
+    case 5:
+    case 7:
+    case 32:
+    case 33:
+    case 41:
+    case 50:
+      list = ['1', '2', '3', '4', '5', '44', '6', '45'];
+      break;
+    case 6:
+    case 8:
+    case 15:
+    case 16:
+    case 31:
+    case 46:
+      list = ['9', '10'];
+      break;
+    case 9:
+    case 11:
+      list = ['9', '10', '1', '2'];
+      break;
+    case 10:
+      list = ['9', '10', '3', '4', '43'];
+      break;
+  }
+
+  return _.includes(list, conditionId);
+};
+
+/*
+ * 清理flowNodeMap多余参数
+ */
+export const clearFlowNodeMapParameter = flowNodeMap => {
+  if (!_.isObject(flowNodeMap)) return flowNodeMap;
+
+  flowNodeMap = _.cloneDeep(flowNodeMap);
+
+  Object.keys(flowNodeMap).forEach(key => {
+    delete flowNodeMap[key].controls;
+    delete flowNodeMap[key].flowNodeList;
+    delete flowNodeMap[key].formulaMap;
+    delete flowNodeMap[key].selectNodeObj;
+  });
+
+  return flowNodeMap;
 };

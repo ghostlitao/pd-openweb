@@ -1,19 +1,9 @@
 ﻿import ReactDOM from 'react-dom';
-import redirect from 'src/common/redirect';
-
 import { getAppFeaturesPath } from 'src/util';
 import { getSuffix } from 'src/pages/PortalAccount/util';
-export const urlStack = [];
-export function urlStackBack(e) {
-  if (urlStack.length > 1) {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    history.back(); // TODO: test
-    return false;
-  }
-}
+import _ from 'lodash';
+
+const urlStack = [];
 
 window.location.goto = function(url, isReplace = false) {
   if (isReplace) {
@@ -22,29 +12,6 @@ window.location.goto = function(url, isReplace = false) {
     window.location.assign(url);
   }
 };
-
-const xhrs = [];
-/** 终止掉记录下的 ajax 请求 */
-export function abortAjax() {
-  // TODO: clear $.api queque, and abort xhr without causing error alert
-  xhrs.forEach(xhr => xhr.abort());
-  xhrs.splice(0);
-}
-
-export function logAjax() {
-  // 记录下所有 ajax 请求，切换模块时终止掉
-  $(document).ajaxSend(function logAjaxSent(e, jqXHR, options) {
-    xhrs.push(jqXHR);
-  });
-  $(document).ajaxComplete(function logAjaxComplete(e, jqXHR, options) {
-    let index = -1;
-    while (xhrs.length && index >= 0) {
-      index = xhrs.indexOf(jqXHR);
-      xhrs.splice(index, 1);
-    }
-    // xhrs = xhrs.filter(xhr => xhr !== jqXHR);
-  });
-}
 
 let historyObj;
 export function setHistoryObject(history) {
@@ -56,21 +23,13 @@ export function clearZombie() {
   // tooltip
   $('.md_tooltip').remove();
 
-  // mdDialog
-  [...document.querySelectorAll('.mdDialog')].forEach(dialog => {
-    const dialogId = dialog.getAttribute('id').replace('_container', '');
-    $(document).off('keyup.' + dialogId);
-    ReactDOM.unmountComponentAtNode(dialog);
-    $(`#${dialogId}_mask`).remove();
-    $(`#${dialogId}_container`).remove();
-  });
-
   // 处理切换页面时残留 businessCard
   $('.businessCardSite').remove();
 }
 
 export function fillUrl(url) {
   const hash = url.split('#')[1] || '';
+  const hash2 = url.split('#')[2] || '';
 
   url = url.split('#')[0];
 
@@ -93,9 +52,20 @@ export function fillUrl(url) {
     url = url + (url.indexOf('?') > -1 ? `&${hideOptions}` : `?${hideOptions}`);
   }
   if (window.isPublicApp && !new URL('http://z.z' + url).hash) {
-    url = url + '#publicapp' + window.publicAppAuthorization;
+    url = url + '#publicapp' + window.publicAppAuthorization + (hash2 ? `#${hash2}` : ``);
+    return url;
   }
   return url + (hash ? `#${hash}` : '');
+}
+
+export function redirect(url, navigate = toUrl => (location.href = toUrl)) {
+  if (url === '/app/my') {
+    const latestGroup = safeParse(localStorage.getItem(`latest_group_${md.global.Account.accountId}`));
+    if (!_.isEmpty(latestGroup)) {
+      navigate(`/app/my/group/${latestGroup.projectId}/${latestGroup.groupType}/${latestGroup.groupId}`);
+      return true;
+    }
+  }
 }
 
 /** 跳转到 url */

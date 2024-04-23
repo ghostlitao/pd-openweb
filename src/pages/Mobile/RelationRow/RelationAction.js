@@ -9,6 +9,7 @@ import DocumentTitle from 'react-document-title';
 import NewRecord from 'src/pages/worksheet/common/newRecord/MobileNewRecord';
 import MobileRecordCardListDialog from 'src/components/recordCardListDialog/mobile';
 import { getFilter } from 'src/pages/worksheet/common/WorkSheetFilter/util';
+import { controlState } from 'src/components/newCustomFields/tools/utils';
 import * as actions from './redux/actions';
 import sheetAjax from 'src/api/worksheet';
 import styled from 'styled-components';
@@ -26,10 +27,13 @@ const BtnsWrapper = styled(Flex)`
     display: flex;
     align-items: center;
     justify-content: center;
-    &, &::before, &-active::before {
+    &,
+    &::before,
+    &-active::before {
       color: #fff;
       font-size: 14px;
       border-radius: 50px !important;
+      padding: 0 5px 0 10px;
     }
   }
 `;
@@ -41,15 +45,15 @@ class RelationAction extends Component {
       showRelevanceRecord: false,
       showCreateRecord: false,
       recordkeyWords: '',
-      title: ''
+      title: '',
     };
   }
-  handleSetEdit = (value) => {
+  handleSetEdit = value => {
     this.props.updateActionParams({
       isEdit: value,
-      selectedRecordIds: []
+      selectedRecordIds: [],
     });
-  }
+  };
   removeRelationRows = () => {
     const { base, relationRow, actionParams, updateRelationRows, permissionInfo, getDataType } = this.props;
     const { worksheet } = relationRow;
@@ -99,9 +103,9 @@ class RelationAction extends Component {
           alert(_l('取消关联失败！'), 2);
         });
     }
-  }
+  };
   addRelationRows(newRelationRows) {
-    const { base, relationRows, getDataType } = this.props;
+    const { base, relationRows, getDataType, rowInfo } = this.props;
     const ids = relationRows.map(item => item.rowid);
     const list = newRelationRows.filter(item => !ids.includes(item.rowid));
 
@@ -109,6 +113,14 @@ class RelationAction extends Component {
       alert(_l('无法关联已经关联过的记录'), 2);
       return;
     }
+
+    // 关联查询  begin-->
+    const { type } = _.find(rowInfo.templateControls, { controlId: base.controlId }) || {};
+    if (type === 51) {
+      this.pushRelationRows(list);
+      return;
+    }
+    // --> end
 
     sheetAjax
       .updateRowRelationRows({
@@ -143,9 +155,9 @@ class RelationAction extends Component {
     const entityName = relationRow.worksheet.entityName || _l('记录');
     this.setState({
       showRelevanceRecord: visible,
-      title: visible ? _l('选择%0', entityName) : _l('%0详情', entityName)
+      title: visible ? _l('选择%0', entityName) : _l('%0详情', entityName),
     });
-  }
+  };
   renderDialog() {
     const { showCreateRecord, recordkeyWords, showRelevanceRecord } = this.state;
     const { base, rowInfo, relationRow, actionParams, permissionInfo } = this.props;
@@ -153,11 +165,12 @@ class RelationAction extends Component {
     const { worksheet } = relationRow;
     const { rowId, controlId, worksheetId } = base;
     const { isCreate, isSubList, activeRelateSheetControl, onlyRelateByScanCode } = permissionInfo;
-    const disabledManualWrite = onlyRelateByScanCode && _.get(activeRelateSheetControl, 'advancedSetting.dismanual') === '1';
+    const disabledManualWrite =
+      onlyRelateByScanCode && _.get(activeRelateSheetControl, 'advancedSetting.dismanual') === '1';
+    const formData = this.props.formData || rowInfo.templateControls.filter(_.identity);
 
     let defaultRelatedSheetValue;
     try {
-      const formData = rowInfo.receiveControls.filter(_.identity);
       const titleControl = formData.filter(c => c && c.attribute === 1);
       defaultRelatedSheetValue = titleControl && {
         name: titleControl.value,
@@ -176,10 +189,10 @@ class RelationAction extends Component {
         {showRelevanceRecord && (
           <MobileRecordCardListDialog
             multiple
-            control={_.find(rowInfo.receiveControls, { controlId: controlId })}
-            formData={rowInfo.receiveControls}
+            control={_.find(rowInfo.templateControls, { controlId: controlId })}
+            formData={formData}
             visible={showRelevanceRecord}
-            allowNewRecord={isCreate}
+            allowNewRecord={isCreate && !_.get(window, 'shareState.isPublicForm')}
             disabledManualWrite={disabledManualWrite}
             coverCid={coverCid}
             keyWords={recordkeyWords}
@@ -205,38 +218,40 @@ class RelationAction extends Component {
             }}
           />
         )}
-        <NewRecord
-          hideFillNext
-          className="worksheetRelateNewRecord"
-          title={isSubList && _l('创建%0', activeRelateSheetControl.controlName)}
-          appId={worksheet.appId}
-          worksheetId={worksheet.worksheetId}
-          projectId={worksheet.projectId}
-          addType={2}
-          entityName={worksheet.entityName}
-          filterRelateSheetIds={[worksheet.worksheetId]}
-          filterRelatesheetControlIds={[controlId]}
-          defaultRelatedSheet={{
-            worksheetId,
-            relateSheetControlId: activeRelateSheetControl.controlId,
-            value: defaultRelatedSheetValue,
-          }}
-          visible={showCreateRecord}
-          hideNewRecord={() => {
-            this.setState({ showCreateRecord: false });
-          }}
-          onAdd={row => {
-            this.addRelationRows([row]);
-          }}
-        />
+        {showCreateRecord && (
+          <NewRecord
+            hideFillNext
+            className="worksheetRelateNewRecord"
+            title={isSubList && _l('创建%0', activeRelateSheetControl.controlName)}
+            appId={worksheet.appId}
+            worksheetId={worksheet.worksheetId}
+            projectId={worksheet.projectId}
+            addType={2}
+            entityName={worksheet.entityName}
+            filterRelateSheetIds={[worksheet.worksheetId]}
+            filterRelatesheetControlIds={[controlId]}
+            defaultRelatedSheet={{
+              worksheetId,
+              relateSheetControlId: activeRelateSheetControl.controlId,
+              value: defaultRelatedSheetValue,
+            }}
+            visible={showCreateRecord}
+            hideNewRecord={() => {
+              this.setState({ showCreateRecord: false });
+            }}
+            onAdd={row => {
+              this.addRelationRows([row]);
+            }}
+          />
+        )}
       </Fragment>
     );
   }
   renderRelateScanQRCodeBtn() {
     const { base, rowInfo, relationRow } = this.props;
     const { worksheet } = relationRow;
-    const control = _.find(rowInfo.receiveControls, { controlId: base.controlId });
-    const formData = rowInfo.receiveControls;
+    const formData = this.props.formData || rowInfo.templateControls;
+    const control = _.find(formData, { controlId: base.controlId });
     const filterControls = getFilter({ control, formData });
 
     return (
@@ -244,10 +259,15 @@ class RelationAction extends Component {
         projectId={worksheet.projectId}
         worksheetId={worksheet.worksheetId}
         filterControls={filterControls}
+        control={control}
         onChange={data => {
           this.addRelationRows([data]);
         }}
         onOpenRecordCardListDialog={keyWords => {
+          const { scanlink, scancontrol } = _.get(control, 'advancedSetting') || {};
+          if ((scanlink !== '1' && RegExp.isURL(keyWords)) || (scancontrol !== '1' && !RegExp.isURL(keyWords))) {
+            return;
+          }
           this.setState({ showRelevanceRecord: true, recordkeyWords: keyWords });
         }}
       >
@@ -306,16 +326,26 @@ class RelationAction extends Component {
     );
   }
   renderContent() {
-    const { relationRows, permissionInfo, relationRow } = this.props;
-    const { isCreate, isRelevance, allowRemoveRelation, onlyRelateByScanCode, activeRelateSheetControl } =
+    const { relationRows, permissionInfo, relationRow, rowInfo = {}, controlId, base } = this.props;
+    const { isCreate, isRelevance, allowRemoveRelation, onlyRelateByScanCode, activeRelateSheetControl, hasEdit } =
       permissionInfo;
     const disabledManualWrite =
       onlyRelateByScanCode && _.get(activeRelateSheetControl, 'advancedSetting.dismanual') === '1';
     const entityName = relationRow.worksheet.entityName || _l('关联');
 
+    const control = _.find(rowInfo.templateControls || [], { controlId: controlId }) || {};
+    const controlPermission = controlState(control, base.rowId ? 3 : 2);
+    const allowNewRecord =
+      control.type === 51
+        ? base.rowId &&
+          controlPermission.editable &&
+          control.enumDefault2 !== 1 &&
+          control.enumDefault2 !== 11 &&
+          !window.isPublicWorksheet
+        : isRelevance || isCreate;
     return (
       <Fragment>
-        {allowRemoveRelation && (
+        {control.type !== 51 && allowRemoveRelation && hasEdit && (
           <WingBlank size="sm" className="flex">
             <Button
               disabled={!relationRows.length}
@@ -328,28 +358,37 @@ class RelationAction extends Component {
             </Button>
           </WingBlank>
         )}
-        {(isRelevance || isCreate) && (
+        {allowNewRecord && (
           <Fragment>
-            {onlyRelateByScanCode && <WingBlank size="sm" className="flex">{this.renderRelateScanQRCodeBtn()}</WingBlank>}
+            {onlyRelateByScanCode && (
+              <WingBlank size="sm" className="flex">
+                {this.renderRelateScanQRCodeBtn()}
+              </WingBlank>
+            )}
             {!disabledManualWrite && (
               <WingBlank size="sm" className="flex">
                 <Button
                   type="primary"
                   className="bold"
                   onClick={() => {
+                    if (control.type === 51) {
+                      this.setState({ showCreateRecord: true });
+                      return;
+                    }
                     if (isRelevance) {
                       this.handleSetShowRelevanceRecord(true);
-                      return
+                      return;
                     }
                     if (isCreate) {
                       this.setState({ showCreateRecord: true });
-                      return
+                      return;
                     }
                   }}
                 >
                   <Fragment>
                     <Icon icon="add" className="Font20" />
-                    {isRelevance ? _l(`添加${entityName}`) : _l(`新建${entityName}`)}
+                    {isRelevance ? _l('添加') : _l('新建')}
+                    {entityName}
                   </Fragment>
                 </Button>
               </WingBlank>
@@ -361,9 +400,21 @@ class RelationAction extends Component {
   }
   render() {
     const { title } = this.state;
-    const { actionParams, permissionInfo } = this.props;
+    const { actionParams, permissionInfo, rowInfo = {}, controlId, base = {} } = this.props;
     const { isEdit } = actionParams;
     const { isRelevance, hasEdit, allowRemoveRelation } = permissionInfo;
+
+    const control = _.find(rowInfo.templateControls || [], { controlId: controlId }) || {};
+    const controlPermission = controlState(control, base.rowId ? 3 : 2);
+    const allowNewRecord =
+      base.rowId &&
+      controlPermission.editable &&
+      control.enumDefault2 !== 1 &&
+      control.enumDefault2 !== 11 &&
+      !window.isPublicWorksheet;
+
+    if (!hasEdit) return null;
+    if (control.type === 51 && !allowNewRecord) return null;
 
     if (!isRelevance && !hasEdit && !allowRemoveRelation) {
       return null;
@@ -372,11 +423,7 @@ class RelationAction extends Component {
     return (
       <BtnsWrapper justify="center" align="center">
         {title && <DocumentTitle title={title} />}
-        {isEdit ? (
-          this.renderEdit()
-        ) : (
-          this.renderContent()
-        )}
+        {isEdit ? this.renderEdit() : this.renderContent()}
         {this.renderDialog()}
       </BtnsWrapper>
     );
@@ -385,12 +432,8 @@ class RelationAction extends Component {
 
 export default connect(
   state => ({
-    ..._.pick(state.mobile, ['base', 'rowInfo', 'relationRow', 'relationRows', 'actionParams', 'permissionInfo'])
+    ..._.pick(state.mobile, ['base', 'rowInfo', 'relationRow', 'relationRows', 'actionParams', 'permissionInfo']),
   }),
   dispatch =>
-    bindActionCreators(
-      _.pick(actions, ['updateActionParams', 'updatePageIndex', 'updateRelationRows']),
-      dispatch,
-  ),
+    bindActionCreators(_.pick(actions, ['updateActionParams', 'updatePageIndex', 'updateRelationRows']), dispatch),
 )(RelationAction);
-

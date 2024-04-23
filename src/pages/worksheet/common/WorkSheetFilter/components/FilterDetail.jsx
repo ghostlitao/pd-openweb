@@ -2,9 +2,10 @@ import React, { useRef, useState, Fragment } from 'react';
 import { shape, func, arrayOf, bool, string } from 'prop-types';
 import styled from 'styled-components';
 import { FlexCenter, VerticalMiddle } from 'worksheet/components/Basics';
-import { VCenterIconText, Tooltip, Dialog } from 'ming-ui';
+import { VCenterIconText, Tooltip, Dialog, UpgradeIcon } from 'ming-ui';
 import cx from 'classnames';
 import { getFeatureStatus, buriedUpgradeVersionDialog } from 'src/util';
+import { VersionProductType } from 'src/util/enum';
 import SaveButton from './SaveButton';
 import FilterDetailName from './FilterDetailName';
 import SplitDropdown from './SplitDropdown';
@@ -52,6 +53,7 @@ const Content = styled.div`
 `;
 
 const Footer = styled(VerticalMiddle)`
+  margin-bottom: 24px;
   font-size: 0px;
   margin-top: 19px;
   padding: ${({ isSingleFilter }) => (isSingleFilter ? '0px 4px' : '0 24px')};
@@ -68,6 +70,7 @@ const AddButton = styled(VCenterIconText)`
 
 export default function FilterDetail(props) {
   const {
+    maxHeight,
     supportGroup,
     isSingleFilter,
     from,
@@ -86,6 +89,7 @@ export default function FilterDetail(props) {
     filterResigned = true,
     filterError = [],
     isRules,
+    showCustom,
   } = props;
   const formattedCondition = formatForSave(filter);
   const canSave = !!_.sum(formattedCondition.map(c => (c.isGroup ? _.get(c, 'groupFilters.length') : 1)));
@@ -96,7 +100,7 @@ export default function FilterDetail(props) {
   const scrollRef = useRef();
   const [foldedMap, setFoldedMap] = useState({});
   const { projectId, appId, worksheetId, isCharge } = base;
-  const featureType = getFeatureStatus(projectId, 24);
+  const featureType = getFeatureStatus(projectId, VersionProductType.filterGroup);
   let canEdit = props.canEdit;
   if (_.isUndefined(canEdit)) {
     canEdit = filter.type === FILTER_TYPE.PUBLIC ? isCharge : filter.createAccountId === md.global.Account.accountId;
@@ -165,7 +169,7 @@ export default function FilterDetail(props) {
       {!isSingleFilter && !isNew && (
         <Header>
           <BackBtn onClick={handleBack}>
-            <i className="icon icon-knowledge-return" />
+            <i className="icon icon-knowledge-return"></i>
           </BackBtn>
           <FilterDetailName
             editable={canEdit}
@@ -184,7 +188,11 @@ export default function FilterDetail(props) {
           />
         </Header>
       )}
-      <Content className={cx({ isSingleFilter })} ref={scrollRef}>
+      <Content
+        className={cx({ isSingleFilter })}
+        ref={scrollRef}
+        style={maxHeight ? { maxHeight: maxHeight - 120 } : {}}
+      >
         {conditionsGroups.map((conditionsGroup, groupIndex) => (
           <Fragment>
             <ConditionsGroup
@@ -193,6 +201,7 @@ export default function FilterDetail(props) {
               isSingleFilter={isSingleFilter}
               canEdit={isNew ? true : canEdit}
               appId={appId}
+              showCustom={showCustom}
               projectId={projectId}
               isGroup={filter.isGroup}
               filterError={filterError[groupIndex] || []}
@@ -208,7 +217,6 @@ export default function FilterDetail(props) {
               conditionsGroupsLength={conditionsGroups.length}
               onAdd={control => {
                 actions.addCondition(control, groupIndex);
-                scrollToEnd();
               }}
               onChange={(value = {}, conditionIndex) => {
                 actions.updateCondition(value, groupIndex, conditionIndex);
@@ -265,33 +273,33 @@ export default function FilterDetail(props) {
           </AddCondition>
         )}
         {supportGroup && featureType && (
-          <AddButton
-            icon="add"
-            textLeft={4}
-            iconSize={18}
-            text={_l('条件组')}
-            afterElement={
-              featureType === '2' && <icon className="icon-auto_awesome Font16 mLeft6" style={{ color: '#fcb400' }} />
-            }
-            textSize={13}
-            onClick={() => {
-              if (featureType === '2') {
-                buriedUpgradeVersionDialog(projectId, 24);
-              } else {
-                const spliceType = _.get(conditionsGroups, '0.spliceType');
-                actions.addGroup(spliceType);
-                onAddCondition();
-                scrollToEnd();
-              }
-            }}
-          />
+          <Tooltip popupPlacement="bottom" text={featureType === '2' ? _l('条件组为专业版功能') : ''}>
+            <AddButton
+              icon="add"
+              textLeft={4}
+              iconSize={18}
+              text={_l('条件组')}
+              afterElement={featureType === '2' && <UpgradeIcon />}
+              textSize={13}
+              onClick={() => {
+                if (featureType === '2') {
+                  buriedUpgradeVersionDialog(projectId, VersionProductType.filterGroup);
+                } else {
+                  const spliceType = _.get(conditionsGroups, '0.spliceType');
+                  actions.addGroup(spliceType);
+                  onAddCondition();
+                  scrollToEnd();
+                }
+              }}
+            />
+          </Tooltip>
         )}
         {supportGroup && (
           <Tooltip text={_l('添加条件组，结合 且/或 条件进行筛选')}>
-            <i className="addGroupTip icon icon-help Font16 mLeft6" />
+            <i className="addGroupTip icon icon-help Font16 mLeft6"></i>
           </Tooltip>
         )}
-        <div className="flex" />
+        <div className="flex"></div>
         {!isSingleFilter && !hideSave && (
           <SaveButton
             disabled={saveButtonDisabled}

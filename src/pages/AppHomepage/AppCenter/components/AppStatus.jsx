@@ -13,7 +13,7 @@ const AppStatus = styled.div`
   background-color: #333;
   border-radius: 13px;
   color: #fff;
-  line-height: 22px;
+  line-height: 20px;
   box-sizing: border-box;
   white-space: nowrap;
   padding: 0 10px;
@@ -24,8 +24,19 @@ const AppStatus = styled.div`
   &.fixed {
     background: #fd7558;
   }
+  &.isUpgrade {
+    background: #4caf50;
+  }
+  &.isNew {
+    background: #333;
+  }
   &.mobilePadding {
     padding: 0 8px;
+  }
+  &.isRecent {
+    left: unset;
+    bottom: -10px;
+    padding: 0 6px;
   }
 `;
 export default class AppStatusComp extends Component {
@@ -33,12 +44,20 @@ export default class AppStatusComp extends Component {
   static defaultProps = {};
   state = {};
   render() {
-    const { isGoodsStatus, isNew, fixed } = this.props;
+    const { isGoodsStatus, isNew, fixed, isRecent, isUpgrade, className } = this.props;
     const isMobile = browserIsMobile();
-    const text = getAppStatusText({ isGoodsStatus, isNew, fixed });
+    const text = getAppStatusText({ isGoodsStatus, isNew, fixed, isUpgrade });
     if (!text) return null;
     return (
-      <AppStatus className={cx({ isOverdue: !isGoodsStatus, fixed, mobilePadding: fixed && isMobile })}>
+      <AppStatus
+        className={cx(`${className}`, {
+          isOverdue: !isGoodsStatus,
+          fixed,
+          isUpgrade,
+          mobilePadding: fixed && isMobile,
+          isRecent,
+        })}
+      >
         {text}
       </AppStatus>
     );

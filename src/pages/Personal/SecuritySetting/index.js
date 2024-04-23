@@ -4,9 +4,8 @@ import accountController from 'src/api/account';
 import actionLogAjax from 'src/api/actionLog';
 import accountSetting from 'src/api/accountSetting';
 import wxController from 'src/api/weixin';
-import ValidatePassword from '../bindAccount/validatePasswordDialog';
-import StepsVerifyDialog from '../bindAccount/stepsVerifyDialog/index';
-import { verifyPassword } from 'src/util';
+import { validateFunc } from '../components/ValidateInfo';
+import StepsVerifyDialog from '../components/stepsVerifyDialog/index';
 import { formatFormulaDate } from 'src/pages/worksheet/util.js';
 import common from '../common';
 import moment from 'moment';
@@ -85,32 +84,23 @@ export default class SecuritySetting extends Component {
   renderTips = key => {
     return (
       <Tooltip popupPlacement="top" text={<span>{tipsConfig[key]}</span>}>
-        <span className="icon-novice-circle Gray_bd Hand mLeft5 Font15"></span>
+        <span className="icon-novice-circle Gray_bd Hand mLeft5 Font15" />
       </Tooltip>
     );
   };
 
   openVerify = checked => {
     if (checked) {
-      const colseValidateDialog = ValidatePassword({
-        header: _l('关闭两步验证'),
+      validateFunc({
+        title: _l('关闭两步验证'),
         callback: () =>
-          this.sureSettings('isTwoauthentication', false, () => {
-            this.setState({ isTwoauthentication: false }, () => colseValidateDialog.closeDialog());
+          this.sureSettings('isTwoauthentication', 0, () => {
+            this.setState({ isTwoauthentication: false });
           }),
       });
       return;
     }
     this.setState({ visible: true });
-  };
-
-  confirmOpenVerify = password => {
-    const _this = this;
-    verifyPassword(password, () => {
-      _this.sureSettings('isTwoauthentication', true, () => {
-        _this.setState({ isTwoauthentication: true, visible: false });
-      });
-    });
   };
 
   openopenWeixinLogin = openWeixinLogin => {
@@ -154,7 +144,7 @@ export default class SecuritySetting extends Component {
         onCancel={() => this.setState({ openWXRemindDialog: false })}
       >
         <div className="weixinImg">
-          {wxQRCodeLoading ? <LoadDiv className="mTop80" /> : <img className="w100 h100" src={wxQRCode} />}
+          {wxQRCodeLoading ? <LoadDiv className="mTop40" /> : <img className="w100 h100" src={wxQRCode} />}
         </div>
         <div className="mTop8 mBottom24 Font17">{_l('使用微信扫码绑定账号，开启登录微信提醒')}</div>
         <Button type="primary" onClick={this.checkIsBindWX}>
@@ -191,7 +181,7 @@ export default class SecuritySetting extends Component {
           </div>
           <div>{browserName}</div>
         </div>
-        <div class="flex2">{current ? _l('现在') : `${passTime}前使用`}</div>
+        <div class="flex2">{current ? _l('现在') : `${_l('%0前使用', passTime)}`}</div>
         <div class="flex3 pLeft24">
           {ip}
           {!!geoCity && `（${geoCity}）`}
@@ -225,7 +215,7 @@ export default class SecuritySetting extends Component {
             </div>
           </Tooltip>
         ) : (
-          <div className="iconWrap bgWhite"></div>
+          <div className="iconWrap bgWhite" />
         )}
       </div>
     );
@@ -254,7 +244,7 @@ export default class SecuritySetting extends Component {
       <div className="securitySettingContainer">
         {!md.global.Config.IsLocal && (
           <Fragment>
-            <div className="Font15 mBottom30 Bold">{_l('安全')}</div>
+            <div className="Font17 mBottom30 Bold">{_l('安全')}</div>
             <div>
               {!md.global.Config.IsLocal && (
                 <div className="setRowItem">
@@ -277,7 +267,7 @@ export default class SecuritySetting extends Component {
             </div>
           </Fragment>
         )}
-        <div className="Font15 mTop30 Bold">{_l('设备管理')}</div>
+        <div className="Font17 mTop30 Bold">{_l('设备管理')}</div>
         {!md.global.Config.IsLocal && (
           <div className="setRowItem loginSameTime">
             <div className="label Gray_75">{_l('允许同时登录')}</div>
@@ -313,7 +303,11 @@ export default class SecuritySetting extends Component {
             email={email}
             isVerify={isVerify}
             visible={visible}
-            onOk={this.confirmOpenVerify}
+            onOk={() => {
+              this.sureSettings('isTwoauthentication', 1, () => {
+                this.setState({ isTwoauthentication: true, visible: false });
+              });
+            }}
             onCancel={() => this.setState({ visible: false })}
           />
         )}

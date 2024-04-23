@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, Fragment } from 'react';
-import { Icon } from 'src';
+import Components from '../../../components';
 import { get, has, head, pick } from 'lodash';
 import { Support, Dialog, Dropdown } from 'ming-ui';
 import styled from 'styled-components';
@@ -8,6 +8,8 @@ import { SettingItem } from '../../../styled';
 import SelectOptionList from './SelectOptionList';
 import EditOptionList from './EditOptionList';
 import Options from './Options';
+import update from 'immutability-helper';
+import { v4 as uuidv4 } from 'uuid';
 import {
   getDefaultOptions,
   getDefaultCheckedOption,
@@ -16,6 +18,8 @@ import {
   handleAdvancedSettingChange,
   getOptions,
 } from '../../../util/setting';
+
+const Icon = Components.Icon;
 
 const OPTION_TYPE = [
   {
@@ -47,7 +51,7 @@ const OptionsWrap = styled.div`
 `;
 
 const OptionListItem = styled.div`
-  margin-top: 20px;
+  margin-top: 12px;
   padding: 0 12px;
   border: 1px solid #ddd;
   background-color: #fff;
@@ -149,21 +153,42 @@ export default function SelectOptions(props) {
       description: (
         <span>
           {_l('转为选项集后，可以使选项在其他工作表中共用。此过程不可逆，转换后无法再恢复为自定义选项')}
-          <Support href="https://help.mingdao.com/zh/sheet30.html" type={3} text={_l('帮助')} />
+          <Support href="https://help.mingdao.com/sheet30" type={3} text={_l('帮助')} />
         </span>
       ),
       onOk: () => {
-        worksheetAjax.saveOptionsCollection({ appId, colorful, options, name: controlName }).then(({ code, data, msg }) => {
-          if (code === 1) {
-            const { collectionId } = data;
-            setOptionList(data);
-            onChange({ dataSource: collectionId });
-          } else {
-            alert(_l('%0', msg));
-          }
-        });
+        worksheetAjax
+          .saveOptionsCollection({ appId, colorful, options, name: controlName })
+          .then(({ code, data, msg }) => {
+            if (code === 1) {
+              const { collectionId } = data;
+              setOptionList(data);
+              onChange({ dataSource: collectionId });
+            } else {
+              alert(msg);
+            }
+          });
       },
     });
+  };
+
+  const handleCopy = () => {
+    const copyOptions = options
+      .filter(i => !i.isDeleted)
+      .map((item, index) => ({
+        key: uuidv4(),
+        value: item.value,
+        checked: false,
+        isDeleted: false,
+        index: options.length + index + 1,
+        color: item.color,
+      }));
+    const findOther = _.findIndex(options, i => i.key === 'other');
+    const newOptions = update(options, {
+      $splice: [[findOther > -1 ? findOther : options.length, 0, ...copyOptions]],
+    });
+    onChange({ options: newOptions.map((item, idx) => ({ ...item, index: idx + 1 })) });
+    alert(_l('已复制'));
   };
 
   return (
@@ -197,17 +222,27 @@ export default function SelectOptions(props) {
                 className={`Font24 pointer icon-${colorful ? 'toggle_on' : 'toggle_off'}`}
                 onClick={e => {
                   e.stopPropagation();
-                  onChange({ enumDefault2: +!enumDefault2 });
+                  let newData = { enumDefault2: +!enumDefault2 };
+                  if (_.find(options, i => !i.color)) {
+                    newData.options = options.map(i => ({ ...i, color: i.color || '#2196f3' }));
+                  }
+                  onChange(newData);
                 }}
               ></i>
               <span>{_l('彩色')}</span>
             </div>
-            {!dataSource && showtype !== '2' && (
-              <div className="toOptionList flexCenter hoverText" onClick={toOptionList}>
-                <Icon icon="swap_horiz" />
-                <span>{_l('转为选项集')}</span>
+            <div className="flexCenter">
+              <div className="flexCenter hoverText" onClick={handleCopy}>
+                <Icon icon="content-copy" className="Font13" />
+                <span>{_l('复制')}</span>
               </div>
-            )}
+              {!dataSource && showtype !== '2' && (
+                <div className="toOptionList flexCenter mLeft10 hoverText" onClick={toOptionList}>
+                  <Icon icon="swap_horiz" />
+                  <span>{_l('转为选项集')}</span>
+                </div>
+              )}
+            </div>
           </div>
         )}
         {dataSource ? (
@@ -238,7 +273,7 @@ export default function SelectOptions(props) {
                       <div className="name">{value}</div>
                     </li>
                   ))}
-                {optionList.options.length > 15 && <li className="more">{_l('...')}</li>}
+                {optionList.options.length > 15 && <li className="more">...</li>}
               </ul>
             </OptionListItem>
           </Fragment>
@@ -266,7 +301,7 @@ export default function SelectOptions(props) {
         <SelectOptionList
           {...props}
           onOk={({ listId, listItem }) => {
-            onChange({ dataSource: listId, default: '', options: listItem.options });
+            onChange({ dataSource: listId, default: '', options: listItem.options, enumDefault2: +listItem.colorful });
             setOptionList(listItem);
             setVisible({ selectVisible: false });
           }}

@@ -12,6 +12,7 @@ import { createDiscussion } from '../../utils/group';
 import AddressBook from '../../lib/addressBook';
 import Tooltip from 'ming-ui/components/Tooltip';
 import CreateGroup from 'src/components/group/create/creatGroup';
+import addFriends from 'src/components/addFriends';
 
 class Btns extends Component {
   constructor(props) {
@@ -33,7 +34,7 @@ class Btns extends Component {
   }
   handleOpenChatList() {
     const { visible } = this.props;
-    $.publish('chat-fold');
+
     this.props.dispatch(actions.setVisible(!visible));
     // 优化交互体验
     this.setState(
@@ -79,9 +80,7 @@ class Btns extends Component {
     });
   }
   handleInvite() {
-    import('src/components/invite').then(invite => {
-      invite();
-    });
+    addFriends({ selectProject: true });
     this.handleMenuChange();
   }
   handleAddSession() {
@@ -128,9 +127,8 @@ class Btns extends Component {
       return;
     }
     if (type === 'file-transfer') {
-      const { avatar, name } = Constant.FILE_TRANSFER;
+      const { name } = Constant.FILE_TRANSFER;
       const message = {
-        logo: avatar,
         uname: name,
         sysType: 1,
       };
@@ -227,7 +225,7 @@ class Btns extends Component {
     const { visible } = this.props;
     const { menuVisible, tooltipVisible, dark } = this.state;
     const direction = visible ? 'top' : 'left';
-    const isEn = (getCookie('i18n_langtag') || getNavigatorLang()) == 'en';
+    const isEn = (getCookie('i18n_langtag') || md.global.Config.DefaultLang) == 'en';
     return (
       <div className={name}>
         <Tooltip popupPlacement={direction} text={<span>{_l('搜索')}</span>}>

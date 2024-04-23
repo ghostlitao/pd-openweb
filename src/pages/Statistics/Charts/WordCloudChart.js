@@ -1,8 +1,7 @@
 import React, { Component } from 'react';
-import { WordCloud } from '@antv/g2plot';
 import { formatChartData } from './BarChart';
 import { Dropdown, Menu } from 'antd';
-import { formatYaxisList, formatrChartValue, formatControlInfo } from './common';
+import { formatYaxisList, formatrChartValue, formatControlInfo, getChartColors } from './common';
 import { formatSummaryName, isFormatNumber } from 'statistics/common';
 
 export default class extends Component {
@@ -18,7 +17,10 @@ export default class extends Component {
     this.WordCloudChart = null;
   }
   componentDidMount() {
-    this.renderWordCloudChart(this.props);
+    import('@antv/g2plot').then(data => {
+      this.g2plotComponent = data;
+      this.renderWordCloudChart(this.props);
+    });
   }
   componentWillUnmount() {
     this.WordCloudChart && this.WordCloudChart.destroy();
@@ -26,10 +28,14 @@ export default class extends Component {
   componentWillReceiveProps(nextProps) {
     const { displaySetup } = nextProps.reportData;
     const { displaySetup: oldDisplaySetup } = this.props.reportData;
+    const chartColor = _.get(nextProps, 'customPageConfig.chartColor');
+    const oldChartColor = _.get(this.props, 'customPageConfig.chartColor');
     if (
       displaySetup.showChartType !== oldDisplaySetup.showChartType ||
       displaySetup.ydisplay.minValue !== oldDisplaySetup.ydisplay.minValue ||
-      displaySetup.ydisplay.maxValue !== oldDisplaySetup.ydisplay.maxValue
+      displaySetup.ydisplay.maxValue !== oldDisplaySetup.ydisplay.maxValue ||
+      !_.isEqual(chartColor, oldChartColor) ||
+      nextProps.themeColor !== this.props.themeColor
     ) {
       const WordCloudChartConfig = this.getComponentConfig(nextProps);
       this.WordCloudChart.update(WordCloudChartConfig);
@@ -39,6 +45,7 @@ export default class extends Component {
     const { reportData, isViewOriginalData } = props;
     const { displaySetup } = reportData;
     const WordCloudChartConfig = this.getComponentConfig(props);
+    const { WordCloud } = this.g2plotComponent;
     this.WordCloudChart = new WordCloud(this.chartEl, WordCloudChartConfig);
     if (displaySetup.showRowList && isViewOriginalData) {
       this.WordCloudChart.on('element:click', this.handleClick);
@@ -49,10 +56,11 @@ export default class extends Component {
     const { xaxes } = this.props.reportData;
     const event = data.gEvent;
     const currentData = data.data.data;
-    const isNumber = isFormatNumber(xaxes.controlType);
     const param = {};
     if (xaxes.cid) {
-      param[xaxes.cid] = isNumber ? Number(currentData.datum.originalId) : currentData.datum.originalId;
+      const isNumber = isFormatNumber(xaxes.controlType);
+      const value = currentData.datum.originalId;
+      param[xaxes.cid] = isNumber && value ? Number(value) : value;
     }
     this.setState({
       dropdownVisible: true,
@@ -78,10 +86,15 @@ export default class extends Component {
     }
   }
   getComponentConfig(props) {
-    const { map, displaySetup, xaxes, yaxisList, style = {}, reportId } = props.reportData;
+    const { themeColor, projectId, customPageConfig = {}, reportData } = props;
+    const { chartColor, chartColorIndex = 1 } = customPageConfig;
+    const { map, displaySetup, xaxes, yaxisList, reportId } = reportData;
+    const styleConfig = reportData.style || {};
+    const style = chartColor && chartColorIndex >= (styleConfig.chartColorIndex || 0) ? { ...styleConfig, ...chartColor } : styleConfig;
     const data = formatChartData(map, yaxisList);
     const newYaxisList = formatYaxisList(data, yaxisList);
     const { ydisplay } = displaySetup;
+    const colors = getChartColors(style, themeColor, projectId);
     const baseConfig = {
       data,
       // meta: {
@@ -102,6 +115,7 @@ export default class extends Component {
       wordStyle: {
         fontSize: [ydisplay.minValue || 20, ydisplay.maxValue || 60],
       },
+      color: colors
     }
 
     this.setCount(newYaxisList);

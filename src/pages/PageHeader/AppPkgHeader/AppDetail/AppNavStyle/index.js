@@ -10,7 +10,7 @@ const mobileNavList = [{
   style: 'list',
   activeStyle: 'list_active',
 }, {
-  name: _l('九宫格'),
+  name: _l('宫格'),
   value: 1,
   style: 'sudoku',
   activeStyle: 'sudoku_active',
@@ -21,7 +21,7 @@ const mobileNavList = [{
   activeStyle: 'nav_active',
 }];
 
-const pcNavList = [{
+export const pcNavList = [{
   name: _l('经典'),
   value: 0,
   style: 'classic',

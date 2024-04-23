@@ -3,10 +3,11 @@ import React, { Component } from 'react';
 
 import './style.less';
 
-import LibCalender from 'ming-ui/components/lib/calender';
+import LibCalender from '../lib/calender';
 import DateTable from './date-table';
 import MonthTable from './month-table';
 import YearTable from './year-table';
+import moment from 'moment';
 
 class Calender extends Component {
   constructor(props) {
@@ -81,8 +82,11 @@ class Calender extends Component {
   /**
    * 生成周数据
    */
-  generateWeekList = (props) => {
-    const WeekDays = ['日', '一', '二', '三', '四', '五', '六'];
+  generateWeekList = props => {
+    console.log(moment);
+    const WeekDays = [0, 1, 2, 3, 4, 5, 6].map(function (item) {
+      return moment().day(item).format('dd');
+    });
 
     const firstDayOfWeek = props.firstDayOfWeek;
     const list = [];
@@ -125,7 +129,12 @@ class Calender extends Component {
       if (props.range) {
         current = LibCalender.dateInRange(time, props.value[0], props.value[1]);
       }
-      if (!props.range && props.value.getFullYear() === year && props.value.getMonth() === month && props.value.getDate() === date) {
+      if (
+        !props.range &&
+        props.value.getFullYear() === year &&
+        props.value.getMonth() === month &&
+        props.value.getDate() === date
+      ) {
         current = true;
       }
       // is inRange
@@ -160,7 +169,7 @@ class Calender extends Component {
   /**
    * 生成日期数据
    */
-  generateDateList = (props) => {
+  generateDateList = props => {
     // 当前显示页面
     const currentPage = props.cursor;
 
@@ -270,7 +279,7 @@ class Calender extends Component {
   /**
    * 生成月份数据
    */
-  generateMonthList = (props) => {
+  generateMonthList = props => {
     const monthList = [];
     // 当前年
     const thisYear = props.cursor.getFullYear();
@@ -304,7 +313,7 @@ class Calender extends Component {
       monthList.push({
         time,
         value: i,
-        label: _l(`${i + 1}月`),
+        label: _l('%0月', i + 1),
         disabled,
         current,
         inRange,
@@ -330,7 +339,7 @@ class Calender extends Component {
   /**
    * 生成年份数据
    */
-  generateYearList = (props) => {
+  generateYearList = props => {
     const yearList = [];
 
     const thisYear = props.cursor.getFullYear();
@@ -396,7 +405,7 @@ class Calender extends Component {
   /**
    * 生成数据列表
    */
-  generateList = (props) => {
+  generateList = props => {
     // BUG: too much update
     const data = {
       weekList: this.generateWeekList(props),

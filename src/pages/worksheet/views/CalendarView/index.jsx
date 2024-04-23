@@ -9,7 +9,7 @@ import cx from 'classnames';
 import SelectField from '../components/SelectField';
 import { connect } from 'react-redux';
 import { bindActionCreators } from 'redux';
-import { getAdvanceSetting, browserIsMobile } from 'src/util';
+import { getAdvanceSetting, browserIsMobile, addBehaviorLog } from 'src/util';
 import RecordInfoWrapper from 'src/pages/worksheet/common/recordInfo/RecordInfoWrapper';
 import addRecord from 'worksheet/common/newRecord/addRecord';
 import moment from 'moment';
@@ -90,6 +90,7 @@ const WrapNum = styled.div`
 
 import { getTimeControls } from './util';
 import _ from 'lodash';
+import { handleRecordClick } from 'worksheet/util';
 
 let tabList = [
   { key: 'eventAll', txt: _l('全部') },
@@ -123,6 +124,10 @@ class RecordCalendar extends Component {
     };
   }
   componentDidMount() {
+    const { allowAdd } = this.props.worksheetInfo;
+    this.setState({
+      canNew: isOpenPermit(permitList.createButtonSwitch, this.props.sheetSwitchPermit) && allowAdd,
+    });
     this.getFormatData(this.props);
     this.props.getCalendarData();
     this.props.fetchExternal();
@@ -130,7 +135,17 @@ class RecordCalendar extends Component {
   }
 
   componentWillReceiveProps(nextProps) {
-    const { base, calendarview = {}, height } = nextProps;
+    const { base, calendarview = {}, height, sheetSwitchPermit } = nextProps;
+    if (
+      !_.isEqual(sheetSwitchPermit, this.props.sheetSwitchPermit) ||
+      _.get(nextProps, 'worksheetInfo.allowAdd') !== _.get(this.props, 'worksheetInfo.allowAdd')
+    ) {
+      this.setState({
+        canNew:
+          isOpenPermit(permitList.createButtonSwitch, nextProps.sheetSwitchPermit) &&
+          _.get(nextProps, 'worksheetInfo.allowAdd'),
+      });
+    }
     const { calendarData = {}, calendarFormatData } = calendarview;
     const { viewId } = base;
     const currentView = this.getCurrentView(nextProps);
@@ -309,6 +324,7 @@ class RecordCalendar extends Component {
     const { base = {} } = this.props;
     const { worksheetId } = base;
     addRecord({
+      showFillNext: true,
       worksheetId: worksheetId,
       defaultFormData,
       defaultFormDataEditable: true,
@@ -601,7 +617,10 @@ class RecordCalendar extends Component {
   };
 
   showChooseTrigger = (data, type) => {
-    const { random } = this.state;
+    const { random, canNew } = this.state;
+    if (!canNew) {
+      return;
+    }
     let date = moment(data).format('YYYY-MM-DD');
     $(`span[data-date=${date}-${random}]`)[0].click();
   };
@@ -616,6 +635,7 @@ class RecordCalendar extends Component {
       base,
       calendarview = {},
       mobileCalendarSetting = {},
+      setViewConfigVisible,
     } = this.props;
     const { calendarData = {}, editable, calenderEventList = {} } = calendarview;
     const { eventScheduled = [] } = calenderEventList;
@@ -660,6 +680,7 @@ class RecordCalendar extends Component {
       return (
         <Wrap>
           <SelectField
+            sheetSwitchPermit={sheetSwitchPermit}
             isCharge={isCharge}
             context={
               <SelectFieldForStartOrEnd
@@ -677,6 +698,7 @@ class RecordCalendar extends Component {
                     };
                   }
                   this.props.saveView(data, { ...viewNew, ...viewData });
+                  setViewConfigVisible(true);
                 }}
                 view={currentView}
                 isDelete={isDelete}
@@ -697,23 +719,25 @@ class RecordCalendar extends Component {
             showExternal={this.state.showExternal}
             recordInfoVisible={this.state.recordInfoVisible}
             showRecordInfo={(rowid, data, eventData) => {
-              this.setState({
-                recordId: rowid,
-                recordInfoVisible: true,
-                showPrevNext: !!data.start,
-                rows: data.start
-                  ? eventData
-                      .filter(
-                        o =>
-                          (!!o.start &&
-                            moment(o.start).isSameOrBefore(data.start, 'day') &&
-                            moment(o.end).isSameOrAfter(data.end, 'day')) ||
-                          moment(o.start).isSame(data.start, 'day'),
-                      )
-                      .map(o => {
-                        return { ...o.extendedProps };
-                      })
-                  : [],
+              handleRecordClick(currentView, data.extendedProps, () => {
+                this.setState({
+                  recordId: rowid,
+                  recordInfoVisible: true,
+                  showPrevNext: !!data.start,
+                  rows: data.start
+                    ? eventData
+                        .filter(
+                          o =>
+                            (!!o.start &&
+                              moment(o.start).isSameOrBefore(data.start, 'day') &&
+                              moment(o.end).isSameOrAfter(data.end, 'day')) ||
+                            moment(o.start).isSame(data.start, 'day'),
+                        )
+                        .map(o => {
+                          return { ...o.extendedProps };
+                        })
+                    : [],
+                });
               });
             }}
             tabList={tabList}
@@ -891,11 +915,14 @@ class RecordCalendar extends Component {
               eventClick={eventInfo => {
                 // 点击任务 获得任务id或其他相关内容
                 const { extendedProps } = eventInfo.event._def;
-                this.setState({
-                  recordId: extendedProps.rowid,
-                  recordInfoVisible: true,
-                  rows: this.getRows(eventInfo.event.start, eventInfo.event.start),
-                  showPrevNext: true,
+                handleRecordClick(currentView, extendedProps, () => {
+                  this.setState({
+                    recordId: extendedProps.rowid,
+                    recordInfoVisible: true,
+                    rows: this.getRows(eventInfo.event.start, eventInfo.event.start),
+                    showPrevNext: true,
+                  });
+                  addBehaviorLog('worksheetRecord', worksheetId, { rowId: extendedProps.rowid }); // 埋点
                 });
               }}
               eventDidMount={info => {
@@ -1009,7 +1036,7 @@ class RecordCalendar extends Component {
               }}
               dayMaxEventRows={showall === '0'}
               moreLinkContent={info => {
-                return `+${info.num}`;
+                return <div className="w100" title={_l('查看其他%0个', info.num)}>{`+${info.num}`}</div>;
               }}
               moreLinkClick={info => {
                 if (this.browserIsMobile()) {

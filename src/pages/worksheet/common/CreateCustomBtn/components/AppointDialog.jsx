@@ -2,18 +2,27 @@ import React from 'react';
 import { Icon, Dropdown, RadioGroup, Dialog, Tooltip } from 'ming-ui';
 import { getIconByType } from 'src/pages/widgetConfig/util';
 import cx from 'classnames';
-import sheetAjax from 'src/api/worksheet';
 import ChooseWidget from './ChooseWidget';
 import styled from 'styled-components';
 import Input from '../components/Inputs';
 import { DEF_TYPES, DEF_R_TYPES } from 'src/pages/worksheet/common/CreateCustomBtn/config.js';
 import _ from 'lodash';
+import {
+  formatControlsBySectionId,
+  getSectionId,
+  getRealData,
+} from 'src/pages/worksheet/common/CreateCustomBtn/utils.js';
+
 const Wrap = styled.div`
   .controlname {
     width: 200px;
+    &.isChild {
+      margin-left: 24px;
+      width: 176px;
+    }
   }
   .actionListBox {
-    width: 100px;
+    width: 110px;
   }
   .valueDef {
     flex: 1;
@@ -105,7 +114,7 @@ class AppointDialog extends React.Component {
     return (
       [
         20, // 20: _l('公式'),
-        22, // 分割线
+        22, // 分段
         25, // _l('大写金额'),
         30, // _l('他表字段'),
         31, // 31: _l('公式'),
@@ -116,6 +125,8 @@ class AppointDialog extends React.Component {
         10010, // 备注
         45, // 嵌入
         47, //条码
+        51, //查询记录
+        52, //分段
       ].indexOf(type) >= 0
     );
   };
@@ -124,41 +135,18 @@ class AppointDialog extends React.Component {
     return this.isDisable(it.type) ? 1 : it.required ? 3 : 2;
   };
 
-  editAppointFilters = (item, isClone) => {
-    let indexNum = -1;
-    const data = isClone ? this.state.writeControlsClone : this.state.writeControls;
-    data.map((itemF, i) => {
-      if (item.controlId === itemF.controlId) {
-        indexNum = i;
-      }
+  handDel = item => {
+    const controls = this.state.writeObject !== 1 ? this.props.relationControls : this.state.widgetList;
+    const list = getRealData(
+      controls.find(o => o.controlId === item.controlId),
+      controls.filter(o => this.state.writeControls.map(it => it.controlId).includes(o.controlId)),
+      controls,
+      false,
+    );
+    const ids = list.map(o => o.controlId);
+    this.setState({
+      writeControls: this.state.writeControls.filter(o => ids.includes(o.controlId)),
     });
-    const newCopyCells = data;
-    if (indexNum >= 0) {
-      _.remove(newCopyCells, itemN => itemN.controlId === item.controlId);
-      if (!isClone) {
-        this.setState({
-          writeControls: newCopyCells,
-        });
-      } else {
-        this.setState({
-          writeControlsClone: newCopyCells,
-        });
-      }
-    } else {
-      let writeControls = newCopyCells.concat({
-        ...item,
-        type: this.getControlEffect(item),
-      });
-      if (!isClone) {
-        this.setState({
-          writeControls,
-        });
-      } else {
-        this.setState({
-          writeControlsClone: writeControls,
-        });
-      }
-    }
   };
 
   renderErrerDialog = () => {
@@ -166,7 +154,6 @@ class AppointDialog extends React.Component {
       <Dialog
         title={this.state.errerDialogTitle}
         okText={_l('确定')}
-        // cancelText=""
         confirm="danger"
         className="errerDialogForAppoint"
         headerClass=""
@@ -194,8 +181,7 @@ class AppointDialog extends React.Component {
       return;
     }
     const { writeObject } = this.state;
-    const { currentSheetInfo, relationWorksheetInfo } = this.props;
-    // const SheetInfo = writeObject === 1 ? currentSheetInfo : relationWorksheetInfo;
+    const { currentSheetInfo } = this.props;
     const SheetInfo = currentSheetInfo; // 动态默认值 =>当前主记录字段
     let advancedSetting = { ..._.omit(data.advancedSetting, ['dynamicsrc', 'defaultfunc']), defaulttype: '' };
     if (data.type === 34 && item.defsource) {
@@ -241,11 +227,22 @@ class AppointDialog extends React.Component {
   };
 
   renderAppointFilters = () => {
-    const dataControls = this.state.writeObject !== 1 ? this.props.relationControls : this.state.widgetList;
-    //计算出有效的writeControls
-    let writeControls = this.state.writeControls.filter(it =>
-      dataControls.map(o => o.controlId).includes(it.controlId),
+    const dataControls = formatControlsBySectionId(
+      this.state.writeObject !== 1 ? this.props.relationControls : this.state.widgetList,
     );
+    const sectionIds = getSectionId(dataControls);
+    //计算出有效的writeControls
+    let writeControls = [];
+    dataControls.map(o => {
+      let data = this.state.writeControls.find(it => it.controlId === o.controlId);
+      if (!!data) {
+        if (!!o.sectionId) {
+          writeControls.push(dataControls.find(it => it.controlId === o.sectionId));
+        }
+        writeControls.push(data);
+      }
+    });
+    writeControls = _.union(writeControls, 'controlId');
     if (this.state.writeType === 1 && writeControls.length > 0) {
       return (
         <Wrap className="appointFiltersList">
@@ -262,16 +259,25 @@ class AppointDialog extends React.Component {
               }
               const type = writeControlsData.type;
               const controlName = writeControlsData.controlName;
-              let isList = type === 29 && writeControlsData.advancedSetting.showtype === '2';
+              let isList = [29, 51].includes(type) && writeControlsData.advancedSetting.showtype === '2';
+              if (sectionIds.includes(item.controlId)) {
+                return (
+                  <div className="itemBox mTop10">
+                    <Icon icon={getIconByType(type)} className={cx('Font14 Gray_9e mRight15')} />
+                    <span className="">{controlName}</span>
+                  </div>
+                );
+              }
               return (
                 <div className="itemBox mTop10">
                   <span
                     className={cx('widget controlname Gray Font13 WordBreak overflow_ellipsis Relative', {
                       isErr: isList,
+                      isChild: !!writeControlsData.sectionId,
                     })}
                   >
                     <Icon icon={getIconByType(type)} className={cx('Font14 Gray_9e mRight15')} />
-                    <span className="">{controlName || (type === 22 ? _l('分割线') : _l('备注'))}</span>
+                    <span className="">{controlName || (type === 22 ? _l('分段') : _l('备注'))}</span>
                     {isList && (
                       <Tooltip
                         tooltipClass="pointTooltip"
@@ -298,8 +304,8 @@ class AppointDialog extends React.Component {
                         value: i + 1,
                         disabled:
                           (this.isDisable(type) && i > 0) ||
-                          (type === 29 && writeControlsData.advancedSetting.showtype === '2') ||
-                          ([43].includes(type) && [3].includes(i + 1)), //OCR 只读 编辑
+                          ([29, 51].includes(type) && writeControlsData.advancedSetting.showtype === '2') ||
+                          ([49, 21, 43].includes(type) && i > 1), //api查询,自由连接,文本识别 屏蔽必填
                       };
                     })}
                     onChange={newValue => {
@@ -323,7 +329,7 @@ class AppointDialog extends React.Component {
                     icon="hr_delete"
                     className="Font18 editAppointFilters Hand Gray_9e mLeft8"
                     onClick={() => {
-                      this.editAppointFilters(item, false);
+                      this.handDel(item);
                     }}
                   />
                 </div>
@@ -338,7 +344,6 @@ class AppointDialog extends React.Component {
 
   render = () => {
     const {
-      currentSheetInfo,
       btnId,
       workflowType,
       clickType,
@@ -355,7 +360,7 @@ class AppointDialog extends React.Component {
     return (
       <React.Fragment>
         <Dialog
-          title={_l('设置填写内容')}
+          title={_l('设置填写内容%02060')}
           okText={_l('确定')}
           cancelText={_l('取消')}
           width={630}
@@ -400,7 +405,7 @@ class AppointDialog extends React.Component {
               writeObject: this.state.writeObject,
               writeType: this.state.writeType,
               addRelationControlId: this.state.addRelationControlId,
-              writeControls: this.state.writeControls,
+              writeControls: this.state.writeControls.filter(o => ![52].includes(o.type)),
               workflowType: !btnId ? 2 : workflowType,
             };
             setValue(value);
@@ -409,7 +414,7 @@ class AppointDialog extends React.Component {
         >
           <div className="appointCon">
             <p className="Gray_9e Font14">{_l('用户点击按钮后，立即弹出对话框并填写指定的内容')}</p>
-            <p className="Gray Font13 mTop32 Bold500">{_l('填写对象')}</p>
+            <p className="Gray Font13 mTop32 Bold500">{_l('填写对象%02061')}</p>
             <RadioGroup
               className="mTop10"
               data={[
@@ -419,7 +424,8 @@ class AppointDialog extends React.Component {
                 },
                 {
                   value: 2,
-                  text: _l('关联记录（单条）'),
+                  text: _l('关联记录（单条）%02062'),
+                  disabled: this.props.cannotRelate,
                 },
               ]}
               size="small"
@@ -472,7 +478,7 @@ class AppointDialog extends React.Component {
                 />
               </div>
             )}
-            <p className="Gray Font13 mTop32 Bold500">{_l('填写内容')}</p>
+            <p className="Gray Font13 mTop32 Bold500">{_l('填写内容%02063')}</p>
             <RadioGroup
               className="mTop10"
               data={[
@@ -482,7 +488,8 @@ class AppointDialog extends React.Component {
                 },
                 {
                   value: 2,
-                  text: _l('新建关联记录'),
+                  text: _l('新建关联记录%02064'),
+                  disabled: this.props.cannotRelate,
                 },
               ]}
               size="small"

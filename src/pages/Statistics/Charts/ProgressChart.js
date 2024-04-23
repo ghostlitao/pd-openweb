@@ -1,12 +1,24 @@
 import React, { Component, Fragment } from 'react';
-import { Progress, RingProgress, Liquid } from '@antv/g2plot';
 import { Row, Col } from 'antd';
-import { formatYaxisList, formatrChartValue, formatControlInfo, getChartColors } from './common';
+import { formatYaxisList, formatrChartValue, formatControlInfo, getChartColors, getStyleColor } from './common';
 import { formatSummaryName, isFormatNumber } from 'statistics/common';
 import tinycolor from '@ctrl/tinycolor';
 import cx from 'classnames';
 import { browserIsMobile } from 'src/util';
 const isMobile = browserIsMobile();
+
+const getControlMinAndMax = (map) => {
+  const data = {};
+  for(const item in map) {
+    const targetValue = map[item].targetValue;
+    data[item] = {
+      min: 0,
+      max: targetValue,
+      center: targetValue / 2
+    }
+  }
+  return data;
+}
 
 class ProgressChart extends Component {
   constructor(props) {
@@ -19,7 +31,10 @@ class ProgressChart extends Component {
     this.ProgressChart = null;
   }
   componentDidMount() {
-    this.renderProgressChart(this.props);
+    import('@antv/g2plot').then(data => {
+      this.g2plotComponent = data;
+      this.renderProgressChart(this.props);
+    });
   }
   componentWillUnmount() {
     this.ProgressChart && this.ProgressChart.destroy();
@@ -30,7 +45,9 @@ class ProgressChart extends Component {
     if (
       displaySetup.magnitudeUpdateFlag !== oldDisplaySetup.magnitudeUpdateFlag ||
       displaySetup.showNumber !== oldDisplaySetup.showNumber ||
-      style.showValueType !== oldStyle.showValueType
+      !_.isEqual(displaySetup.colorRules, oldDisplaySetup.colorRules) ||
+      style.showValueType !== oldStyle.showValueType ||
+      nextProps.color !== this.props.color
     ) {
       const { ProgressChartConfig } = this.getComponentConfig(nextProps);
       this.ProgressChart.update(ProgressChartConfig);
@@ -52,23 +69,40 @@ class ProgressChart extends Component {
     this.ProgressChart.render();
   }
   getComponentConfig(props) {
-    const { data = {}, yAxis, color, isThumbnail, reportData } = props;
+    const { data = {}, yAxis, controlMinAndMax, isThumbnail, reportData } = props;
     const { yaxisList, displaySetup, style } = reportData;
-    const { showChartType, showNumber } = displaySetup;
+    const { showChartType, showNumber, colorRules } = displaySetup;
     const { showValueType = 1 } = style;
     const { clientWidth } = this.chartEl;
     const { clientHeight } = document.querySelector(isThumbnail ? `.statisticsCard-${reportData.reportId} .chartWrapper` : '.ChartDialog .chart .flex');
     const size = Math.min(clientWidth, clientHeight);
     const percentValue = data.value / (data.targetValue || 1);
+    const rule = _.get(colorRules[0], 'dataBarRule') || {};
     const titleFormatter = () => {
       if (showValueType == 1) {
-        return formatrChartValue(data.value, false, yaxisList);
+        return formatrChartValue(data.value, false, yaxisList, null, false);
       }
       if (showValueType == 2) {
         return `${(percentValue * 100).toFixed(2)} %`;
       }
-      return `${formatrChartValue(data.value, false, yaxisList)}/${formatrChartValue(data.targetValue, false, yaxisList)}`;
+      return `${formatrChartValue(data.value, false, yaxisList, null, false)}/${formatrChartValue(data.targetValue, false, yaxisList)}`;
     }
+    const getColor = () => {
+      if (_.isEmpty(rule)) {
+        return props.color;
+      } else {
+        const controlId = yAxis.controlId;
+        const color = getStyleColor({
+          value: data.value,
+          controlMinAndMax,
+          rule,
+          controlId
+        });
+        return color || props.color;
+      }
+    }
+    const color = getColor();
+    const { Progress, RingProgress, Liquid } = this.g2plotComponent;
 
     if (showChartType === 2) {
       const baseConfig = {
@@ -204,8 +238,13 @@ class ProgressChart extends Component {
 
 
 export default (props) => {
-  const { map, yaxisList, style } = props.reportData;
-  const color = getChartColors();
+  const { themeColor, projectId, customPageConfig = {}, reportData } = props;
+  const { chartColor, chartColorIndex = 1 } = customPageConfig;
+  const { map, yaxisList } = reportData;
+  const styleConfig = reportData.style || {};
+  const style = chartColor && chartColorIndex >= (styleConfig.chartColorIndex || 0) ? { ...styleConfig, ...chartColor } : styleConfig;
+  const color = getChartColors(style, themeColor, projectId);
+  const controlMinAndMax = getControlMinAndMax(map);
   return (
     <div
       className="flex chartWrapper alignItemsCenter justifyContentCenter flexRow overflowHidden"
@@ -216,8 +255,9 @@ export default (props) => {
           <ProgressChart
             key={data.controlId}
             {...props}
-            color={color[index]}
+            color={color[index % color.length]}
             data={map[data.controlId] || {}}
+            controlMinAndMax={controlMinAndMax}
             yAxis={data}
           />
         ))}

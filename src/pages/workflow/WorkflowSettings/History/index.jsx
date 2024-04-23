@@ -9,7 +9,7 @@ import './index.less';
 import api from '../../api/instance';
 import process from '../../api/process';
 import processVersion from '../../api/processVersion';
-import UserHead from 'src/pages/feed/components/userHead';
+import UserHead from 'src/components/userHead';
 import createDecoratedComponent from 'ming-ui/decorators/createDecoratedComponent';
 import withClickAway from 'ming-ui/decorators/withClickAway';
 import { FLOW_STATUS } from './config';
@@ -43,6 +43,7 @@ class History extends Component {
       filters: {},
       accumulation: {},
       requestPending: false,
+      batchIds: [],
     };
   }
 
@@ -64,9 +65,7 @@ class History extends Component {
     let para = { pageIndex, processId, pageSize, workId, instanceId, ...filterPara };
 
     if (_.isEmpty(filters) && !para.startDate) {
-      para.startDate = moment()
-        .add(-6, 'M')
-        .format('YYYY/MM/DD HH:mm');
+      para.startDate = moment().add(-6, 'M').format('YYYY/MM/DD HH:mm');
     }
 
     if (requestPending) return;
@@ -101,7 +100,7 @@ class History extends Component {
    */
   handleFilter = para => {
     this.filterPara = para;
-    this.setState({ pageIndex: 1 }, () => {
+    this.setState({ pageIndex: 1, batchIds: [] }, () => {
       this.getData();
     });
   };
@@ -179,7 +178,7 @@ class History extends Component {
 
   renderHistory() {
     const { flowInfo } = this.props;
-    const { enabled } = flowInfo;
+    const { enabled, companyId } = flowInfo;
     const { historyIsLoading, historyIndex, historyList } = this.state;
 
     return (
@@ -208,11 +207,11 @@ class History extends Component {
                 </div>
                 <div className="flex flexRow">
                   <UserHead
+                    projectId={companyId}
                     user={{
                       userHead: item.publisher.avatar,
                       accountId: item.publisher.accountId,
                     }}
-                    lazy="false"
                     size={26}
                   />
                   <div className="mLeft12 flex ellipsis">{item.publisher.fullName}</div>
@@ -258,11 +257,9 @@ class History extends Component {
   getProcessAccumulation() {
     const { flowInfo } = this.props;
 
-    if (flowInfo.enabled) {
-      processVersion.getDifferenceByProcessId({ processId: flowInfo.id }).then(accumulation => {
-        this.setState({ accumulation });
-      });
-    }
+    processVersion.getDifferenceByProcessId({ processId: flowInfo.id }).then(accumulation => {
+      this.setState({ accumulation });
+    });
   }
 
   /**
@@ -287,6 +284,7 @@ class History extends Component {
       filters,
       accumulation,
       requestPending,
+      batchIds,
     } = this.state;
     const { lastPublishDate, parentId, enabled } = flowInfo;
     const isMoreHistory = !_.isEmpty(filters) && !showFilter;
@@ -295,11 +293,7 @@ class History extends Component {
       return (
         <ScrollView className="workflowHistoryWrap flex">
           <div className="workflowHistoryContentWrap">
-            <HistoryDetail
-              id={selectActionId}
-              disabled={isMoreHistory}
-              onClick={() => this.setState({ selectActionId: '' })}
-            />
+            <HistoryDetail id={selectActionId} onClick={() => this.setState({ selectActionId: '' })} />
           </div>
         </ScrollView>
       );
@@ -394,6 +388,8 @@ class History extends Component {
         <div className="workflowHistoryContentWrap">
           {this.renderInstanceContent()}
           <HistoryHeader
+            processId={flowInfo.id}
+            isSerial={_.includes([2, 3], flowInfo.executeType)}
             filters={
               isMoreHistory
                 ? {
@@ -404,15 +400,17 @@ class History extends Component {
                 : {}
             }
             hideStatusAndDate={isMoreHistory}
+            batchIds={batchIds}
             onFilter={this.handleFilter}
             onRefresh={callback => {
-              this.setState({ pageIndex: 1 }, () => {
+              this.setState({ pageIndex: 1, batchIds: [] }, () => {
                 this.getData(callback);
               });
               this.getProcessAccumulation();
             }}
           />
           <HistoryList
+            processId={flowInfo.id}
             data={data}
             accumulation={accumulation}
             disabled={isMoreHistory}
@@ -424,8 +422,11 @@ class History extends Component {
             getMore={this.getMore}
             hasMoreData={hasMoreData}
             requestPending={requestPending}
+            batchIds={batchIds}
             onClick={selectActionId => this.setState({ selectActionId })}
             onRecovery={this.onRecovery}
+            onRefreshAccumulation={() => this.getProcessAccumulation()}
+            onUpdateBatchIds={batchIds => this.setState({ batchIds })}
           />
         </div>
 

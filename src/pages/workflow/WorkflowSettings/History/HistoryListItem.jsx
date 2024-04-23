@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Icon } from 'ming-ui';
+import React, { Fragment, useState } from 'react';
+import { Icon, Checkbox } from 'ming-ui';
 import cx from 'classnames';
 import HistoryStatus from './HistoryStatus';
 import { FLOW_FAIL_REASON, FLOW_STATUS, STATUS2COLOR } from './config';
@@ -17,7 +17,8 @@ export default ({
   onClick,
   index,
   updateSource,
-  disabled,
+  batchIds,
+  onUpdateBatchIds,
 }) => {
   const { cause, nodeName, causeMsg } = instanceLog;
   const { color } = STATUS2COLOR[FLOW_STATUS[status].status];
@@ -25,12 +26,23 @@ export default ({
   const [isRetry, setRetry] = useState(false);
   const [versionDate, setVersion] = useState('');
   const [currentWorkflowId, setWorkflowId] = useState('');
-  const showRetry = (status === 3 && _.includes([20001, 20002], cause)) || (status === 4 && cause !== 7777);
+  const showRetry = _.includes([3, 4], status) && cause !== 7777;
   const showSuspend = status === 1;
 
   return (
     <li className="historyListItem" onClick={() => onClick(id)}>
       {isRetry && <div className="workflowRetryLoading" />}
+      <div className="batch">
+        {status === 2 || cause === 7777 ? null : (
+          <Checkbox
+            checked={!!batchIds.find(o => o.id === id)}
+            onClick={(checked, value, e) => {
+              e.stopPropagation();
+              onUpdateBatchIds(!checked ? batchIds.concat({ id, status, cause }) : batchIds.filter(o => o.id !== id));
+            }}
+          />
+        )}
+      </div>
       <div className={cx('status', status)}>
         <div className="iconWrap">
           <HistoryStatus statusCode={status} />
@@ -44,21 +56,30 @@ export default ({
           cause
             ? cause === 40007
               ? FLOW_FAIL_REASON[cause]
-              : `${_l('节点: ')} ${nodeName}, ${FLOW_FAIL_REASON[cause] || causeMsg}`
+              : !nodeName
+              ? FLOW_FAIL_REASON[cause] || causeMsg
+              : `${_l('节点: ')} ${nodeName}, ${
+                  cause === 7777 ? _l('过期自动中止') : FLOW_FAIL_REASON[cause] || causeMsg
+                }`
             : ''
         }
       >
         {cause
           ? cause === 40007
             ? FLOW_FAIL_REASON[cause]
-            : `${_l('节点: ')} ${nodeName}, ${FLOW_FAIL_REASON[cause] || causeMsg}`
+            : !nodeName
+            ? FLOW_FAIL_REASON[cause] || causeMsg
+            : `${_l('节点: ')} ${nodeName}, ${
+                cause === 7777 ? _l('过期自动中止') : FLOW_FAIL_REASON[cause] || causeMsg
+              }`
           : ''}
       </div>
       <div className="triggerTime Gray_75">
         {displayedDate.isValid() ? displayedDate.format('YYYY-MM-DD HH:mm:ss') : ''}
       </div>
+
       <div className="retry">
-        {(showRetry || showSuspend) && !disabled && (
+        {(showRetry || showSuspend) && (
           <span
             data-tip={showRetry ? _l('重试') : _l('中止')}
             onClick={e => {
@@ -67,10 +88,22 @@ export default ({
 
               setRetry(true);
 
-              (showRetry ? instanceVersion.resetInstance : instanceVersion.endInstance)({ instanceId: id }).then(res => {
-                updateSource(Object.assign(res, { id }), index);
-                setRetry(false);
-              });
+              (showRetry ? instanceVersion.resetInstance : instanceVersion.endInstance)({ instanceId: id }).then(
+                res => {
+                  onUpdateBatchIds(
+                    batchIds.map(o => {
+                      if (o.id === id) {
+                        o.status = res.status;
+                        o.cause = res.instanceLog.cause;
+                      }
+
+                      return o;
+                    }),
+                  );
+                  updateSource(Object.assign(res, { id }), index);
+                  setRetry(false);
+                },
+              );
             }}
           >
             <Icon className="Font16 pointer ThemeHoverColor3 Block Gray_9e" icon={showRetry ? 'replay' : 'delete'} />
@@ -79,6 +112,7 @@ export default ({
       </div>
       <div className="version">
         <span
+          className="tip-bottom-left"
           data-tip={versionDate && typeof versionDate === 'string' ? _l('版本：%0', versionDate) : _l('加载中')}
           onMouseOver={() => {
             if (versionDate) return;

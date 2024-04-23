@@ -9,20 +9,24 @@ const EditShowNameCon = styled.div`
   }
 `;
 export default function ChangeName(props) {
-  const { name, onCancel, onChange } = props;
+  const { name, onCancel, onChange, title, deduplication, list } = props;
   const [value, setValue] = useState(name);
   return (
     <Dialog
       visible
-      title={_l('重命名')}
+      title={title || _l('重命名')}
       onCancel={onCancel}
       onOk={() => {
-        onChange(value);
+        let name = value.trim();
+        if (deduplication && list.find(item => item.alias === name)) {
+          return alert(_l('名称重复，请修改后提交'), 3);
+        }
+        onChange(value.trim());
         onCancel();
       }}
     >
       <EditShowNameCon>
-        <Input className="w100" value={value} onChange={setValue} />
+        <Input className="w100" value={value} onChange={setValue} autoFocus />
       </EditShowNameCon>
     </Dialog>
   );

@@ -3,9 +3,11 @@ import React, { Component, Fragment } from 'react';
 import './index.less';
 import flowNode from '../../../../api/flowNode';
 import ActionFields from '../ActionFields';
-import { CONTROLS_NAME, APP_TYPE } from '../../../enum';
+import { CONTROLS_NAME, APP_TYPE, NODE_TYPE, GLOBAL_VARIABLE } from '../../../enum';
 import { MenuItem } from 'ming-ui';
 import _ from 'lodash';
+import SelectGlobalVar from 'src/pages/Admin/app/globalVariable/components/SelectGlobalVarDialog';
+import cx from 'classnames';
 
 export default class SelectOtherFields extends Component {
   static propTypes = {
@@ -13,7 +15,10 @@ export default class SelectOtherFields extends Component {
     sourceNodeId: PropTypes.string,
     fieldsVisible: PropTypes.bool,
     showClear: PropTypes.bool,
+    showCurrent: PropTypes.bool,
+    projectId: PropTypes.string,
     processId: PropTypes.string,
+    relationId: PropTypes.string,
     selectNodeId: PropTypes.string,
     sourceAppId: PropTypes.string,
     isIntegration: PropTypes.bool,
@@ -27,6 +32,8 @@ export default class SelectOtherFields extends Component {
       type: PropTypes.number,
       enumDefault: PropTypes.number,
     }),
+    disabledInterface: PropTypes.bool,
+    filterType: PropTypes.number,
   };
 
   static defaultProps = {
@@ -35,6 +42,9 @@ export default class SelectOtherFields extends Component {
     sourceNodeId: '',
     isIntegration: false,
     showClear: false,
+    showCurrent: false,
+    disabledInterface: false,
+    filterType: 0,
   };
 
   constructor(props) {
@@ -64,7 +74,16 @@ export default class SelectOtherFields extends Component {
       conditionId,
       dataSource,
       isIntegration,
+      showCurrent,
+      disabledInterface,
+      filterType,
     } = this.props;
+
+    // 禁止获取其他动态值
+    if (disabledInterface) {
+      this.setState({ fieldsData: [] });
+      return;
+    }
 
     flowNode[isFilter ? 'getFlowAppDtos' : 'getFlowNodeAppDtos'](
       {
@@ -76,6 +95,8 @@ export default class SelectOtherFields extends Component {
         selectNodeId: sourceNodeId,
         conditionId,
         dataSource,
+        current: showCurrent,
+        filterType,
       },
       { isIntegration },
     ).then(result => {
@@ -98,6 +119,7 @@ export default class SelectOtherFields extends Component {
                 obj.appType === APP_TYPE.WEBHOOK
                   ? `[${o.enumDefault === 0 ? 'Body' : o.enumDefault === 1001 ? 'Params' : 'Header'}] ${o.controlName}`
                   : o.controlName,
+              sourceType: o.sourceControlType,
             };
           }),
         };
@@ -107,10 +129,57 @@ export default class SelectOtherFields extends Component {
   }
 
   /**
+   * 头部
+   */
+  header() {
+    const { projectId, relationId, item, handleFieldClick, closeLayer, isIntegration } = this.props;
+    let filterTypes = [];
+
+    if (!_.includes([1, 2, 3, 4, 5, 6, 7, 8, 33, 41], item.type) || isIntegration) return null;
+
+    if (_.includes([6, 8], item.type)) {
+      filterTypes = [6];
+    }
+
+    return (
+      <ul className="flowDetailUserList">
+        <MenuItem
+          icon={<i className="icon-global_variable" />}
+          onClick={() => {
+            SelectGlobalVar({
+              projectId,
+              appId: relationId,
+              filterTypes,
+              onOk: ({ id, controlType, name, sourceType }) => {
+                handleFieldClick({
+                  nodeId: GLOBAL_VARIABLE,
+                  fieldValueId: id,
+                  nodeName: _l('全局变量'),
+                  fieldValueName: name,
+                  fieldValue: item.type === 26 || item.type === 27 ? '[]' : '',
+                  fieldValueType: controlType,
+                  nodeTypeId: NODE_TYPE.SYSTEM,
+                  appType: APP_TYPE.GLOBAL_VARIABLE,
+                  actionId: '',
+                  isSourceApp: false,
+                  sourceType,
+                });
+              },
+            });
+            closeLayer();
+          }}
+        >
+          {_l('全局变量')}
+        </MenuItem>
+      </ul>
+    );
+  }
+
+  /**
    * 渲染其他字段层
    */
   renderOtherFieldsBox() {
-    const { item, fieldsVisible, handleFieldClick, closeLayer, showClear } = this.props;
+    const { item, fieldsVisible, handleFieldClick, closeLayer, showClear, disabledInterface } = this.props;
     const { fieldsData } = this.state;
 
     if (!fieldsVisible || !_.isArray(fieldsData)) {
@@ -119,11 +188,12 @@ export default class SelectOtherFields extends Component {
 
     return (
       <ActionFields
+        header={this.header()}
         className="actionFields"
-        openSearch
+        openSearch={!disabledInterface}
         footer={showClear && this.footer()}
         noItemTips={_l('没有可用的字段')}
-        noData={_l('没有可用的节点对象')}
+        noData={!disabledInterface && _l('没有可用的节点对象')}
         condition={fieldsData}
         handleFieldClick={({
           nodeId,
@@ -135,6 +205,7 @@ export default class SelectOtherFields extends Component {
           appType,
           actionId,
           isSourceApp,
+          sourceType,
         }) => {
           handleFieldClick({
             nodeId,
@@ -147,6 +218,7 @@ export default class SelectOtherFields extends Component {
             appType,
             actionId,
             isSourceApp,
+            sourceType,
           });
           closeLayer();
         }}
@@ -159,11 +231,10 @@ export default class SelectOtherFields extends Component {
    * 尾部
    */
   footer() {
+    const { disabledInterface } = this.props;
+
     return (
-      <ul
-        className="flowDetailUserList clearAllFields"
-        style={{ borderTopWidth: 1, borderTopStyle: 'solid', borderColor: '#ccc' }}
-      >
+      <ul className={cx('flowDetailUserList clearAllFields', { BorderTopGrayC: !disabledInterface })}>
         <MenuItem
           icon={<i className="icon-workflow_empty" />}
           onClick={() => {

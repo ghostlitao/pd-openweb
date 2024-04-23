@@ -1,15 +1,15 @@
 import React, { Component, Fragment } from 'react';
-import { formatrChartValue, formatYaxisList } from './common';
+import { formatrChartValue, formatYaxisList, getChartColors } from './common';
 import { formatSummaryName } from 'statistics/common';
-import { Dropdown, Menu } from 'antd';
-import { LoadDiv } from 'ming-ui';
+import { Dropdown, Menu, Tooltip } from 'antd';
+import { LoadDiv, Icon } from 'ming-ui';
 import styled from 'styled-components';
 import { connect } from 'react-redux';
 import * as actions from 'statistics/redux/actions';
 import { bindActionCreators } from 'redux';
 import reportRequestAjax from '../api/report';
 import { version, fillValueMap } from '../common';
-import Hammer from 'l7hammerjs';
+import { generate } from '@ant-design/colors';
 import _ from 'lodash';
 
 const PathWrapper = styled.div`
@@ -31,11 +31,27 @@ const PathWrapper = styled.div`
   }
 `;
 
-const colors = ['#E3F2FD', '#BBDEFB', '#90CAF9', '#2196F3', '#1565C0', '#0D47A1'];
+const ZoomWrapper = styled.div`
+  width: 40px;
+  height: 90px;
+  border-radius: 4px;
+  background-color: #fff;
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  z-index: 10;
+  .icon:hover {
+    color: #2196f3 !important;
+  }
+`;
 
-const setColorLavel = data => {
+
+const municipality = ['110000', '310000', '120000', '500000'];
+const colorsLength = 6;
+
+const setColorLavel = (data) => {
   let res = data.filter(item => item.value).sort((a, b) => a.value - b.value);
-  let max = Math.ceil(res.length / colors.length);
+  let max = Math.ceil(res.length / colorsLength);
   let currentIndex = max;
   let lavel = 1;
   for (let i = 0; i < res.length; i++) {
@@ -52,7 +68,7 @@ const setColorLavel = data => {
   return res;
 };
 
-const getColorValues = data => {
+const getColorValues = (data, colors) => {
   const maxLength = Math.max.apply(null, data.map(item => item.colorLavel));
   if (maxLength === 1) {
     return [colors[0], colors[0]];
@@ -135,7 +151,7 @@ export default class extends Component {
               3: {
                 fill: {
                   type: 'pbf',
-                  url: `${url}districtDataConfigFile/516b2703-d692-44e6-80dd-b3f5df0186e7.bin`
+                  url: `${url}districtDataConfigFile/524f7de2-7d69-4fa7-8da3-7ff42fa69ee4.bin`
                 },
                 line: {
                   type: 'pbf',
@@ -179,6 +195,7 @@ export default class extends Component {
 
         scene.on('loaded', () => {
           this.CountryLayerChart = new ChartComponent(scene, config);
+          if (country.municipality) return;
           if (displaySetup.showRowList && isViewOriginalData && !style.isDrillDownLayer) {
             this.CountryLayerChart.on('click', this.handleClick);
           }
@@ -209,11 +226,17 @@ export default class extends Component {
     this.scene && this.scene.destroy();
   }
   componentWillReceiveProps(nextProps) {
-    const { displaySetup = {}, map } = nextProps.reportData;
-    const { displaySetup: oldDisplaySetup = {} } = this.props.reportData;
+    const { style = {}, displaySetup = {}, map } = nextProps.reportData;
+    const { style: oldStyle = {}, displaySetup: oldDisplaySetup = {} } = this.props.reportData;
+    const chartColor = _.get(nextProps, 'customPageConfig.chartColor');
+    const oldChartColor = _.get(this.props, 'customPageConfig.chartColor');
     if (
+      !_.isEmpty(displaySetup) &&
       displaySetup.showChartType !== oldDisplaySetup.showChartType ||
-      displaySetup.magnitudeUpdateFlag !== oldDisplaySetup.magnitudeUpdateFlag
+      displaySetup.magnitudeUpdateFlag !== oldDisplaySetup.magnitudeUpdateFlag ||
+      !_.isEqual(chartColor, oldChartColor) ||
+      !_.isEqual(style, oldStyle) ||
+      nextProps.themeColor !== this.props.themeColor
     ) {
       this.CountryLayerChart && this.CountryLayerChart.destroy();
       this.scene && this.scene.destroy();
@@ -223,12 +246,16 @@ export default class extends Component {
       });
     }
     if (!nextProps.loading && this.props.loading) {
-      const { map, yaxisList, summary } = nextProps.reportData;
+      const { map, yaxisList, summary, style } = nextProps.reportData;
       const data = setColorLavel(map);
       const { CountryLayerChart } = this;
       if (CountryLayerChart && typeof CountryLayerChart.updateData === 'function') {
         this.setCount(formatYaxisList(data, yaxisList), summary);
-        CountryLayerChart.updateData(data);
+        if (_.get(style, 'isDrillDownLayer')) {
+          CountryLayerChart.updateData(CountryLayerChart.drillState, data);
+        } else {
+          CountryLayerChart.updateData(data);
+        }
       }
     }
   }
@@ -320,6 +347,17 @@ export default class extends Component {
         this.setState({ drillDownLoading: false, dropdownVisible: false });
         const data = setColorLavel(result.map);
 
+        if (municipality.includes(code)) {
+          const last = _.find(this.CountryLayerChart.provinceLayer.options.data, { code: code });
+          this.setState({ path: [_l('全国'), last.name] });
+          this.CountryLayerChart.depth = 3;
+          this.CountryLayerChart.drillState = 'Province';
+          this.CountryLayerChart.drillDown(code, data);
+          this.CountryLayerChart.drillState = 'City';
+          this.CountryLayerChart.drillDown(code, data);
+          return;
+        } 
+
         if (path.length) {
           const last = _.find(this.CountryLayerChart.cityLayer.options.data, { code: code });
           const city = last.name.split('/')[1];
@@ -350,7 +388,7 @@ export default class extends Component {
   };
   handleDrillUpTriggleData = index => {
     const { path } = this.state;
-    const { reportData, base } = this.props;
+    const { isThumbnail, reportData, base } = this.props;
     const { country } = reportData;
 
     if (path.length) {
@@ -366,7 +404,17 @@ export default class extends Component {
         path.pop();
         this.setState({ path });
       } else {
-        this.props.closeCurrentReport();
+        if (isThumbnail) {
+          this.props.closeCurrentReport();
+        } else {
+          this.props.changeCurrentReport({
+            country: {
+              ...country,
+              drillFilterCode: '',
+              drillParticleSizeType: 1,
+            },
+          });
+        }
         this.CountryLayerChart.drillUp('Province');
         this.CountryLayerChart.drillUp('Country');
         this.setState({ path: [] });
@@ -408,8 +456,17 @@ export default class extends Component {
     });
   };
   getChartConfig(props) {
-    const { country, displaySetup, map, yaxisList, style, summary } = props.reportData;
+    const { themeColor, projectId, customPageConfig = {}, reportData } = props;
+    const { country, displaySetup, map, yaxisList, summary, sorts } = reportData;
+    const { chartColor, chartColorIndex = 1 } = customPageConfig;
+    const sort = _.get(sorts[0], yaxisList[0].controlId);
+    const styleConfig = reportData.style || {};
+    const style = chartColor && chartColorIndex >= (styleConfig.chartColorIndex || 0) ? { ...styleConfig, ...chartColor } : styleConfig;
     const data = setColorLavel(map);
+    const maxColorLavel = _.max(data.map(n => n.colorLavel));
+    const colors = getChartColors(style, themeColor, projectId);
+    const generateColors = generate(colors[0]).filter((_, index) => [0, 2, 4, 6, 7, 9].includes(index)).filter((_, index) => maxColorLavel > index);
+    const colorLavels = sort === 2 ? generateColors.reverse() : generateColors;
     const newYaxisList = formatYaxisList(data, yaxisList);
     const { Scene, Mapbox, CountryLayer, ProvinceLayer, CityLayer, DrillDownLayer } = this.asyncComponents;
 
@@ -454,6 +511,7 @@ export default class extends Component {
       config.provinceStroke = '#FFF';
       config.cityStroke = '#FFF';
       config.bubble = {
+        color: colors[0],
         enable: true,
         size: {
           field: 'colorLavel',
@@ -468,13 +526,15 @@ export default class extends Component {
       config.fill = {
         color: {
           field: 'colorLavel',
-          values: getColorValues(data),
+          values: value => {
+            return colorLavels[value - 1];
+          },
         },
       };
     }
 
     // 钻取地图
-    if (style && style.isDrillDownLayer && [1, 2].includes(country.particleSizeType)) {
+    if (style && style.isDrillDownLayer && [1, 2].includes(country.particleSizeType) && !country.municipality) {
       config.customTrigger = true;
       config.data = undefined;
       // 省
@@ -628,6 +688,17 @@ export default class extends Component {
                 ))}
               </PathWrapper>
             )}
+            <ZoomWrapper className="flexColumn alignItemsCenter justifyContentCenter card">
+              <Tooltip title={_l('放大')}>
+                <Icon className="pointer Font20 Gray_75 mTop2" icon="add" onClick={() => this.scene.map.zoomIn()} />
+              </Tooltip>
+              <Tooltip title={_l('完整显示')}>
+                <Icon className="pointer Font17 Gray_75 mTop10 mBottom10" icon="gps_fixed" onClick={() => this.scene.map.zoomTo(2)} />
+              </Tooltip>
+              <Tooltip title={_l('缩小')}>
+                <Icon className="pointer Font20 Gray_75" icon="minus" onClick={() => this.scene.map.zoomOut()} />
+              </Tooltip>
+            </ZoomWrapper>
           </Fragment>
         )}
       </div>

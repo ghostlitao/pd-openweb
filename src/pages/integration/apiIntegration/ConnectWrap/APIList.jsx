@@ -9,6 +9,7 @@ import packageVersionAjax from 'src/pages/workflow/api/packageVersion';
 import { LoadDiv, Dialog, Icon } from 'ming-ui';
 import processAjax from 'src/pages/workflow/api/process.js';
 import { getFeatureStatus, buriedUpgradeVersionDialog } from 'src/util';
+import { VersionProductType } from 'src/util/enum';
 import loadScript from 'load-script';
 import _ from 'lodash';
 import moment from 'moment';
@@ -69,7 +70,7 @@ const SortableList = SortableContainer(({ items, ...rest }) => {
 // 点击卡片可以侧拉弹出API详情；
 function APIList(props) {
   let str = 'https://alifile.mingdaocloud.com/open/js/apilibrary.js' + '?' + moment().format('YYYYMMDD');
-  const featureType = getFeatureStatus(props.companyId, 3);
+  const featureType = getFeatureStatus(props.companyId, VersionProductType.apiIntergration);
   const [{ list, keywords, show, listId, loading, pageIndex, publishing, showType, change, listSearch }, setState] =
     useSetState({
       list: props.apiList || [],
@@ -125,7 +126,7 @@ function APIList(props) {
       installCallBack: installCallBack,
       info: props,
       buriedUpgradeVersionDialog: () => {
-        buriedUpgradeVersionDialog(props.companyId, 3);
+        buriedUpgradeVersionDialog(props.companyId, VersionProductType.apiIntergration);
       },
       currentProjectId: props.companyId,
       getUrl: __api_server__.integration || md.global.Config.IntegrationAPIUrl,
@@ -308,7 +309,10 @@ function APIList(props) {
                   value={keywords}
                   className="search"
                   onChange={v => {
-                    setState({ keywords: v, listSearch: list.filter(o => o.name.indexOf(v) >= 0) });
+                    setState({
+                      keywords: v,
+                      listSearch: list.filter(o => o.name.toLocaleLowerCase().indexOf(v.toLocaleLowerCase()) >= 0),
+                    });
                   }}
                 />
               </div>

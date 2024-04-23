@@ -1,39 +1,73 @@
-import homeAppAjax from 'src/api/homeApp';
-import AppManagement from 'src/api/appManagement';
+import homeAppApi from 'src/api/homeApp';
+import appManagementApi from 'src/api/appManagement';
 import instanceVersion from 'src/pages/workflow/api/instanceVersion';
 import { Modal, Toast } from 'antd-mobile';
+import { getTranslateInfo } from 'src/util';
 import _ from 'lodash';
 
 export const getAppDetail = (appId, cb) => (dispatch, getState) => {
-  const params = {
-    appId,
-  };
   dispatch({
     type: 'MOBILE_FETCH_START',
   });
   Promise.all([
-    homeAppAjax.getAppDetail(params).then(),
-    homeAppAjax.getAppInfo(params).then(),
-    homeAppAjax.checkApp({ appId }, { silent: true }).then(),
+    homeAppApi
+      .getApp({
+        appId,
+        getSection: true,
+        getLang: true,
+      })
+      .then(),
+    homeAppApi.checkApp({ appId }, { silent: true }).then(),
     window.isPublicApp ? undefined : instanceVersion.getTodoListFilter({ type: -1 }).then(),
   ]).then(
     result => {
-      const [detail, info, status, processTodoList] = result;
+      let [detail, status, processTodoList] = result;
       const processData = _.find(processTodoList, { app: { id: appId } });
+      const appExpandGroupInfo =
+        (localStorage.getItem(`appExpandGroupInfo-${detail.id}`) &&
+          JSON.parse(localStorage.getItem(`appExpandGroupInfo-${detail.id}`))) ||
+        {};
+      if (
+        detail.appNaviDisplayType !== appExpandGroupInfo.appNaviDisplayType ||
+        detail.appNaviStyle !== appExpandGroupInfo.appNaviStyle
+      ) {
+        localStorage.removeItem(`appExpandGroupInfo-${detail.id}`);
+      }
+      const { langInfo } = detail;
+      const run = () => {
+        dispatch({
+          type: 'UPDATE_APP_DETAIL',
+          data: {
+            appName: getTranslateInfo(appId, appId).name || detail.name,
+            detail: detail,
+            appSection: detail.sections,
+            status: status,
+            processCount: processData ? processData.count : 0,
+          },
+        });
+        dispatch({
+          type: 'MOBILE_FETCH_SUCCESS',
+        });
+      };
+      if (langInfo && langInfo.appLangId && langInfo.version !== window[`langVersion-${appId}`]) {
+        appManagementApi
+          .getAppLangDetail({
+            appId,
+            appLangId: langInfo.appLangId,
+          })
+          .then(lang => {
+            window[`langData-${appId}`] = lang;
+            window[`langVersion-${appId}`] = langInfo.version;
+            run();
+          });
+      } else {
+        run();
+      }
+      cb && cb(detail);
       dispatch({
-        type: 'UPDATE_APP_DETAIL',
-        data: {
-          appName: detail.name,
-          detail: detail,
-          appSection: info.appSectionDetail,
-          status: status,
-          processCount: processData ? processData.count : 0,
-        },
+        type: 'DEBUG_ROLE_LIST',
+        data: (detail.debugRole || {}).selectedRoles || [],
       });
-      dispatch({
-        type: 'MOBILE_FETCH_SUCCESS',
-      });
-      cb && cb(info);
     },
     () => {
       dispatch({
@@ -58,29 +92,31 @@ export const addAppApply =
     dispatch({
       type: 'MOBILE_ACTION_ING',
     });
-    AppManagement.addAppApply({
-      appId,
-      remark: '',
-    }).then(data => {
-      dispatch({
-        type: 'MOBILE_ACTION_END',
+    appManagementApi
+      .addAppApply({
+        appId,
+        remark: '',
+      })
+      .then(data => {
+        dispatch({
+          type: 'MOBILE_ACTION_END',
+        });
+        if (data) {
+          Modal.alert(_l('申请已提交'), '', [
+            {
+              text: _l('确定'),
+              onPress: () => {},
+            },
+          ]);
+        }
       });
-      if (data) {
-        Modal.alert(_l('申请已提交'), '', [
-          {
-            text: _l('确定'),
-            onPress: () => {},
-          },
-        ]);
-      }
-    });
   };
 
 export const updateAppMark = (appId, projectId, isMarked) => (dispatch, getState) => {
   const { mobile } = getState();
   const { appDetail } = mobile;
 
-  homeAppAjax
+  homeAppApi
     .markApp({
       appId,
       isMark: isMarked,
@@ -95,7 +131,7 @@ export const updateAppMark = (appId, projectId, isMarked) => (dispatch, getState
             detail: Object.assign(appDetail.detail, { isMarked }),
           },
         });
-        Toast.info(isMarked ? _l('星标成功') : _l('取消星标成功'), 1);
+        alert(isMarked ? _l('收藏成功') : _l('已取消收藏'));
       }
     });
 };
@@ -103,7 +139,7 @@ export const updateAppMark = (appId, projectId, isMarked) => (dispatch, getState
 export const editAppInfo = (viewHideNavi, callback) => (dispatch, getState) => {
   const { detail } = _.get(getState(), 'mobile.appDetail');
   const params = _.pick(detail, ['projectId', 'iconColor', 'navColor', 'icon', 'description', 'name']);
-  homeAppAjax.editAppInfo({ ...params, appId: detail.id, viewHideNavi }).then(res => {
+  homeAppApi.editAppInfo({ ...params, appId: detail.id, viewHideNavi }).then(res => {
     if (res.data) {
       alert(_l('设置成功'));
       callback();

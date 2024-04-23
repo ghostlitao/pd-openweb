@@ -1,9 +1,12 @@
-import React from 'react';
+import React, { Fragment } from 'react';
+import cx from 'classnames';
 import Sidenav from './components/sidenav';
 import Header from './components/header';
 import Con from './components/content';
 import { Icon, Dialog, LoadDiv } from 'ming-ui';
 import sheetAjax from 'src/api/worksheet';
+import homeAppApi from 'src/api/homeApp';
+import appManagementApi from 'src/api/appManagement';
 import instance from 'src/pages/workflow/api/instanceVersion';
 import './index.less';
 import SaveDia from './components/saveDia';
@@ -17,6 +20,10 @@ import { getControlsForPrint, sysToPrintData, isRelation } from './util';
 import appManagementAjax from 'src/api/appManagement';
 import { controlState } from 'src/components/newCustomFields/tools/utils';
 import _ from 'lodash';
+import { addBehaviorLog, getTranslateInfo } from 'src/util';
+import { replaceControlsTranslateInfo } from 'worksheet/util';
+import { getFilter } from 'src/pages/worksheet/common/WorkSheetFilter/util';
+import { canEditApp } from 'src/pages/worksheet/redux/actions/util.js';
 
 class PrintForm extends React.Component {
   constructor(props) {
@@ -34,6 +41,7 @@ class PrintForm extends React.Component {
         printOption: false, //选择平铺 //打印未选中的项
         shareType: 0, //0 = 默认，1= 内部
         approval: [],
+        views: [],
       },
       isChange: false, // 当前模板是否修改
       appId,
@@ -47,10 +55,15 @@ class PrintForm extends React.Component {
       ajaxUrlStr: '',
       showPdf: false,
       saveLoading: false,
+      approval: [],
+      useWps: false,
+      isUserAdmin: false
     };
   }
   componentWillMount = () => {
-    this.getParamFn();
+    this.getApp(() => {
+      this.getParamFn();
+    });
   };
   componentDidMount() {
     $('html').addClass('printPage');
@@ -64,6 +77,31 @@ class PrintForm extends React.Component {
       webCacheAjax.clear({
         key: `${key}`,
       });
+    }
+  }
+  getApp = (cb) => {
+    const { params } = this.state;
+    const { type, from, appId, printType } = params;
+    if (from === fromType.PRINT && type === typeForCon.NEW && appId && printType !== 'flow') {
+      homeAppApi.getApp({ appId: appId, getLang: true }, { silent: true }).then(data => {
+        this.setState({
+          isUserAdmin: canEditApp(data.permissionType, data.isLock), //开发者|管理员
+        });
+        if (data.langInfo && data.langInfo.appLangId) {
+          appManagementApi.getAppLangDetail({
+            projectId: data.projectId,
+            appId,
+            appLangId: data.langInfo.appLangId
+          }).then(lang => {
+            window[`langData-${appId}`] = lang;
+            cb && cb();
+          });
+        } else {
+          cb && cb();
+        }
+      });
+    } else {
+      cb && cb();
     }
   }
   getParamFn = () => {
@@ -105,8 +143,10 @@ class PrintForm extends React.Component {
       .getWorksheetInfo({
         worksheetId: worksheetId,
         getSwitchPermit: true,
+        getTemplate: true,
       })
       .then(res => {
+        res.name = getTranslateInfo(res.appId, worksheetId).name || res.name;
         this.setInfo(res);
       });
   };
@@ -124,6 +164,7 @@ class PrintForm extends React.Component {
       {
         downLoadUrl: res.downLoadUrl,
         sheetSwitchPermit: res.switches,
+        info: res,
       },
       () => {
         if (isDefault) {
@@ -147,7 +188,7 @@ class PrintForm extends React.Component {
 
   getDownLoadUrl = async downLoadUrl => {
     const { params } = this.state;
-    const { worksheetId, rowId, printId, projectId, appId, viewId } = params;
+    const { worksheetId, rowId, printId, projectId, appId, viewId, fileTypeNum } = params;
     //功能模块 token枚举，3 = 导出excel，4 = 导入excel生成表，5= word打印
     const token = await appManagementAjax.getToken({ worksheetId, viewId, tokenType: 5 });
     let payload = {
@@ -162,21 +203,25 @@ class PrintForm extends React.Component {
       token,
     };
     $.ajax({
-      url: downLoadUrl + '/ExportWord/GetWordPath',
+      url: downLoadUrl + `/Export${fileTypeNum === 5 ? 'Xlsx' : 'Word'}/Get${fileTypeNum === 5 ? 'Xlsx' : 'Word'}Path`,
       type: 'POST',
       dataType: 'json',
       contentType: 'application/json',
       data: JSON.stringify(payload),
-    }).done(r => {
-      this.setState(
-        {
-          ajaxUrlStr: r.data,
-        },
-        () => {
-          this.getFiles();
-        },
-      );
-    });
+    })
+      .done(r => {
+        this.setState(
+          {
+            ajaxUrlStr: r.data,
+          },
+          () => {
+            this.getFiles();
+          },
+        );
+      })
+      .fail(() => {
+        this.setState({ ajaxUrlStr: 'error' });
+      });
   };
 
   getApproval = () => {
@@ -243,19 +288,68 @@ class PrintForm extends React.Component {
             });
           }
         });
-
         this.setState({
           printData: {
             ...this.state.printData,
             approval: _approval,
           },
+          approval: _approval,
         });
       });
     });
   };
 
+  getRowRelationRows = () => {
+    const { printData, params } = this.state;
+    const { worksheetId, rowId } = params;
+    const { receiveControls = [] } = printData;
+    let controls = receiveControls.filter(l => l.type === 51);
+    if (controls.length === 0) return;
+    let promiseList = controls.map(control => {
+      const newFilter = getFilter({
+        control: { ...control, recordId: rowId || printData.rowIdForQr },
+        formData: receiveControls,
+        filterKey: 'resultfilters',
+      });
+
+      return newFilter
+        ? sheetAjax.getRowRelationRows({
+            worksheetId,
+            controlId: control.controlId,
+            getRules: true,
+            getWorksheet: true,
+            keywords: '',
+            pageIndex: 1,
+            pageSize: 1000,
+            rowId,
+            filterControls: newFilter,
+          })
+        : [];
+    });
+    let _printData = _.cloneDeep(printData);
+    Promise.all(promiseList).then(res => {
+      printData.receiveControls.forEach((item, index) => {
+        let _index = controls.findIndex(l => l.controlId === item.controlId);
+        if (_index > -1 && item.type === 51) {
+          _printData.receiveControls[index].value =
+            (res[_index].data || []).length === 0 ? '' : JSON.stringify(res[_index].data);
+          _printData.receiveControls[index].relationsData = res[_index];
+          if (
+            (!_printData.receiveControls[index].relationControls ||
+              _printData.receiveControls[index].relationControls.length === 0) &&
+            res[_index].template
+          )
+            _printData.receiveControls[index].relationControls = res[_index].template.controls;
+        }
+      });
+      this.setState({
+        printData: _printData,
+      });
+    });
+  };
+
   getData = () => {
-    const { params } = this.state;
+    const { params, info } = this.state;
     const {
       printId,
       projectId,
@@ -302,10 +396,16 @@ class PrintForm extends React.Component {
         });
         return;
       }
+      res.formName = getTranslateInfo(appId, worksheetId).name || res.formName;
+      if (res.receiveControls && res.receiveControls.length) {
+        res.receiveControls = replaceControlsTranslateInfo(appId, res.receiveControls);
+      }
+
       const rules = resData[1];
       //通过规则计算
       let receiveControls = updateRulesData({
-        rules: rules,
+        rules: [typeForCon.NEW, typeForCon.EDIT].includes(type) && from === fromType.FORMSET ? [] : rules,
+        recordId: rowId,
         data: res.receiveControls,
       });
       receiveControls = getControlsForPrint(receiveControls, res.relations)
@@ -315,35 +415,84 @@ class PrintForm extends React.Component {
             ? true
             : controlState(o).visible,
         ); //系统打印需要根据用户权限显示
+      receiveControls = receiveControls.map(l => {
+        let _control = (_.get(info.template, 'controls') || []).find(m => m.controlId === l.controlId);
+
+        return _control ? {
+          ...l,
+          advancedSetting: _control.advancedSetting,
+        } : l;
+      });
       let dat = (res.receiveControls || []).filter(o => ![43, 49].includes(o.type)); //去除 文本识别 43 接口查询按钮
       let attribute = dat.find(it => it.attribute === 1);
       let attributeName = !attribute ? _l('未命名') : renderCellText(attribute) || _l('未命名');
       if (from === fromType.PRINT && printType !== 'flow') {
         document.title = printId ? `${res.name}-${attributeName}` : `${_l('系统打印')}-${attributeName}`;
       }
-      this.setState(
-        {
-          printData: {
-            ...this.state.printData,
-            ..._.omit(res, ['rowId']),
-            rowIdForQr: res.rowId,
-            receiveControls,
-            rules,
-            attributeName,
-            font: Number(res.font || DEFAULT_FONT_SIZE),
-            orderNumber: dat
-              .filter(control => isRelation(control))
-              .map(it => {
-                // res.orderNumber取消序号呈现的关联表id
-                return { receiveControlId: it.controlId, checked: !(res.orderNumber || []).includes(it.controlId) };
-              }),
-            systemControl: sysToPrintData(res),
-            approvalIds: res.approvalIds,
+      let _printData = {
+        ...this.state.printData,
+        ..._.omit(res, ['rowId']),
+        rowIdForQr: res.rowId,
+        receiveControls,
+        rules,
+        attributeName,
+        font: Number(res.font || DEFAULT_FONT_SIZE),
+        orderNumber: dat
+          .filter(control => isRelation(control))
+          .map(it => {
+            // res.orderNumber取消序号呈现的关联表id
+            return { receiveControlId: it.controlId, checked: !(res.orderNumber || []).includes(it.controlId) };
+          }),
+        systemControl: sysToPrintData(res),
+        approvalIds: res.approvalIds,
+      };
+
+      let infoPromiseList = [];
+      receiveControls.forEach(l => {
+        if (l.type === 51) {
+          infoPromiseList.push(
+            sheetAjax.getWorksheetInfo({
+              worksheetId: l.dataSource,
+              getTemplate: true,
+            }),
+          );
+        }
+      });
+
+      if (infoPromiseList.length === 0) {
+        this.setState(
+          {
+            printData: _printData,
+            isLoading: false,
           },
-          isLoading: false,
-        },
-        this.getApproval,
-      );
+          () => {
+            this.getApproval();
+            this.getRowRelationRows();
+          },
+        );
+      } else {
+        Promise.all(infoPromiseList).then(res => {
+          let _receiveControls = receiveControls.map(item => {
+            return {
+              ...item,
+              relationControls: item.relationControls || [],
+            };
+          });
+          this.setState(
+            {
+              printData: {
+                ..._printData,
+                receiveControls: _receiveControls,
+              },
+              isLoading: false,
+            },
+            () => {
+              this.getApproval();
+              this.getRowRelationRows();
+            },
+          );
+        });
+      }
     });
   };
 
@@ -418,7 +567,7 @@ class PrintForm extends React.Component {
         if (
           o.relationControls &&
           o.relationControls.length > 0 &&
-          (o.advancedSetting.showtype === '2' || o.type === 34) //关联表列表||子表
+          (o.advancedSetting.showtype === '2' || [34, 51].includes(o.type)) //关联表列表||子表||查询列表
         ) {
           //关联表 列表
           let relations = [];
@@ -474,6 +623,7 @@ class PrintForm extends React.Component {
             'formName',
             'name',
             'font',
+            'approvePosition',
           ]),
           approvalIds: approvalIds,
           projectId,
@@ -535,8 +685,21 @@ class PrintForm extends React.Component {
     window.open(ajaxUrl);
   };
 
+  // 埋点
+  handleBehaviorLog = () => {
+    const { params = {} } = this.state;
+    const { isBatch, worksheetId, rowId, printId } = params;
+    if (isBatch) {
+      addBehaviorLog('batchPrintWord', worksheetId, { printId, msg: [rowId.split(',').length] });
+    } else {
+      addBehaviorLog('printWord', worksheetId, { printId, rowId });
+    }
+  };
+
   renderWordCon = () => {
-    const { ajaxUrlStr, showPdf } = this.state;
+    const { ajaxUrlStr, showPdf, params, printData, showHeader, useWps } = this.state;
+    const { fileTypeNum } = params;
+
     if (!showPdf) {
       return (
         <div className="toWordLoadCon">
@@ -545,45 +708,54 @@ class PrintForm extends React.Component {
               <div className="wordPng"></div>
               <p className="dec">
                 <LoadDiv size="small" className="mRight10" />
-                {_l('正在导出word文件...')}
+                {_l(fileTypeNum === 5 ? '正在导出Excel文件...' : '正在导出Word文件...')}
               </p>
               <p className="txt">{_l('包含图片时生成速度较慢，请耐心等待...')}</p>
             </React.Fragment>
           ) : (
             <React.Fragment>
-              <div className="exportPng"></div>
-              <p className="dec">{_l('导出成功！')}</p>
-              <p
-                className="downWord"
-                onClick={() => {
-                  this.downFn();
-                }}
-              >
-                <Icon
-                  icon={'file_download'}
-                  className="Font16"
-                  style={{ marginLeft: -14, 'vertical-align': 'bottom' }}
-                />
-                {_l('下载word文件')}
-              </p>
-              <div
-                className="toPdf"
-                onClick={() => {
-                  this.setState({
-                    showPdf: true,
-                  });
-                }}
-              >
-                {_l('直接用浏览器打印')}
-              </div>
-              <p className="txt">{_l('文件复杂时可能会失败')}</p>
+              {ajaxUrlStr === 'error' ? <div className='icon-error_outline Red Font64'></div> : <div className="exportPng"></div>}
+              <p className="dec">{ajaxUrlStr === 'error' ? _l('导出失败') : _l('导出成功！')}</p>
+
+              {ajaxUrlStr !== 'error' && (
+                <Fragment>
+                  <p
+                    className="downWord"
+                    onClick={() => {
+                      this.handleBehaviorLog();
+                      this.downFn();
+                    }}
+                  >
+                    <Icon
+                      icon={'file_download'}
+                      className="Font16"
+                      style={{ marginLeft: -14, 'vertical-align': 'bottom' }}
+                    />
+                    {_l(fileTypeNum === 5 ? '下载Excel文件' : '下载Word文件')}
+                  </p>
+                  {/* {fileTypeNum !== 5 && ( */}
+                  <div
+                    className="toPdf"
+                    onClick={() => {
+                      this.handleBehaviorLog();
+                      this.setState({
+                        showPdf: true,
+                      });
+                    }}
+                  >
+                    {_l('在线预览，直接用浏览器打印')}
+                  </div>
+                  {/* )} */}
+                </Fragment>
+              )}
+              <p className="txt">{_l('文件复杂时可能会失败')}</p>{' '}
             </React.Fragment>
           )}
         </div>
       );
     } else {
       return (
-        <div className="previewContainer">
+        <div className={cx('previewContainer')}>
           <div className="iframeLoad">
             <div className="pdfPng"></div>
             <p className="dec">
@@ -597,7 +769,9 @@ class PrintForm extends React.Component {
               $('.iframeLoad').hide();
               $('.iframeDiv').show();
             }}
-            src={this.state.pdfUrl}
+            src={
+              this.state.pdfUrl
+            }
             width="100%"
             height="100%"
           />
@@ -607,7 +781,18 @@ class PrintForm extends React.Component {
   };
 
   render() {
-    const { params, printData, isChange, showSaveDia, isLoading, error, showPdf, sheetSwitchPermit } = this.state;
+    const {
+      params,
+      printData,
+      isChange,
+      showSaveDia,
+      isLoading,
+      error,
+      showPdf,
+      sheetSwitchPermit,
+      showHeader,
+      approval,
+    } = this.state;
     const { type, isDefault, worksheetId, viewId } = params;
     let { receiveControls = [], systemControl = [] } = printData;
     if (!worksheetId) {
@@ -655,13 +840,18 @@ class PrintForm extends React.Component {
           });
         }
       },
-      printData: printData,
+      printData: {
+        ...printData,
+        approval: approval,
+      },
       saveTem: this.saveTem,
       saveFn: this.saveFn,
       downFn: this.downFn,
       showPdf,
       sheetSwitchPermit: sheetSwitchPermit,
+      isUserAdmin: this.state.isUserAdmin
     };
+
     return (
       <div className="printTem">
         <Header {...data} />

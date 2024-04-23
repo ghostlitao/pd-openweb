@@ -43,11 +43,11 @@ export default class EditInfo extends React.Component {
   //验证
   validateContract() {
     const { baseInfo } = this.state
-    if (baseInfo.snsLinkedin !== '' && !RegExp.isUrl(baseInfo.snsLinkedin)) {
+    if (baseInfo.snsLinkedin !== '' && !RegExp.isURL(baseInfo.snsLinkedin)) {
       alert(_l('LinkedIn输入不正确,请输入有效的URL'), 3);
       return false;
     }
-    if (baseInfo.snsSina !== '' && !RegExp.isUrl(baseInfo.snsSina)) {
+    if (baseInfo.snsSina !== '' && !RegExp.isURL(baseInfo.snsSina)) {
       alert(_l('新浪微博主页输入不正确,请输入有效的URL'), 3);
       return false;
     }
@@ -64,7 +64,7 @@ export default class EditInfo extends React.Component {
             this.props.closeDialog();
             navigateTo(common.url({ type: 'account' }));
           }}>
-            {_l('账户与安全')}
+            {_l('账户与隐私')}
           </span>
           {_l(' 页面设置')}
         </div>
@@ -101,7 +101,7 @@ export default class EditInfo extends React.Component {
             this.updateValue('snsSina', e.target.value);
           }}
         />
-        <div className="mTop20 flexEnd mBottom24">
+        <div className="mTop20 flexEnd">
           <button
             type="button"
             className="ming Button Button--link Gray_9e mRight30"

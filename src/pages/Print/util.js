@@ -34,6 +34,7 @@ export const getPrintContent = (item, sourceControlType, valueItem, relationItem
           : type
         : type,
   };
+
   switch (type) {
     case 36:
       const { showtype } = getAdvanceSetting(item);
@@ -76,35 +77,28 @@ export const getPrintContent = (item, sourceControlType, valueItem, relationItem
             'value',
           ) || _l('%0 级', value)
         : '';
-    case 29:
+    case 51:
       if (item.advancedSetting && item.advancedSetting.showtype !== '2') {
-        //非列表
         let records = [];
         try {
           records = JSON.parse(value);
-        } catch (err) {}
+        } catch (err) {
+          return null;
+        }
         let list = (dataItem.relationControls || []).find(o => o.attribute === 1) || [];
         if (list.type && ![29, 30, dataItem.sourceControlType].includes(list.type)) {
           dataItem = { ...dataItem, sourceControlType: list.type };
         }
-        // 1 卡片 2 列表 3 下拉
+        // 1 卡片 2 列表 3 文本
         if (item.advancedSetting && item.advancedSetting.showtype === '3') {
           //下拉 显示关联表名称
           if (item.isRelateMultipleSheet && records.length <= 0) {
             return '';
           }
-          return (
-            <span className="relaList">{item.isRelateMultipleSheet ? records[0].name : renderCellText(dataItem)}</span>
-          );
-        }
-        //按文本形式 显示关联表标题字段（卡片，下拉）/数量（列表）
-        if (item.isRelateMultipleSheet) {
-          if (records.length <= 0) return '';
-          if (dataItem.enumDefault === 2) {
-            let valueParse = safeParse(dataItem.value, []);
-            return Array.isArray(valueParse) ? valueParse.map(l => l.name || _l('未命名')).join('、') : valueParse;
-          }
-          return renderCellText(dataItem);
+
+          let titleControl = item.relationControls.find(l => l.attribute === 1) || item.relationControls[0] || {};
+
+          return <span className="relaList">{records.map(l => renderCellText({...titleControl, value: l[titleControl.controlId]}) || l[titleControl.controlId] || _l('未命名')).join(', ')}</span>;
         }
         //关联表内除标题字段外的其他字段
         let showControlsList = [];
@@ -125,11 +119,12 @@ export const getPrintContent = (item, sourceControlType, valueItem, relationItem
           <table className="relaList" style={STYLE_PRINT.table} border="0" cellPadding="0" cellSpacing="0">
             <tbody>
               {records.map((da, i) => {
-                let data = JSON.parse(da.sourcevalue || '[]');
+                let data = da;
                 let coverCid = coverCidData.length > 0 ? coverCidData[0].controlId || '' : '';
                 let cover = coverCid ? JSON.parse(data[coverCid] || '[]') : [];
                 let coverData = cover.length > 0 ? cover[0] : '';
-                let list = (item.relationControls || []).find(o => o.attribute === 1) || [];
+                let list = (item.relationControls || []).find(o => o.attribute === 1) || {};
+
                 return (
                   <tr>
                     <td className="listTextDiv">
@@ -141,7 +136,146 @@ export const getPrintContent = (item, sourceControlType, valueItem, relationItem
                               list.type && ![29, 30, item.sourceControlType].includes(list.type)
                                 ? list.type
                                 : item.sourceControlType,
-                            value: da.name,
+                            value: data[list.controlId],
+                          }) || _l('未命名')}
+                      {showControlsList.map(it => {
+                        if (it.type === 41 || it.type === 22) {
+                          return '';
+                        }
+                        // 若设置不显示无内容字段=>计算内容
+                        if (
+                          item.showData &&
+                          !getPrintContent(
+                            { ...it, isRelateMultipleSheet: true, showUnit: true, printOption: false },
+                            it.type,
+                            data[it.controlId],
+                          )
+                        ) {
+                          return '';
+                        }
+                        return (
+                          <div>
+                            {it.controlName || _l('未命名')}
+                            {' : '}
+                            <div className="listRight">
+                              {/* 关联表单选多选不需要特殊处理 printOption: false */}
+                              {getPrintContent(
+                                { ...it, isRelateMultipleSheet: true, showUnit: true, printOption: false },
+                                it.type,
+                                data[it.controlId],
+                              ) || ''}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </td>
+                    {coverData && coverData.previewUrl && (
+                      <td width="100px">
+                        <img
+                          style={{
+                            width: 100,
+                            height: 100,
+                            verticalAlign: 'middle',
+                          }}
+                          className="cover thumbnail"
+                          role="presentation"
+                          src={
+                            File.isPicture(coverData.ext)
+                              ? coverData.previewUrl.indexOf('imageView2') > -1
+                                ? coverData.previewUrl.replace(
+                                    /imageView2\/\d\/w\/\d+\/h\/\d+(\/q\/\d+)?/,
+                                    'imageView2/1/w/76/h/76/q/90',
+                                  )
+                                : `${coverData.previewUrl}&imageView2/1/w/76/h/76/q/90`
+                              : coverData.previewUrl
+                          }
+                        />
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        ) : null;
+      } else {
+        return value;
+      }
+    case 29:
+      if (item.advancedSetting && item.advancedSetting.showtype !== '2') {
+        //非列表
+        let records = [];
+        try {
+          records = JSON.parse(value);
+        } catch (err) {}
+        let list = (dataItem.relationControls || []).find(o => o.attribute === 1) || [];
+        if (list.type && ![29, 30, dataItem.sourceControlType].includes(list.type)) {
+          dataItem = { ...dataItem, sourceControlType: list.type };
+        }
+        // 1 卡片 2 列表 3 下拉
+        if (item.advancedSetting && item.advancedSetting.showtype === '3') {
+          //下拉 显示关联表名称
+          if (item.isRelateMultipleSheet && records.length <= 0) {
+            return '';
+          }
+          if (
+            !item.isRelateMultipleSheet &&
+            [11, 26].includes(dataItem.sourceControlType) &&
+            dataItem.enumDefault === 2
+          ) {
+            dataItem = { ...dataItem, enumDefault: 1 };
+          }
+          return (
+            <span className="relaList">
+              {item.isRelateMultipleSheet ? (records[0] || {}).name : renderCellText(dataItem)}
+            </span>
+          );
+        }
+        //按文本形式 显示关联表标题字段（卡片，下拉）/数量（列表）
+        if (item.isRelateMultipleSheet) {
+          if (records.length <= 0) return '';
+          return renderCellText({ ...dataItem, enumDefault: dataItem.type === 29 ? 1 : dataItem.enumDefault });
+        }
+        //关联表内除标题字段外的其他字段
+        let showControlsList = [];
+        item.showControls.map(o => {
+          let data = (item.relationControls || []).find(it => it.controlId === o && it.attribute !== 1);
+          if (data) {
+            showControlsList.push(data);
+          }
+        });
+        //关联表的标题字段
+        let coverCidData = item.coverCid
+          ? (item.relationControls || []).filter(o => item.coverCid === o.controlId)
+          : [];
+        //平铺的关联表多条显示除了附件外的前三个
+        showControlsList = showControlsList.filter(o => o.type !== 14);
+        // 1 卡片 显示关联表名称
+        return _.isArray(records) && records.length > 0 ? (
+          <table className="relaList" style={STYLE_PRINT.table} border="0" cellPadding="0" cellSpacing="0">
+            <tbody>
+              {records.map((da, i) => {
+                let data = JSON.parse(da.sourcevalue || '[]');
+                let coverCid = coverCidData.length > 0 ? coverCidData[0].controlId || '' : '';
+                let cover = coverCid ? JSON.parse(data[coverCid] || '[]') : [];
+                let coverData = cover.length > 0 ? cover[0] : '';
+                let list = (item.relationControls || []).find(o => o.attribute === 1) || [];
+                const type =
+                  list.type && ![29, 30, item.sourceControlType].includes(list.type)
+                    ? list.type
+                    : item.sourceControlType;
+                return (
+                  <tr>
+                    <td className="listTextDiv">
+                      {list.type === 38
+                        ? renderCellText(item.controls.find(it => it.attribute === 1))
+                        : renderCellText({
+                            ...dataItem,
+                            type: type,
+                            value:
+                              type === 27 && da.name
+                                ? JSON.stringify(safeParse(da.name, 'array').filter(l => !l.isDelete))
+                                : da.name,
                           }) || _l('未命名')}
                       {showControlsList.map(it => {
                         if (it.type === 41 || it.type === 22) {
@@ -210,7 +344,20 @@ export const getPrintContent = (item, sourceControlType, valueItem, relationItem
     case 34: // 子表
       return value;
     case 42: {
-      return value ? <img src={value} style={{ width: 168 }} /> : '';
+      return value ? (
+        <img
+          src={value}
+          style={{ maxHeight: 45, maxWidth: 160 }}
+          onLoad={e => {
+            $(e.target).attr({
+              width: e.target.width,
+              height: e.target.height,
+            });
+          }}
+        />
+      ) : (
+        ''
+      );
     }
     case 45: {
       return value ? <Embed {...dataItem} formData={dataItem.controls} from="print" /> : '';
@@ -232,7 +379,11 @@ export const getPrintContent = (item, sourceControlType, valueItem, relationItem
     }
     case 41:
     case 10010:
-      return value ? <RichText data={value} className="richText" disabled={true} /> : '';
+      return (type === 41 ? value : value || item.dataSource) ? (
+        <RichText data={value || item.dataSource} className="richText" disabled={true} />
+      ) : (
+        ''
+      );
     case 30: {
       if (item.sourceControlType <= 0) {
         return '';
@@ -243,7 +394,7 @@ export const getPrintContent = (item, sourceControlType, valueItem, relationItem
     case 9: // OPTIONS 单选 平铺
     case 10: // MULTI_SELECT 多选
       if (!printOption || (type === 10 && _.get(item, ['advancedSetting', 'checktype']) === '1')) {
-        renderCellText(dataItem);
+        return renderCellText(dataItem);
       } else {
         let selectedKeys = [];
         try {
@@ -264,6 +415,17 @@ export const getPrintContent = (item, sourceControlType, valueItem, relationItem
           );
         });
       }
+    case 27: // 部门层级
+      const { advancedSetting = {} } = dataItem;
+      const _valueParse = safeParse(dataItem.value, 'array').filter(l => !l.isDelete);
+      let textList = _valueParse.map(item => {
+        const pathValue =
+          advancedSetting.allpath === '1'
+            ? (item.departmentPath || []).sort((a, b) => b.depth - a.depth).map(i => i.departmentName)
+            : [];
+        return pathValue.concat([item.departmentName]).join('/');
+      });
+      return textList.join('，');
     default:
       return renderCellText(dataItem);
   }
@@ -325,9 +487,9 @@ export const renderRecordAttachments = (value, isRelateMultipleSheet) => {
                         pictureAttachments[index].previewUrl.indexOf('imageView2') > -1
                           ? pictureAttachments[index].previewUrl.replace(
                               /imageView2\/\d\/w\/\d+\/h\/\d+(\/q\/\d+)?/,
-                              'imageView2/2/w/1200/q/90',
+                              'imageView2/2/w/600/q/90',
                             )
-                          : `${pictureAttachments[index].previewUrl}&imageView2/2/w/1200/q/90`
+                          : `${pictureAttachments[index].previewUrl}&imageView2/2/w/600/q/90`
                       }
                       alt=""
                     />
@@ -340,6 +502,8 @@ export const renderRecordAttachments = (value, isRelateMultipleSheet) => {
           <table
             style={{
               ...STYLE_PRINT.table,
+              width: 620,
+              tableLayout: 'fixed',
             }}
             className={cx('recordAttachments', { isMultiple: isRelateMultipleSheet })}
           >
@@ -359,15 +523,16 @@ export const renderRecordAttachments = (value, isRelateMultipleSheet) => {
                         <img
                           style={{
                             border: 'none',
-                            height: 158,
+                            maxHeight: 158,
+                            maxWidth: '100%',
                           }}
                           src={
                             pictureAttachments[index * 2 + i].previewUrl.indexOf('imageView2') > -1
                               ? pictureAttachments[index * 2 + i].previewUrl.replace(
                                   /imageView2\/\d\/w\/\d+\/h\/\d+(\/q\/\d+)?/,
-                                  'imageView2/2/w/1200/q/90',
+                                  'imageView2/2/w/600/q/90',
                                 )
-                              : `${pictureAttachments[index * 2 + i].previewUrl}&imageView2/2/w/1200/q/90`
+                              : `${pictureAttachments[index * 2 + i].previewUrl}&imageView2/2/w/600/q/90`
                           }
                         />
                       )}
@@ -446,9 +611,12 @@ export const getControlsForPrint = (receiveControls, relations = []) => {
   let relation = receiveControls.filter(
     control => (control.type === 29 && control.enumDefault === 2) || control.type === 34,
   );
-  relation = relation.map((it, i) => {
-    return { ...it, relationControls: getShowControl(it.relationControls), relationsData: relations[i] };
-  });
+  relation = relation
+    .filter(l => l.checked)
+    .map((it, i) => {
+      let relationsData = relations[i];
+      return { ...it, relationControls: getShowControl(it.relationControls), relationsData: relationsData };
+    });
   receiveControls = receiveControls.map(control => {
     let data = relation.find(it => it.controlId === control.controlId);
     return data || control;
@@ -471,6 +639,8 @@ export const sysToPrintData = data => {
 
 export const isRelation = control => {
   return (
-    (control.type === 29 && control.advancedSetting && control.advancedSetting.showtype === '2') || control.type === 34
+    (control.type === 29 && control.advancedSetting && control.advancedSetting.showtype === '2') ||
+    control.type === 34 ||
+    (control.type === 51 && control.advancedSetting && control.advancedSetting.showtype === '2')
   );
 };

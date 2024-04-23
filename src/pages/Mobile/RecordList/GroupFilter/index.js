@@ -11,18 +11,21 @@ import { isOpenPermit } from 'src/pages/FormSet/util';
 import { permitList } from 'src/pages/FormSet/config';
 import SheetView from '../View/SheetView';
 import GalleryView from '../View/GalleryView';
+import MobileMapView from '../View/MapView';
 import { VIEW_DISPLAY_TYPE } from 'src/pages/worksheet/constants/enum';
 import { getAdvanceSetting } from 'src/util';
 import { FILTER_CONDITION_TYPE } from 'src/pages/worksheet/common/WorkSheetFilter/enum';
 import { handleCondition } from 'src/pages/widgetConfig/util/data';
+import { AddRecordBtn, BatchOperationBtn } from 'mobile/components/RecordActions';
 import cx from 'classnames';
 import './index.less';
 import _ from 'lodash';
 
-const { sheet, gallery } = VIEW_DISPLAY_TYPE;
+const { sheet, gallery, map } = VIEW_DISPLAY_TYPE;
 const TYPE_TO_COMP = {
   [sheet]: SheetView,
   [gallery]: GalleryView,
+  [map]: MobileMapView,
 };
 
 let ajaxFn = null;
@@ -38,6 +41,8 @@ const GroupFilter = props => {
     worksheetInfo,
     appColor,
     mobileNavGroupFilters,
+    appNaviStyle,
+    filters,
   } = props;
   const { appId, viewId } = base;
   const view = _.find(views, { viewId }) || (!viewId && views[0]) || {};
@@ -60,6 +65,8 @@ const GroupFilter = props => {
     ...base,
     isCharge,
     view,
+    controls,
+    sheetSwitchPermit,
   };
   const canDelete = isOpenPermit(permitList.delete, sheetSwitchPermit, view.viewId);
   const showCusTomBtn = isOpenPermit(permitList.execute, sheetSwitchPermit, view.viewId);
@@ -73,11 +80,18 @@ const GroupFilter = props => {
     fetch();
   }, [keywords]);
   useEffect(() => {
+    let soucre = controls.find(o => o.controlId === navGroup.controlId) || {};
+    let { navshow } = getAdvanceSetting(view);
+    if (29 === soucre.type && navshow === '1') {
+      fetch();
+    }
+  }, [navGroupCounts]);
+  useEffect(() => {
     setCurrentNodeId();
     setKeywords('');
     fetch();
     props.getNavGroupCount();
-  }, [navGroup.controlId, viewId]);
+  }, [navGroup.controlId, viewId, filters]);
   const fetch = () => {
     const { controlId } = navGroup;
     if (!controlId) {
@@ -98,12 +112,30 @@ const GroupFilter = props => {
     let data = [];
     //级联选择字段 或 已配置层级展示的关联字段
     if ([29, 35].includes(soucre.type)) {
-      fetchData({
-        worksheetId: soucre.dataSource,
-        viewId: 29 === soucre.type ? navGroup.viewId : soucre.viewId,
-        rowId,
-        cb,
-      });
+      let { navshow } = getAdvanceSetting(view);
+      if (29 === soucre.type && navshow === '1') {
+        dataUpdate({
+          filterData: navGroupData,
+          data: navGroupCounts
+            .filter(o => !['all', ''].includes(o.key)) //排除全部和空
+            .map(item => {
+              return {
+                value: item.key,
+                txt: item.name, //renderTxt(item, control, viewId),
+                isLeaf: false,
+              };
+            }),
+          rowId,
+          cb,
+        });
+      } else {
+        fetchData({
+          worksheetId: soucre.dataSource,
+          viewId: 29 === soucre.type ? navGroup.viewId : soucre.viewId,
+          rowId,
+          cb,
+        });
+      }
     } else {
       let options = (controls.find(o => o.controlId === navGroup.controlId) || {}).options || [];
       data = !navGroup.isAsc ? options.slice().reverse() : options;
@@ -252,31 +284,51 @@ const GroupFilter = props => {
     setDrawerVisible(true);
     setCurrentGroup(item);
     let obj = _.omit(navGroup, ['isAsc']);
+    let filterType = 2; //选项的选中
+    if ([29, 35].includes(soucre.type)) {
+      if (soucre.type === 29 && !navGroup.viewId) {
+        //未选择了层级视图 按是筛选
+        filterType = 24;
+      } else {
+        filterType = navGroup.filterType === 11 ? navGroup.filterType : 24; //筛选方式 24是 | 11包含 老数据是0 按照24走
+      }
+    }
+    if (item.value === 'null') {
+      //为空
+      filterType = FILTER_CONDITION_TYPE.ISNULL;
+    }
+
     let navGroupFilters = [
       {
         ...obj,
         values: item.value === 'null' ? [] : [item.value],
         dataType: soucre.type,
-        filterType:
-          item.value === 'null'
-            ? FILTER_CONDITION_TYPE.ISNULL
-            : soucre.type === 29 || soucre.type === 35
-            ? FILTER_CONDITION_TYPE.RCEQ
-            : FILTER_CONDITION_TYPE.EQ,
+        filterType,
         navNames: [item.txt],
       },
     ];
     if (!item.value) {
       props.changeMobileGroupFilters([]);
-      props.fetchSheetRows();
+      if (view.viewType === 8) {
+        props.updateGroupFilter([], view);
+      } else {
+        props.fetchSheetRows();
+      }
     } else {
       props.changeMobileGroupFilters(navGroupFilters);
-      props.fetchSheetRows({ navGroupFilters });
+      if (view.viewType === 8) {
+        props.updateGroupFilter(navGroupFilters, view);
+      } else {
+        props.fetchSheetRows({ navGroupFilters });
+      }
     }
   };
   const renderContent = data => {
     return data.map(item => {
-      let count = Number((navGroupCounts.find(o => o.key === (!item.value ? 'all' : item.value)) || {}).count || 0);
+      let count = Number(
+        (navGroupCounts.find(o => o.key === (!item.value ? 'all' : item.value === 'null' ? '' : item.value)) || {})
+          .count || 0,
+      );
       let { navshow } = getAdvanceSetting(view);
       let hasChildren = !item.isLeaf;
       if (isSoucreTree()) {
@@ -319,7 +371,7 @@ const GroupFilter = props => {
                 style={{ backgroundColor: isOption && soucre.enumDefault2 === 1 && !!item.value ? item.color : '' }}
               ></div>
               <div className="flexRow listItem flex borderBottom">
-                <div className="radioGroupFilterTxt">{item.txt || _l('未命名')}</div>
+                <div className="radioGroupFilterTxt mRight16">{item.txt || _l('未命名')}</div>
                 {count > 0 && <div className="count">{count}</div>}
               </div>
             </div>
@@ -378,29 +430,40 @@ const GroupFilter = props => {
         </div>
       );
     }
-    let tempData = keywords
-      ? renderData
-      : !keywords && navGroupData && currentNodeId
-      ? renderData
-      : (soucre.type === 29 && !!navGroup.viewId) || [35].includes(soucre.type)
-      ? [
+
+    let tempData = renderData;
+    if (!keywords && !currentNodeId) {
+      if ((soucre.type === 29 && !!navGroup.viewId) || [35].includes(soucre.type)) {
+        //关联记录以层级视图时|| 级联没有显示项
+        tempData = [
           {
             txt: _l('全部'),
             value: '',
             isLeaf: true,
           },
-        ].concat(renderData)
-      : showallitem !== '1'
-      ? [{ txt: allitemname || _l('全部'), value: '', isLeaf: true }].concat(renderData)
-      : renderData;
-    tempData =
-      shownullitem === '1'
-        ? tempData.concat({
-            txt: nullitemname || _l('为空'),
-            value: 'null',
-            isLeaf: true,
-          })
-        : tempData;
+        ].concat(tempData);
+      } else {
+        tempData =
+          showallitem !== '1'
+            ? [
+                {
+                  txt: allitemname || _l('全部'),
+                  value: '',
+                  isLeaf: true,
+                },
+              ].concat(tempData)
+            : tempData;
+        tempData =
+          shownullitem === '1'
+            ? tempData.concat({
+                txt: nullitemname || _l('为空'),
+                value: 'null',
+                isLeaf: true,
+              })
+            : tempData;
+      }
+    }
+
     let { navfilters = '[]', navshow } = getAdvanceSetting(view);
     try {
       navfilters = JSON.parse(navfilters);
@@ -437,15 +500,16 @@ const GroupFilter = props => {
     );
   };
   const getSearchRecordResult = keywords => {
-    let param =
-      soucre.type === 35 || keywords
-        ? {
-            getType: 10,
-          }
-        : {
-            appId,
-            searchType: 1,
-          };
+    let param = keywords
+      ? {}
+      : soucre.type === 35
+      ? {
+          getType: 10,
+        }
+      : {
+          appId,
+          searchType: 1,
+        };
     sheetAjax
       .getFilterRows({
         worksheetId: base.worksheetId,
@@ -529,46 +593,45 @@ const GroupFilter = props => {
               {isOpenPermit(permitList.createButtonSwitch, sheetSwitchPermit) &&
               worksheetInfo.allowAdd &&
               !batchOptVisible ? (
-                <div className="addRecordItemWrapper">
-                  <Button
-                    style={{ backgroundColor: appColor }}
-                    className={cx('addRecordBtn flex valignWrapper', {})}
-                    onClick={() => {
-                      let defaultFormData = getDefaultValueInCreate();
-                      let param = {
-                        defaultFormData,
-                        defaultFormDataEditable: true,
-                      };
-                      openAddRecord({
-                        ...param,
-                        className: 'full',
-                        worksheetInfo,
-                        appId,
-                        worksheetId: worksheetInfo.worksheetId,
-                        viewId: view.viewId,
-                        addType: 2,
-                        entityName: worksheetInfo.entityName,
-                        onAdd: data => {
-                          if (view.viewType) {
-                            props.addNewRecord(data, view);
-                          } else {
-                            props.unshiftSheetRow(data);
-                          }
-                        },
-                      });
-                    }}
-                  >
-                    <Icon icon="add" className="Font22 mRight5" />
-                    {worksheetInfo.entityName}
-                  </Button>
-                </div>
+                <AddRecordBtn
+                  entityName={worksheetInfo.entityName}
+                  backgroundColor={appColor}
+                  onClick={() => {
+                    let defaultFormData = getDefaultValueInCreate();
+                    let param = {
+                      defaultFormData,
+                      defaultFormDataEditable: true,
+                    };
+                    openAddRecord({
+                      ...param,
+                      className: 'full',
+                      worksheetInfo,
+                      appId,
+                      worksheetId: worksheetInfo.worksheetId,
+                      viewId: view.viewId,
+                      addType: 2,
+                      entityName: worksheetInfo.entityName,
+                      onAdd: data => {
+                        if (view.viewType) {
+                          props.addNewRecord(data, view);
+                        } else {
+                          props.unshiftSheetRow(data);
+                        }
+                      },
+                    });
+                  }}
+                />
               ) : null}
             </div>
-            {(canDelete || showCusTomBtn) && view.viewType === 0 && !batchOptVisible && (
-              <div className="batchOperation" onClick={() => props.changeBatchOptVisible(true)}>
-                <Icon icon={'task-complete'} className="Font24" />
-              </div>
-            )}
+            {!_.get(window, 'shareState.shareId') &&
+              (canDelete || showCusTomBtn) &&
+              view.viewType === 0 &&
+              !batchOptVisible && (
+                <BatchOperationBtn
+                  style={{ bottom: appNaviStyle === 2 && view.viewType === 0 ? '70px' : '20px' }}
+                  onClick={() => props.changeBatchOptVisible(true)}
+                />
+              )}
           </div>
         }
         open={drawerVisible}

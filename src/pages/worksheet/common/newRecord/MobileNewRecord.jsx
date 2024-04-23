@@ -4,10 +4,9 @@ import cx from 'classnames';
 import styled from 'styled-components';
 import { Flex, Modal, WingBlank, Button, ActionSheet } from 'antd-mobile';
 import { ScrollView, LoadDiv } from 'ming-ui';
-import { removeFromLocal } from 'worksheet/util';
+import { removeTempRecordValueFromLocal } from 'worksheet/util';
 import NewRecordContent from './NewRecordContent';
 import AdvancedSettingHandler from './AdvancedSettingHandler';
-import TouchHandler from 'mobile/components/TouchHandler';
 import MobileDraft from 'src/pages/Mobile/MobileDraft';
 
 const ModalWrap = styled(Modal)`
@@ -76,7 +75,7 @@ const LoadingMask = styled.div`
 export function MobileRecordRecoverConfirm(props) {
   const { title, cancelText, updateText, visible, onCancel, onUpdate } = props;
   return (
-    <ModalWrap popup animationType="slide-up" onClose={onCancel} visible={visible} style={{ height: 130 }}>
+    <ModalWrap popup animationType="slide-up" onClose={onUpdate} visible={visible} style={{ height: 130 }}>
       <div className="flexColumn h100">
         <Flex align="center" className="Font17 Gray bold pLeft15 pRight15 mTop24 mBottom32">
           {title}
@@ -107,6 +106,7 @@ function NewRecord(props) {
     advancedSetting = {},
     showDraftsEntry,
     sheetSwitchPermit,
+    customButtonConfirm,
     ...rest
   } = props;
   const { appId, viewId, worksheetInfo } = rest;
@@ -115,12 +115,17 @@ function NewRecord(props) {
   const [autoFill, setAutoFill] = useState(null);
 
   useEffect(() => {
+    const cancel = () => {
+      const setRestoreVisible = _.get(newRecordContent.current, 'setRestoreVisible');
+      hideNewRecord();
+      setRestoreVisible && setRestoreVisible(false);
+    };
     if (!notDialog) {
-      window.addEventListener('popstate', hideNewRecord, false);
+      window.addEventListener('popstate', cancel, false);
     }
     return () => {
       if (!notDialog) {
-        window.removeEventListener('popstate', hideNewRecord, false);
+        window.removeEventListener('popstate', cancel, false);
       }
     };
   }, []);
@@ -170,7 +175,7 @@ function NewRecord(props) {
       {visible && advancedSetting.closedrafts !== '1' && showDraftsEntry && (
         <MobileDraft
           appId={appId}
-          worksheetId={worksheetInfo.worksheetId}
+          worksheetId={props.worksheetId || worksheetInfo.worksheetId}
           controls={_.get(worksheetInfo, 'template.controls')}
           worksheetInfo={worksheetInfo}
           sheetSwitchPermit={sheetSwitchPermit}
@@ -180,10 +185,9 @@ function NewRecord(props) {
         className="icon icon-closeelement-bg-circle Gray_9e Font22"
         onClick={() => {
           hideNewRecord();
-          removeFromLocal('tempNewRecord', viewId);
+          removeTempRecordValueFromLocal('tempNewRecord', props.worksheetId);
         }}
-      >
-      </i>
+      ></i>
     </div>
   );
   const content = (
@@ -199,6 +203,7 @@ function NewRecord(props) {
       from={5}
       onSubmitBegin={() => setLoading(true)}
       onSubmitEnd={() => setLoading(false)}
+      viewId=""
     />
   );
 
@@ -239,6 +244,11 @@ function NewRecord(props) {
                     actionType: advancedSetting.continueEndAction,
                   });
                 };
+                if (advancedSetting.autoreserve === '1') {
+                  setAutoFill(true);
+                  retain();
+                  return;
+                }
                 showActionSheetWithOptions(retain, noretain);
               } else {
                 newRecordContent.current.newRecord({
@@ -257,7 +267,14 @@ function NewRecord(props) {
         <Button
           className="Font13 bold"
           type="primary"
-          onClick={() => {
+          onClick={async () => {
+            if (customButtonConfirm) {
+              try {
+                await customButtonConfirm();
+              } catch (err) {
+                return;
+              }
+            }
             if (advancedSetting.autoFillVisible && advancedSetting.submitEndAction === 2 && _.isNull(autoFill)) {
               const retain = () => {
                 newRecordContent.current.newRecord({
@@ -313,9 +330,7 @@ function NewRecord(props) {
         onClose={hideNewRecord}
         visible={visible}
       >
-        <TouchHandler onClose={hideNewRecord} touchClassName=".MobileNewRecordModal">
-          {contentWrap}
-        </TouchHandler>
+        {contentWrap}
       </ModalWrap>
     );
   }

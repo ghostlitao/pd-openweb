@@ -45,14 +45,17 @@ export const ACTION_ID = {
   ADD: '1',
   EDIT: '2',
   DELETE: '3',
+  CREATE_FILE: '4',
   RELATION: '20',
   NUMBER_FORMULA: '100',
   DATE_FORMULA: '101',
   JAVASCRIPT: '102',
   PYTHON: '103',
   DATE_DIFF_FORMULA: '104',
-  TOTAL_STATISTICS: '105',
+  OBJECT_TOTAL: '105',
   FUNCTION_CALCULATION: '106',
+  WORKSHEET_TOTAL: '107',
+  CUSTOM_ACTION_TOTAL: '108',
   SEND_EMAIL_SINGLE_DISPLAY: '201',
   SEND_EMAIL: '202',
   SEND_TEMPLATE_MESSAGE: '203',
@@ -67,7 +70,12 @@ export const ACTION_ID = {
   FROM_PBC_INPUT_ARRAY: '408',
   FROM_API_ARRAY: '409',
   FROM_PBC_OUTPUT_ARRAY: '410',
+  BATCH_ACTION: '411',
+  BATCH_UPDATE: '412',
+  BATCH_DELETE: '413',
   RECORD_LINK_FIND: '420',
+  RECORD_UPDATE: '421',
+  RECORD_DELETE: '422',
   PBC: '500',
   PBC_INPUT: '501',
   PBC_OUT: '502',
@@ -106,10 +114,36 @@ export const APP_TYPE = {
   PARAMETER: 40,
   API_PACKAGE: 41,
   API: 42,
+  CALENDAR: 43,
+  SNAPSHOT: 44,
   SYSTEM: 100,
   VARIABLE: 101,
   PROCESS: 102,
   WORKSHEET_LOG: 103,
+  GLOBAL_VARIABLE: 104,
+};
+
+export const OPERATION_TYPE = {
+  REVOKE: 3,
+  PASS: 4,
+  OVERRULE: 5,
+  FORWARD: 6,
+  SIGN: 7,
+  WORK: 8,
+  SUBMIT: 9,
+  TRANSFER: 10,
+  PRINT: 12,
+  UPDATE: 13,
+  REPLACE: 14,
+  CONTINUE: 15,
+  ADD: 16,
+  RETURN: 17,
+  URGE: 18,
+  BEFORE: 101,
+  EMAIL: 102,
+  GET_OPERATION: 103,
+  ADD_OPERATION: 104,
+  RELATION_OPERATION: 105,
 };
 
 export const CONTROLS_NAME = {
@@ -132,6 +166,7 @@ export const CONTROLS_NAME = {
   19: _l('地区'),
   20: _l('公式'),
   21: _l('自由连接'),
+  22: _l('分段'),
   23: _l('地区'),
   24: _l('地区'),
   25: _l('大写金额'),
@@ -159,6 +194,8 @@ export const CONTROLS_NAME = {
   48: _l('组织角色'),
   49: _l('API查询'),
   50: _l('API查询'),
+  51: _l('查询记录'),
+  52: _l('标签页'),
   10000001: _l('人员'),
   10000002: _l('人员'),
   10000003: _l('数组'),
@@ -169,39 +206,39 @@ export const CONTROLS_NAME = {
 
 export const CONDITION_TYPE = {
   1: {
-    custom: _l('等于'),
-    default: _l('是其中一个'),
+    custom: _l('等于%03056'),
+    default: _l('是其中一个%03079'),
   },
   2: {
-    custom: _l('不等于'),
-    default: _l('不是任何一个'),
+    custom: _l('不等于%03057'),
+    default: _l('不是任何一个%03077'),
   },
   3: {
-    area: _l('下级包含'),
-    relation: _l('标题包含'),
-    custom: _l('包含其中一个'),
-    default: _l('包含'),
+    area: _l('下级包含%03076'),
+    relation: _l('标题包含%03085'),
+    custom: _l('包含其中一个%03082'),
+    default: _l('包含%03058'),
   },
   4: {
-    area: _l('下级不包含'),
-    relation: _l('标题不包含'),
-    custom: _l('不包含任何一个'),
-    default: _l('不包含'),
+    area: _l('下级不包含%03081'),
+    relation: _l('标题不包含%03086'),
+    custom: _l('不包含任何一个%03083'),
+    default: _l('不包含%03059'),
   },
-  5: _l('开头是'),
-  6: _l('结尾是'),
-  7: _l('不为空'),
-  8: _l('为空'),
-  9: _l('等于'),
-  10: _l('不等于'),
-  11: _l('小于'),
-  12: _l('大于'),
-  13: _l('小于等于'),
-  14: _l('大于等于'),
-  15: _l('在范围内'),
-  16: _l('不在范围内'),
-  17: _l('早于'),
-  18: _l('晚于'),
+  5: _l('开头是%03060'),
+  6: _l('结尾是%03062'),
+  7: _l('不为空%03065'),
+  8: _l('为空%03065'),
+  9: _l('等于%03056'),
+  10: _l('不等于%03057'),
+  11: _l('小于%03067'),
+  12: _l('大于%03066'),
+  13: _l('小于等于%03069'),
+  14: _l('大于等于%03068'),
+  15: _l('在范围内%03070'),
+  16: _l('不在范围内%03071'),
+  17: _l('早于%03072'),
+  18: _l('晚于%03073'),
   19: _l('开始等于'),
   20: _l('开始早于'),
   21: _l('开始晚于'),
@@ -222,29 +259,31 @@ export const CONDITION_TYPE = {
     1: _l('关闭'),
     2: _l('否'),
   },
-  31: _l('不为空'),
-  32: _l('为空'),
+  31: _l('不为空%03065'),
+  32: _l('为空%03065'),
   33: {
-    single: _l('是其中一个'),
-    multi: _l('包含其中一个'),
+    single: _l('是其中一个%03079'),
+    multi: _l('包含其中一个%03082'),
   },
   34: {
-    single: _l('不是任何一个'),
-    multi: _l('不包含任何一个'),
+    single: _l('不是任何一个%03077'),
+    multi: _l('不包含任何一个%03083'),
   },
-  35: _l('属于'),
-  36: _l('不属于'),
-  37: _l('在范围内'),
-  38: _l('不在范围内'),
-  39: _l('晚于'),
-  40: _l('晚于等于'),
-  41: _l('早于'),
-  42: _l('早于等于'),
-  43: _l('同时包含'),
-  44: _l('开头不是'),
-  45: _l('结尾不是'),
-  48: _l('下级包含'),
-  49: _l('下级不包含'),
+  35: _l('属于%03080'),
+  36: _l('不属于%03078'),
+  37: _l('在范围内%03070'),
+  38: _l('不在范围内%03071'),
+  39: _l('晚于%03073'),
+  40: _l('晚于等于%03075'),
+  41: _l('早于%03072'),
+  42: _l('早于等于%03074'),
+  43: _l('同时包含%03084'),
+  44: _l('开头不是%03061'),
+  45: _l('结尾不是%03063'),
+  48: _l('下级包含%03076'),
+  49: _l('下级不包含%03081'),
+  100: _l('包含其中一个%03082'),
+  101: _l('不包含任何一个%03083'),
 };
 
 export const USER_TYPE = {
@@ -261,11 +300,15 @@ export const USER_ORGANIZE = {
   11: _l('直属上司'),
   12: _l('主部门负责人'),
   13: _l('主部门上级负责人'),
+  14: _l('主部门中的职位'),
+  15: _l('组织角色分管负责人'),
 };
 
 export const DEPARTMENT_ORGANIZE = {
   12: _l('部门负责人'),
   13: _l('上级部门负责人'),
+  14: _l('部门中的职位'),
+  15: _l('组织角色分管负责人'),
 };
 
 export const EXEC_TIME_TYPE = {
@@ -299,77 +342,77 @@ export const TIME_TYPE_NAME = {
 
 export const SUPPORT_HREF = {
   // worksheet
-  '0-1': 'https://help.mingdao.com/zh/flow7.html',
+  '0-1': 'https://help.mingdao.com/flow7',
   // loop
-  '0-5': 'https://help.mingdao.com/zh/flow8.html',
+  '0-5': 'https://help.mingdao.com/flow8',
   // date
-  '0-6': 'https://help.mingdao.com/zh/flow9.html',
+  '0-6': 'https://help.mingdao.com/flow9',
   // webhook触发
-  '0-7': 'https://help.mingdao.com/zh/flow10.html',
+  '0-7': 'https://help.mingdao.com/flow10',
   // 分支
-  1: 'https://help.mingdao.com/zh/flow25.html',
+  1: 'https://help.mingdao.com/flow25',
   // 填写节点
-  3: 'https://help.mingdao.com/zh/flow20.html',
+  3: 'https://help.mingdao.com/flow20',
   // 审批节点
-  4: 'https://help.mingdao.com/zh/flow19.html',
+  4: 'https://help.mingdao.com/flow19',
   // 通知节点
-  5: 'https://help.mingdao.com/zh/flow21.html',
+  5: 'https://help.mingdao.com/flow21',
   // 新增记录
-  '6-1-1': 'https://help.mingdao.com/zh/flow11.html',
+  '6-1-1': 'https://help.mingdao.com/flow11',
   // 新增任务
-  '6-1-2': 'https://help.mingdao.com/zh/flow31.html',
+  '6-1-2': 'https://help.mingdao.com/flow31',
   // 更新记录
-  '6-2': 'https://help.mingdao.com/zh/flow12.html',
+  '6-2': 'https://help.mingdao.com/flow12',
   // 更新流程参数
-  '6-2-102': 'https://help.mingdao.com/zh/flow13.html',
+  '6-2-102': 'https://help.mingdao.com/flow13',
   // 删除记录
-  '6-3': 'https://help.mingdao.com/zh/flow18.html',
+  '6-3': 'https://help.mingdao.com/flow18',
   // 获取关联记录
-  '6-20': 'https://help.mingdao.com/zh/flow49.html',
+  '6-20': 'https://help.mingdao.com/flow49',
   // 批量新增
-  '6-21': 'https://help.mingdao.com/zh/flow11.html',
+  '6-21': 'https://help.mingdao.com/flow11',
   // 从工作表获取一条指定记录
-  '7-406': 'https://help.mingdao.com/zh/flow49.html',
+  '7-406': 'https://help.mingdao.com/flow49',
   // 从多条数据节点获取一条指定记录
-  '7-407': 'https://help.mingdao.com/zh/flow49.html',
+  '7-407': 'https://help.mingdao.com/flow49',
   // 发送API请求
-  8: 'https://help.mingdao.com/zh/flow33.html',
+  8: 'https://help.mingdao.com/flow33',
   // 公式
-  9: 'https://help.mingdao.com/zh/flow27.html',
+  9: 'https://help.mingdao.com/flow27',
   // 短信
-  10: 'https://help.mingdao.com/zh/flow22.html',
+  10: 'https://help.mingdao.com/flow22',
   // 邮件
-  11: 'https://help.mingdao.com/zh/flow24.html',
+  11: 'https://help.mingdao.com/flow24',
   // 延时
-  12: 'https://help.mingdao.com/zh/flow26.html',
+  12: 'https://help.mingdao.com/flow26',
   // 获取多条
-  13: 'https://help.mingdao.com/zh/flow15.html',
+  13: 'https://help.mingdao.com/flow15',
   // 代码块
-  14: 'https://help.mingdao.com/zh/flow34.html',
+  14: 'https://help.mingdao.com/flow34',
   // 获取链接
-  15: 'https://help.mingdao.com/zh/flow28.html',
+  15: 'https://help.mingdao.com/flow28',
   // 子流程
-  16: 'https://help.mingdao.com/zh/flow29.html',
+  16: 'https://help.mingdao.com/flow29',
   // 界面推送
-  17: 'https://help.mingdao.com/zh/flow32.html',
+  17: 'https://help.mingdao.com/flow32',
   // 获取记录打印文件
-  18: 'https://help.mingdao.com/zh/flow30.html',
+  18: 'https://help.mingdao.com/flow30',
   // 发送服务号消息
-  19: 'https://help.mingdao.com/zh/flow_wechat.html',
-  // 调用业务流程
-  20: 'https://help.mingdao.com/zh/flow70.html',
+  19: 'https://help.mingdao.com/flow_wechat',
+  // 调用封装业务流程
+  20: 'https://help.mingdao.com/flow70',
   // JSON解析
-  21: 'https://help.mingdao.com/zh/flow75.html',
+  21: 'https://help.mingdao.com/flow75',
   // 调用已集成 API
-  25: 'https://help.mingdao.com/zh/flow60.html',
+  25: 'https://help.mingdao.com/flow60',
   // 发起审批
-  26: 'https://help.mingdao.com/zh/flow85.html',
+  26: 'https://help.mingdao.com/flow85',
   // 获取单条系统信息
-  1000: 'https://help.mingdao.com/zh/flow44.html',
+  1000: 'https://help.mingdao.com/flow44',
   // 获取多条系统信息
-  1001: 'https://help.mingdao.com/zh/flow45.html',
+  1001: 'https://help.mingdao.com/flow45',
   // 什么是排队中
-  queue: 'https://help.mingdao.com/zh/flow65.html',
+  queue: 'https://help.mingdao.com/flow65',
 };
 
 export const RELATION_TYPE = {
@@ -476,6 +519,7 @@ export const FIELD_TYPE_LIST = [
   { text: _l('日期时间'), value: 16, en: 'date' },
   { text: _l('人员'), value: 26, en: 'member' },
   { text: _l('部门'), value: 27, en: 'department' },
+  { text: _l('组织角色'), value: 48, en: 'orgRole' },
   { text: _l('附件'), value: 14, en: 'attachment' },
   { text: _l('数组'), value: 10000003, en: 'array' },
   { text: _l('普通数组'), value: 10000007, en: 'array' },
@@ -499,3 +543,28 @@ export const FORMAT_TEXT = {
   5: 'YYYY',
   6: 'YYYY-MM-DD HH:mm',
 };
+
+export const DATE_SHOW_TYPES = [
+  {
+    value: 0,
+    text: _l('ISO'),
+    format: _l('YYYY-MM-DD'),
+  },
+  {
+    value: 1,
+    text: _l('中国'),
+    format: _l('YYYY年M月D日'),
+  },
+  {
+    value: 2,
+    text: 'US',
+    format: _l('M/D/YYYY'),
+  },
+  {
+    value: 3,
+    text: 'EU',
+    format: _l('D/M/YYYY'),
+  },
+];
+
+export const GLOBAL_VARIABLE = '6038a1cbf18158039fb40e69';

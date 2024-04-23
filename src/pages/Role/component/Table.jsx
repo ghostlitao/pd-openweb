@@ -8,9 +8,9 @@ const Wrap = styled.div`
   .opacity0 {
     opacity: 0 !important;
   }
-  // .cur {
-  //   color: #2196f3;
-  // }
+  .Checkbox-box {
+    margin-right: 0 !important;
+  }
   &:hover {
   }
   overflow-x: auto;
@@ -91,7 +91,11 @@ const WrapHeader = styled.div`
     }
   }
 `;
-const WrapList = styled.div``;
+const WrapList = styled.div`
+  &.empty {
+    height: 300px;
+  }
+`;
 const WrapLi = styled.div`
   border-radius: 5px 5px 5px 5px;
   .optionWrapTr {
@@ -101,11 +105,11 @@ const WrapLi = styled.div`
     // opacity: 0;
   }
   &:hover {
-    background: #fafafa !important;
+    background: #f3faff !important;
     .wrapTr {
-      background: #fafafa !important;
+      background: #f3faff !important;
       &.checkBoxTr {
-        background: #fafafa !important;
+        background: #f3faff !important;
       }
     }
     .checkBoxTr,
@@ -113,8 +117,10 @@ const WrapLi = styled.div`
       opacity: 1;
     }
     .optionWrapTr {
-      .moreop::hover {
-        color: #2196f3 !important;
+      .moreop {
+        &:hover {
+          color: #2196f3 !important;
+        }
       }
     }
   }
@@ -178,7 +184,7 @@ function SortToll(props) {
   );
 }
 export default function PorTalTable(props) {
-  const { clickRow } = props;
+  const { clickRow, showTips } = props;
   const [listCell, setList] = useState(props.list || []);
   const [columnsCell, setColumns] = useState(props.columns || []);
   const scorllRef = useRef();
@@ -231,8 +237,8 @@ export default function PorTalTable(props) {
   const customizeRenderEmpty = () => (
     <div className="emptyCon">
       <div className="TxtCenter">
-        <i class="iconBox mBottom12"></i>
-        <span class="Gray_9e Block mBottom20 TxtCenter Font17 Gray_9e">{props.nullTxt || _l('暂无数据')}</span>
+        <i className="iconBox mBottom12"></i>
+        <span className="Gray_9e Block mBottom20 TxtCenter Font17 Gray_9e">{props.nullTxt || _l('暂无数据')}</span>
       </div>
     </div>
   );
@@ -297,7 +303,7 @@ export default function PorTalTable(props) {
           );
         })}
       </WrapHeader>
-      <WrapList className="">
+      <WrapList className={cx({ empty: listCell.length <= 0 && !props.loading })}>
         {listCell.length <= 0 && !props.loading && customizeRenderEmpty()}
         {listCell.length > 0 &&
           listCell.map(item => {
@@ -307,6 +313,7 @@ export default function PorTalTable(props) {
               <WrapLi
                 className={cx('flexRow alignItemsCenter Font14', {
                   checkLi: isChecked && !(props.ownerNoOption && item.isOwner),
+                  Hand: !!clickRow,
                 })}
                 onClick={event => {
                   if (
@@ -349,7 +356,18 @@ export default function PorTalTable(props) {
                   </div>
                 )}
                 {columnsCell.map(o => {
-                  return <div className={cx('wrapTr', o.className)}>{o.render ? o.render('', item) : item[o.id]}</div>;
+                  const pram =
+                    showTips && !['option'].includes(o.id) && !o.render
+                      ? {
+                          title: item[o.id],
+                        }
+                      : null;
+
+                  return (
+                    <div className={cx('wrapTr', o.className)} {...pram}>
+                      {o.render ? o.render('', item) : item[o.id]}
+                    </div>
+                  );
                 })}
               </WrapLi>
             );

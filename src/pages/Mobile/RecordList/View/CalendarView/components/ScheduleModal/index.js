@@ -25,7 +25,7 @@ class ScheduleModal extends Component {
     super(props);
     this.state = {
       previewRecordId: undefined,
-      wsid: undefined
+      wsid: undefined,
     };
   }
   componentDidMount() {
@@ -65,15 +65,18 @@ class ScheduleModal extends Component {
           )}
           <div className="listContainer">
             {eventData.map(it => {
-              let timeStr;
+              let timeStr = '';
               if (moment(it.date).format('ll') === moment().format('ll')) {
                 timeStr = _l('今天');
               } else {
                 timeStr = moment(it.date).format('ll');
               }
+
               return (
-                <div className="" key={it.date}>
-                  <div className={cx('timeStr', {})}>{timeStr}</div>
+                <div key={it.date}>
+                  <div className="timeStr">
+                    {timeStr} <span>{moment(it.date).format('dddd')}</span>
+                  </div>
                   {this.renderEventData(it.res)}
                 </div>
               );
@@ -90,13 +93,18 @@ class ScheduleModal extends Component {
       <React.Fragment>
         {eventData.map(it => {
           const { extendedProps = {} } = it;
-          const { rowid, wsid, stringColor = '' } = extendedProps;
+          const { rowid, wsid, stringColor = '', recordColor } = extendedProps;
+
           return (
             <div
               className="listItem"
               rowid={rowid}
               key={`${rowid}-${it.begin}`}
               enddate={it.enddate}
+              style={{
+                backgroundColor: recordColor && recordColor.showBg ? recordColor.lightColor : undefined,
+                border: `1px solid ${recordColor && recordColor.showBg ? recordColor.lightColor : '#fff'}`,
+              }}
               onClick={() => {
                 const isMingdao = navigator.userAgent.toLowerCase().indexOf('mingdao application') >= 0;
                 if (isMingdao) {
@@ -107,7 +115,9 @@ class ScheduleModal extends Component {
                 this.setState({ previewRecordId: rowid, wsid });
               }}
             >
-              {<div className="colorLeft" style={{ backgroundColor: stringColor }}></div>}
+              {recordColor && recordColor.showLine && (
+                <div className="colorLeft" style={{ backgroundColor: recordColor.color }}></div>
+              )}
               <div className="title Font14 Bold ellipsis" title={it.title} style={{ WebkitBoxOrient: 'vertical' }}>
                 {it.title}
               </div>
@@ -269,7 +279,7 @@ class ScheduleModal extends Component {
           onClose={() => {
             this.setState({
               previewRecordId: undefined,
-              wsid: undefined
+              wsid: undefined,
             });
           }}
         />

@@ -1,5 +1,5 @@
 import React, { Component, Fragment } from 'react';
-import { ScrollView, LoadDiv, Dropdown, Checkbox } from 'ming-ui';
+import { ScrollView, LoadDiv, Dropdown, Checkbox, Radio } from 'ming-ui';
 import cx from 'classnames';
 import { DateTime } from 'ming-ui/components/NewDateTimePicker';
 import { Tooltip } from 'antd';
@@ -14,13 +14,17 @@ import {
   SelectNodeObject,
   FindMode,
   SpecificFieldsValue,
+  TriggerCondition,
 } from '../components';
-import { ACTION_ID } from '../../enum';
+import { ACTION_ID, DATE_SHOW_TYPES, CONTROLS_NAME } from '../../enum';
 import CodeEdit from 'src/pages/widgetConfig/widgetSetting/components/FunctionEditorDialog/Func/common/CodeEdit';
 import FunctionEditorDialog from 'src/pages/widgetConfig/widgetSetting/components/FunctionEditorDialog';
 import _ from 'lodash';
 import moment from 'moment';
 import styled from 'styled-components';
+import { handleGlobalVariableName } from '../../utils';
+import SelectOtherWorksheetDialog from 'src/pages/worksheet/components/SelectWorksheet/SelectOtherWorksheetDialog';
+import { getSummaryInfo } from 'src/pages/worksheet/util';
 
 const DotBox = styled.div`
   input {
@@ -43,6 +47,7 @@ export default class Formula extends Component {
       showFormulaDialog: false,
       fieldsData: [],
       functionError: false,
+      showOtherWorksheet: false,
     };
   }
 
@@ -69,12 +74,18 @@ export default class Formula extends Component {
   /**
    * 获取节点详情
    */
-  getNodeDetail(props) {
+  getNodeDetail(props, { sId } = {}) {
     const { processId, selectNodeId, selectNodeType } = props;
 
-    flowNode.getNodeDetail({ processId, nodeId: selectNodeId, flowNodeType: selectNodeType }).then(result => {
-      this.setState({ data: result });
-    });
+    flowNode
+      .getNodeDetail({ processId, nodeId: selectNodeId, flowNodeType: selectNodeType, selectNodeId: sId })
+      .then(result => {
+        if (result.actionId === ACTION_ID.CUSTOM_ACTION_TOTAL && !result.selectNodeId) {
+          this.getNodeDetail(props, { sId: result.flowNodeList[0].nodeId });
+        } else {
+          this.setState({ data: result });
+        }
+      });
   }
 
   /**
@@ -91,6 +102,7 @@ export default class Formula extends Component {
   onSave = () => {
     const { data, saveRequest, functionError } = this.state;
     const {
+      appType,
       name,
       actionId,
       fieldValue,
@@ -105,6 +117,12 @@ export default class Formula extends Component {
       selectNodeId,
       execute,
       unit,
+      limit,
+      type,
+      appId,
+      filters,
+      reportControlId,
+      reportType,
     } = data;
 
     // 日期/时间
@@ -126,7 +144,7 @@ export default class Formula extends Component {
       return;
     }
 
-    if (actionId === ACTION_ID.TOTAL_STATISTICS && !selectNodeId) {
+    if (_.includes([ACTION_ID.OBJECT_TOTAL, ACTION_ID.CUSTOM_ACTION_TOTAL], actionId) && !selectNodeId) {
       alert(_l('必须先选择一个对象'), 2);
       return;
     }
@@ -141,6 +159,11 @@ export default class Formula extends Component {
       }
     }
 
+    if (actionId === ACTION_ID.WORKSHEET_TOTAL && !appId) {
+      alert(_l('必须先选择一个工作表'), 2);
+      return;
+    }
+
     if (saveRequest) {
       return;
     }
@@ -150,6 +173,7 @@ export default class Formula extends Component {
         processId: this.props.processId,
         nodeId: this.props.selectNodeId,
         flowNodeType: this.props.selectNodeType,
+        appType,
         actionId,
         name: name.trim(),
         fieldValue,
@@ -164,6 +188,12 @@ export default class Formula extends Component {
         selectNodeId,
         execute,
         unit,
+        limit,
+        type,
+        appId,
+        filters,
+        reportControlId,
+        reportType,
       })
       .then(result => {
         this.props.updateNodeData(result);
@@ -182,7 +212,9 @@ export default class Formula extends Component {
     return (
       <CustomTextarea
         className={cx('minH100', { errorBorder: !!data.formulaValue && data.isException && !isFocus })}
+        projectId={this.props.companyId}
         processId={this.props.processId}
+        relationId={this.props.relationId}
         selectNodeId={this.props.selectNodeId}
         operatorsSetMargin={true}
         type={6}
@@ -258,20 +290,7 @@ export default class Formula extends Component {
           </div>
         )}
 
-        <div className="mTop15 flexRow flowDetailNumber">
-          <div className="mRight12">{_l('结果小数点后保留')}</div>
-          <DotBox>
-            <SpecificFieldsValue
-              updateSource={({ fieldValue }) => this.updateSource({ number: fieldValue })}
-              type="number"
-              min={0}
-              max={9}
-              hasOtherField={false}
-              data={{ fieldValue: data.number }}
-            />
-          </DotBox>
-          <div className="mLeft12">{_l('位')}</div>
-        </div>
+        {this.renderNumberDot()}
 
         <div className="mTop20 flexRow">
           <Checkbox
@@ -328,7 +347,7 @@ export default class Formula extends Component {
                 flowNodeType={data.fieldNodeType}
                 appType={data.fieldAppType}
                 actionId={data.fieldActionId}
-                nodeName={data.fieldNodeName}
+                nodeName={handleGlobalVariableName(data.fieldNodeId, data.sourceType, data.fieldNodeName)}
                 controlId={data.fieldControlId}
                 controlName={data.fieldControlName}
               />
@@ -366,7 +385,9 @@ export default class Formula extends Component {
         <SelectOtherFields
           item={{ type: 15 }}
           fieldsVisible={this.state[key]}
+          projectId={this.props.companyId}
           processId={this.props.processId}
+          relationId={this.props.relationId}
           selectNodeId={this.props.selectNodeId}
           handleFieldClick={obj =>
             callback({
@@ -378,6 +399,7 @@ export default class Formula extends Component {
               fieldNodeName: obj.nodeName,
               fieldControlId: obj.fieldValueId,
               fieldControlName: obj.fieldValueName,
+              sourceType: obj.sourceType,
             })
           }
           openLayer={() => this.setState({ [key]: true })}
@@ -415,7 +437,10 @@ export default class Formula extends Component {
 
         <Dropdown
           className="flowDropdown mTop10"
-          data={[{ text: _l('日期+时间'), value: 1 }, { text: _l('日期'), value: 2 }]}
+          data={[
+            { text: _l('日期+时间'), value: 1 },
+            { text: _l('日期'), value: 2 },
+          ]}
           value={data.number}
           border
           onChange={number => this.updateSource({ number })}
@@ -450,7 +475,7 @@ export default class Formula extends Component {
             { text: _l('日期+时间'), value: 1 },
             { text: _l('日期'), value: 3 },
             { text: _l('时分'), value: 8 },
-            // { text: _l('时分秒'), value: 9 },
+            { text: _l('时分秒'), value: 9 },
           ]}
           value={data.unit}
           border
@@ -489,7 +514,10 @@ export default class Formula extends Component {
         <div className="mTop10 Gray_9e">{_l('参与计算的日期未设置时间时，格式化方式为：')}</div>
         <Dropdown
           className="flowDropdown mTop10"
-          data={[{ text: _l('开始 00:00，结束24:00'), value: 1 }, { text: _l('开始 00:00，结束00:00'), value: 2 }]}
+          data={[
+            { text: _l('开始 00:00，结束24:00'), value: 1 },
+            { text: _l('开始 00:00，结束00:00'), value: 2 },
+          ]}
           value={data.number}
           border
           onChange={number => this.updateSource({ number })}
@@ -517,13 +545,13 @@ export default class Formula extends Component {
   /**
    * 渲染统计数据总数内容
    */
-  renderTotalStatisticsContent() {
+  renderObjectTotalContent() {
     const { data } = this.state;
 
     return (
       <Fragment>
         <div className="Font14 Gray_75 workflowDetailDesc">{_l('对获取到的多条数据对象进行数据条数的总计')}</div>
-        <div className="mTop20 bold">{_l('选择统计对象')}</div>
+        <div className="mTop20 bold">{_l('选择汇总对象')}</div>
         <div className="mTop10 Gray_9e">{_l('当前流程中的节点对象')}</div>
 
         <SelectNodeObject
@@ -535,6 +563,16 @@ export default class Formula extends Component {
             this.updateSource({ selectNodeId, selectNodeObj });
           }}
         />
+
+        <div className="mTop20 bold">{_l('汇总结果')}</div>
+        <div className="mTop15 flexRow">
+          <Checkbox
+            className="InlineFlex"
+            text={_l('按汇总对象数量限制返回结果')}
+            checked={data.limit}
+            onClick={checked => this.updateSource({ limit: !checked })}
+          />
+        </div>
       </Fragment>
     );
   }
@@ -544,10 +582,18 @@ export default class Formula extends Component {
    */
   renderFunctionExecContent() {
     const { data, showFormulaDialog, fieldsData, functionError } = this.state;
+    const TYPES = [
+      { text: _l('文本'), value: 2 },
+      { text: _l('数值'), value: 6 },
+      { text: _l('日期'), value: 15 },
+      { text: _l('日期时间'), value: 16 },
+    ];
 
     return (
       <Fragment>
-        <div className="Font14 Gray_75 workflowDetailDesc">{_l('通过函数对 文本/数值 等流程节点对象的值进行处理')}</div>
+        <div className="Font14 Gray_75 workflowDetailDesc">
+          {_l('通过函数对 文本/数值/日期时间 等流程节点对象的值进行处理')}
+        </div>
         <div className="mTop20 bold">{_l('计算')}</div>
 
         <div
@@ -562,6 +608,40 @@ export default class Formula extends Component {
             onClick={this.editFormulaDialog}
           />
         </div>
+
+        <div className="mTop20 bold">{_l('运算结果类型')}</div>
+        <div className="mTop15 flexRow">
+          {TYPES.map((item, i) => (
+            <div style={{ marginRight: 64 }} key={i}>
+              <Radio
+                checked={data.type === item.value}
+                text={item.text}
+                onClick={() =>
+                  this.updateSource({ type: item.value, number: _.includes([15, 16], item.value) ? 0 : 2 })
+                }
+              />
+            </div>
+          ))}
+        </div>
+
+        {data.type === 6 && this.renderNumberDot()}
+        {_.includes([15, 16], data.type) && (
+          <Fragment>
+            <div className="mTop15 flexRow alignItemsCenter">
+              <div>{_l('显示格式')}</div>
+              <Dropdown
+                style={{ width: 260 }}
+                className="flowDropdown mLeft12"
+                data={DATE_SHOW_TYPES.map(item => {
+                  return { ...item, text: item.text + ` (${moment().format(item.format)}) ` };
+                })}
+                value={data.number}
+                border
+                onChange={number => this.updateSource({ number })}
+              />
+            </div>
+          </Fragment>
+        )}
 
         {showFormulaDialog && (
           <FunctionEditorDialog
@@ -582,13 +662,37 @@ export default class Formula extends Component {
   }
 
   /**
+   * 渲染小数位数
+   */
+  renderNumberDot() {
+    const { data } = this.state;
+
+    return (
+      <div className="mTop15 flexRow flowDetailNumber">
+        <div className="mRight12">{_l('结果小数点后保留')}</div>
+        <DotBox>
+          <SpecificFieldsValue
+            updateSource={({ fieldValue }) => this.updateSource({ number: fieldValue })}
+            type="number"
+            min={0}
+            max={9}
+            hasOtherField={false}
+            data={{ fieldValue: data.number }}
+          />
+        </DotBox>
+        <div className="mLeft12">{_l('位')}</div>
+      </div>
+    );
+  }
+
+  /**
    * 渲染单个标签
    */
   renderTag = tag => {
     const { data } = this.state;
     const ids = tag.split(/([a-zA-Z0-9#]{24,32})-/).filter(item => item);
     const nodeObj = data.formulaMap[ids[0]] || {};
-    const controlObj = data.formulaMap[ids[1]] || {};
+    const controlObj = data.formulaMap[ids.join('-')] || {};
 
     return (
       <Tag
@@ -596,7 +700,7 @@ export default class Formula extends Component {
         flowNodeType={nodeObj.type}
         appType={nodeObj.appType}
         actionId={nodeObj.actionId}
-        nodeName={nodeObj.name}
+        nodeName={handleGlobalVariableName(ids[0], controlObj.sourceType, nodeObj.name)}
         controlId={ids[1]}
         controlName={controlObj.name}
       />
@@ -638,7 +742,7 @@ export default class Formula extends Component {
 
             obj.controls.forEach(o => {
               if (!formulaMap[o.controlId]) {
-                formulaMap[o.controlId] = { type: o.type, name: o.controlName };
+                formulaMap[`${obj.nodeId}-${o.controlId}`] = { type: o.type, name: o.controlName };
               }
             });
           });
@@ -651,8 +755,227 @@ export default class Formula extends Component {
     }
   };
 
-  render() {
+  /**
+   * 渲染从工作表汇总
+   */
+  renderWorksheetTotalContent() {
     const { data } = this.state;
+    const selectAppItem = data.appList.find(({ id }) => id === data.appId);
+    const list = data.appList
+      .filter(item => !item.otherApkId)
+      .map(({ name, id }) => ({
+        text: name,
+        value: id,
+      }));
+    const otherWorksheet = [
+      {
+        text: _l('其它应用下的工作表'),
+        value: 'other',
+        className: 'Gray_75',
+      },
+    ];
+
+    return (
+      <Fragment>
+        <div className="Font14 Gray_75 workflowDetailDesc">
+          {_l(
+            '从工作表中筛选符合条件的数据并进行汇总计算，如：记录数量、求和、平均、最大、最小等。注意：当数据频繁变更时可能有一定延时',
+          )}
+        </div>
+
+        <div className="mTop20 bold">{_l('选择工作表')}</div>
+        <Dropdown
+          className={cx('flowDropdown mTop10 flowDropdownBorder', {
+            'errorBorder errorBG': data.appId && !selectAppItem,
+          })}
+          data={[list, otherWorksheet]}
+          value={data.appId}
+          renderTitle={
+            !data.appId
+              ? () => <span className="Gray_9e">{_l('请选择')}</span>
+              : data.appId && !selectAppItem
+              ? () => <span className="errorColor">{_l('工作表无效或已删除')}</span>
+              : () => (
+                  <Fragment>
+                    <span>{selectAppItem.name}</span>
+                    {selectAppItem.otherApkName && <span className="Gray_9e">（{selectAppItem.otherApkName}）</span>}
+                  </Fragment>
+                )
+          }
+          border
+          openSearch
+          onChange={appId => {
+            if (appId === 'other') {
+              this.setState({ showOtherWorksheet: true });
+            } else {
+              this.switchWorksheet(appId);
+            }
+          }}
+        />
+
+        {data.appId && (
+          <Fragment>
+            <div className="mTop20 bold">{_l('筛选条件')}</div>
+            <div className="Gray_75 mTop5">
+              {_l('设置筛选条件，获得满足条件的数据。如果未设置筛选条件，则获取所有数据')}
+            </div>
+            {!!data.filters.length ? (
+              <TriggerCondition
+                projectId={this.props.companyId}
+                relationId={this.props.relationId}
+                processId={this.props.processId}
+                selectNodeId={this.props.selectNodeId}
+                openNewFilter
+                controls={data.controls}
+                data={data.filters}
+                updateSource={data => this.updateSource({ filters: data })}
+                filterEncryptCondition
+              />
+            ) : (
+              <div className="addActionBtn mTop15">
+                <span
+                  className="ThemeBorderColor3"
+                  onClick={() => this.updateSource({ filters: [{ conditions: [[{}]], spliceType: 2 }] })}
+                >
+                  <i className="icon-add Font16" />
+                  {_l('筛选条件')}
+                </span>
+              </div>
+            )}
+
+            {this.renderTotalMethod()}
+          </Fragment>
+        )}
+      </Fragment>
+    );
+  }
+
+  /**
+   * 渲染汇总方式
+   */
+  renderTotalMethod() {
+    const { data } = this.state;
+    const getTotalTypes = controlId => {
+      const currentControl = _.find(data.controls, o => o.controlId === controlId);
+      return getSummaryInfo(currentControl.type, currentControl);
+    };
+
+    return (
+      <Fragment>
+        <div className="mTop20 bold">{_l('汇总')}</div>
+        <div className="mTop10 flexRow">
+          <Dropdown
+            className="flowDropdown flex"
+            data={[{ text: _l('记录数量'), value: '' }].concat(
+              data.controls
+                .filter(o => o.controlId.length === 24)
+                .map(o => {
+                  return {
+                    text: (
+                      <Fragment>
+                        <span className="Gray_9e mRight5">[{CONTROLS_NAME[o.type]}]</span>
+                        <span>{o.controlName}</span>
+                      </Fragment>
+                    ),
+                    value: o.controlId,
+                    searchText: o.controlName,
+                  };
+                }),
+            )}
+            openSearch
+            value={data.reportControlId}
+            border
+            renderTitle={
+              data.reportControlId
+                ? () => {
+                    const controlName = data.controls.find(o => o.controlId === data.reportControlId).controlName;
+                    return <span className={cx({ errorColor: !controlName })}>{controlName || _l('字段已删除')}</span>;
+                  }
+                : null
+            }
+            onChange={reportControlId => {
+              if (reportControlId) {
+                this.updateSource({ reportControlId, reportType: getTotalTypes(reportControlId).default });
+              } else {
+                this.updateSource({ reportControlId, reportType: 0 });
+              }
+            }}
+          />
+          <div className="flex mLeft10">
+            {!!data.reportControlId && (
+              <Dropdown
+                className="flowDropdown"
+                data={getTotalTypes(data.reportControlId)
+                  .list.filter(o => o && o.value)
+                  .map(o => {
+                    return {
+                      text: o.label,
+                      value: o.value,
+                    };
+                  })}
+                value={data.reportType}
+                border
+                onChange={reportType => this.updateSource({ reportType })}
+              />
+            )}
+          </div>
+        </div>
+      </Fragment>
+    );
+  }
+
+  /**
+   * 切换工作表
+   */
+  switchWorksheet = (appId, name, otherApkId = '', otherApkName = '') => {
+    const { data } = this.state;
+    const appList = _.cloneDeep(data.appList);
+    const getControls = () => {
+      flowNode
+        .getStartEventDeploy({
+          appId,
+          appType: data.appType,
+        })
+        .then(result => {
+          this.updateSource({ controls: result.controls });
+        });
+    };
+
+    if (otherApkId) {
+      _.remove(appList, item => item.id === appId);
+      appList.push({ id: appId, name, otherApkId, otherApkName });
+    }
+
+    this.updateSource({ appId, appList, filters: [], controls: [], reportControlId: '', reportType: 0 }, getControls);
+  };
+
+  /**
+   * 渲染自定义动作多条汇总
+   */
+  renderCustomActionTotalContent() {
+    const { data } = this.state;
+
+    return (
+      <Fragment>
+        <div className="Font14 Gray_75 workflowDetailDesc">
+          {_l('对自定义动作触发工作流中的批量数据源进行汇总计算，如：记录数量、求和、平均、最大、最小等。')}
+        </div>
+
+        <div className="mTop20 bold">{_l('汇总对象')}</div>
+        <SelectNodeObject
+          appList={data.flowNodeList}
+          selectNodeId={data.selectNodeId}
+          selectNodeObj={data.selectNodeObj}
+          onChange={sId => this.getNodeDetail(this.props, { sId })}
+        />
+
+        {data.selectNodeId && this.renderTotalMethod()}
+      </Fragment>
+    );
+  }
+
+  render() {
+    const { data, showOtherWorksheet } = this.state;
 
     if (_.isEmpty(data)) {
       return <LoadDiv className="mTop15" />;
@@ -663,20 +986,35 @@ export default class Formula extends Component {
         <DetailHeader
           {...this.props}
           data={{ ...data }}
-          icon="icon-workflow_function"
-          bg="BGBlueAsh"
+          icon={
+            _.includes(
+              [ACTION_ID.OBJECT_TOTAL, ACTION_ID.WORKSHEET_TOTAL, ACTION_ID.CUSTOM_ACTION_TOTAL],
+              data.actionId,
+            )
+              ? 'icon-sigma'
+              : 'icon-workflow_function'
+          }
+          bg="BGGreen"
           updateSource={this.updateSource}
         />
-        <div className="flex mTop20">
+        <div className="flex">
           <ScrollView>
             <div className="workflowDetailBox">
               {data.actionId === ACTION_ID.NUMBER_FORMULA && this.renderNumberContent()}
               {data.actionId === ACTION_ID.DATE_FORMULA && this.renderDateContent()}
               {data.actionId === ACTION_ID.DATE_DIFF_FORMULA && this.renderDateDiffContent()}
-              {data.actionId === ACTION_ID.TOTAL_STATISTICS && this.renderTotalStatisticsContent()}
+              {data.actionId === ACTION_ID.OBJECT_TOTAL && this.renderObjectTotalContent()}
               {data.actionId === ACTION_ID.FUNCTION_CALCULATION && this.renderFunctionExecContent()}
+              {data.actionId === ACTION_ID.WORKSHEET_TOTAL && this.renderWorksheetTotalContent()}
+              {data.actionId === ACTION_ID.CUSTOM_ACTION_TOTAL && this.renderCustomActionTotalContent()}
 
-              <FindMode isFormula execute={data.execute} onChange={execute => this.updateSource({ execute })} />
+              {(data.appId || data.actionId !== ACTION_ID.WORKSHEET_TOTAL) && (
+                <FindMode
+                  isFormula={!_.includes([ACTION_ID.WORKSHEET_TOTAL, ACTION_ID.CUSTOM_ACTION_TOTAL], data.actionId)}
+                  execute={data.execute}
+                  onChange={execute => this.updateSource({ execute })}
+                />
+              )}
             </div>
           </ScrollView>
         </div>
@@ -689,11 +1027,32 @@ export default class Formula extends Component {
             (data.actionId === ACTION_ID.DATE_DIFF_FORMULA &&
               (data.startTime.fieldValue || data.startTime.fieldControlId) &&
               (data.endTime.fieldValue || data.endTime.fieldControlId)) ||
-            (data.actionId === ACTION_ID.TOTAL_STATISTICS && data.selectNodeId) ||
-            (data.actionId === ACTION_ID.FUNCTION_CALCULATION && data.formulaValue)
+            (_.includes([ACTION_ID.OBJECT_TOTAL, ACTION_ID.CUSTOM_ACTION_TOTAL], data.actionId) && data.selectNodeId) ||
+            (data.actionId === ACTION_ID.FUNCTION_CALCULATION && data.formulaValue) ||
+            (data.actionId === ACTION_ID.WORKSHEET_TOTAL && data.appId)
           }
           onSave={this.onSave}
         />
+
+        {showOtherWorksheet && (
+          <SelectOtherWorksheetDialog
+            projectId={this.props.companyId}
+            worksheetType={0}
+            selectedAppId={this.props.relationId}
+            selectedWrorkesheetId={data.appId}
+            visible
+            onOk={(selectedAppId, selectedWrorkesheetId, obj) => {
+              const isCurrentApp = this.props.relationId === selectedAppId;
+              this.switchWorksheet(
+                selectedWrorkesheetId,
+                obj.workSheetName,
+                !isCurrentApp && selectedAppId,
+                !isCurrentApp && obj.appName,
+              );
+            }}
+            onHide={() => this.setState({ showOtherWorksheet: false })}
+          />
+        )}
       </Fragment>
     );
   }

@@ -1,12 +1,12 @@
 import React, { memo } from 'react';
-import { string } from 'prop-types';
-import { navigateTo } from 'src/router/navigateTo';
-import { Icon, MdLink } from 'ming-ui';
+import { Icon, MdLink, Tooltip } from 'ming-ui';
 import styled from 'styled-components';
 import cx from 'classnames';
 import { getAppStatusText } from 'src/pages/PageHeader/util';
 import SvgIcon from 'src/components/SvgIcon';
 import _ from 'lodash';
+import { getAppNavigateUrl, transferExternalLinkUrl } from 'src/pages/AppHomepage/AppCenter/utils';
+import { addBehaviorLog } from 'src/util';
 
 const AppStatus = styled.div`
   border-radius: 10px;
@@ -40,22 +40,29 @@ function SideAppItem({
   isGoodsStatus,
   isNew,
   fixed,
+  pcNaviStyle,
+  selectAppItmeType,
+  createType,
+  urlTemplate,
 }) {
   const storage = JSON.parse(localStorage.getItem(`mdAppCache_${md.global.Account.accountId}_${id}`));
   return (
     <MdLink
+      className="stopPropagation"
       key={id}
-      to={
-        storage
-          ? `/app/${id}/${_.filter(
-              [storage.lastGroupId, storage.lastWorksheetId, storage.lastViewId],
-              item => !!item,
-            ).join('/')}?from=insite`
-          : `/app/${id}`
-      }
+      to={getAppNavigateUrl(id, pcNaviStyle, selectAppItmeType)}
       onClick={e => {
-        if (!e.ctrlKey && !e.metaKey) {
-          closeIndexSide();
+        addBehaviorLog('app', id); // 浏览应用埋点
+
+        if (createType === 1) {
+          //应用为外部链接类型
+          e.stopPropagation();
+          e.preventDefault();
+          window.open(transferExternalLinkUrl(urlTemplate, projectId, id), '_blank');
+        } else {
+          if (!e.ctrlKey && !e.metaKey) {
+            closeIndexSide();
+          }
         }
       }}
     >
@@ -78,14 +85,18 @@ function SideAppItem({
             </div>
           )}
         </div>
+
         <div
           className="markAppWrap"
           onClick={e => {
             e.stopPropagation();
+            e.preventDefault();
             handleMarkApp({ projectId, appId: id, isMark: !isMarked }, e);
           }}
         >
-          <Icon icon={isMarked ? 'task-star' : 'star-hollow'} />
+          <Tooltip popupPlacement={'bottom'} text={isMarked ? _l('取消收藏') : _l('收藏')}>
+            <Icon icon={isMarked ? 'task-star' : 'star-hollow'} />
+          </Tooltip>
         </div>
       </li>
     </MdLink>

@@ -52,10 +52,12 @@ export function handleLifeEffect(
   {
     showColumnWidthChangeMask,
     tableType,
+    isRelateRecordList,
     isSubList,
     cache = {},
     onCellEnter = () => {},
     onCellLeave = () => {},
+    addNewRow = () => {},
     setScroll,
     focusCell,
     handleTableKeyDown,
@@ -154,6 +156,12 @@ export function handleLifeEffect(
       return;
     }
     if (newIndex > cache.rowCount * cache.columnCount - 1) {
+      if (e.action === 'text_enter_to_next' && isSubList) {
+        addNewRow();
+        setTimeout(() => {
+          focusCell(newIndex);
+        }, 100);
+      }
       return;
     }
     const nextFocusElement = tableElement.querySelector('.cell-' + newIndex);
@@ -187,7 +195,10 @@ export function handleLifeEffect(
   }
   function handleKeyDown(e) {
     // console.log({ ..._.pick(e, ['key', 'keyCode']), tagName: e.target.tagName });
-    if (tableType !== 'classic' || (!isSubList && window.recordInfoIsOpen)) {
+    if (
+      tableType !== 'classic' ||
+      (!(isSubList || isRelateRecordList) && !!document.querySelector('.workSheetRecordInfo'))
+    ) {
       return;
     }
     removeReadOnlyTip();
@@ -211,19 +222,23 @@ export function handleLifeEffect(
     ) {
       handleSwitchCell(e);
     } else {
-      handleTableKeyDown(cache.focusIndex, event);
+      handleTableKeyDown(cache.focusIndex, e);
     }
   }
   function handleOuterClick(e) {
+    removeReadOnlyTip();
     if (
-      e.target.closest('.cellNeedFocus,.mdDialog,.mui-dialog-container,.UploadFilesTriggerWrap,.rc-trigger-popup') ||
+      e.target.closest('.cellNeedFocus,.mui-dialog-container,.UploadFilesTriggerWrap,.rc-trigger-popup') ||
       (!isSubList && e.target.closest('.recordInfoCon'))
     ) {
       return;
     }
     if (!e.target.closest(`.sheetViewTable.id-${tableId}-id`)) {
-      window.tempCopyForSheetView = undefined;
-      removeReadOnlyTip();
+      try {
+        if (_.get(safeParse(window.tempCopyForSheetView), 'tableId') === tableId) {
+          window.tempCopyForSheetView = undefined;
+        }
+      } catch (err) {}
       focusCell(-10000);
     }
   }
@@ -266,8 +281,12 @@ export function columnWidthFactory({
 }
 
 export function getControlFieldPermissionsAfterRules(row, controls, rules) {
-  const formData = updateRulesData({ rules, data: controls.map(c => ({ ...c, value: row[c.controlId] })) });
-  const isLock = !/^temp/.test(row.rowid) && checkRuleLocked(rules, formData);
+  const formData = updateRulesData({
+    rules,
+    recordId: row.rowid,
+    data: controls.map(c => ({ ...c, value: row[c.controlId] })),
+  });
+  const isLock = !/^temp/.test(row.rowid) && checkRuleLocked(rules, formData, row.rowid);
   const fieldPermissions = {};
   formData.forEach(item => {
     if (isLock) {
@@ -283,7 +302,7 @@ export function getControlFieldPermissionsAfterRules(row, controls, rules) {
 export function getRulePermissions({ data = [], controls, rules, isSubList, columns } = {}) {
   const result = {};
   data.forEach(row => {
-    const controlFieldPermissions = getControlFieldPermissionsAfterRules(row, isSubList ? columns : controls, rules);
+    const controlFieldPermissions = getControlFieldPermissionsAfterRules(row, controls, rules);
     if (!_.isEmpty(controlFieldPermissions)) {
       Object.keys(controlFieldPermissions).forEach(key => {
         result[key] = controlFieldPermissions[key];

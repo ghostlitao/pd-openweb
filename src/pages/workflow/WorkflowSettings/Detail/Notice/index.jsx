@@ -102,7 +102,9 @@ export default class Notice extends Component {
         <div className="Font13 bold">{_l('通知内容')}</div>
         <CustomTextarea
           className="minH100"
+          projectId={this.props.companyId}
           processId={this.props.processId}
+          relationId={this.props.relationId}
           selectNodeId={this.props.selectNodeId}
           type={2}
           content={data.sendContent}
@@ -114,7 +116,12 @@ export default class Notice extends Component {
         <div className="Font13 bold mTop20">{_l('通知人')}</div>
         <div className="Font13 Gray_9e mTop10">{_l('将通过系统消息发送')}</div>
 
-        <Member accounts={data.accounts} updateSource={this.updateSource} />
+        <Member
+          companyId={this.props.companyId}
+          appId={this.props.relationType === 2 ? this.props.relationId : ''}
+          accounts={data.accounts}
+          updateSource={this.updateSource}
+        />
         <div
           className="flexRow mTop15 ThemeColor3 workflowDetailAddBtn"
           onClick={() => this.setState({ showSelectUserDialog: true })}
@@ -153,7 +160,7 @@ export default class Notice extends Component {
           bg="BGBlue"
           updateSource={this.updateSource}
         />
-        <div className="flex mTop20">
+        <div className="flex">
           <ScrollView>
             <div className="workflowDetailBox">{this.renderContent()}</div>
           </ScrollView>

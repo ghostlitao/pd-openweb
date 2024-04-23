@@ -1,6 +1,6 @@
 import React, { Fragment, useEffect, useState, useRef } from 'react';
 import homeAppApi from 'api/homeApp';
-import { Icon, ScrollView, Menu, MenuItem } from 'ming-ui';
+import { Icon, ScrollView, Menu, MenuItem, Skeleton, Tooltip } from 'ming-ui';
 import { connect } from 'react-redux';
 import { bindActionCreators } from 'redux';
 import {
@@ -12,7 +12,6 @@ import {
   getAllAppSectionDetail,
 } from 'worksheet/redux/actions/sheetList';
 import DelAppGroup from '../AppGroup/DelAppGroup';
-import Skeleton from 'src/router/Application/Skeleton';
 import Drag from 'worksheet/common/WorkSheetLeft/Drag';
 import { DndProvider } from 'react-dnd-latest';
 import { HTML5Backend } from 'react-dnd-html5-backend-latest';
@@ -25,20 +24,45 @@ import SinglelLeftGroup from './SinglelLeftGroup';
 import { formatLeftSectionDetail } from 'worksheet/redux/actions/sheetList';
 import { getIds } from '../../util';
 import { findSheet } from 'worksheet/util';
+import { getTranslateInfo } from 'src/util';
 import _ from 'lodash';
+import tinycolor from '@ctrl/tinycolor';
+import styled from 'styled-components';
+import appManagementApi from 'src/api/appManagement';
+import { ICON_ROLE_TYPE } from '../config';
 import './index.less';
+
+const RoleSelectWrap = styled.div(
+  ({ borderColor }) => `
+  border-radius: 16px;
+  height: 30px;
+  &:hover,
+  &.active {
+    border: 1px solid ${borderColor} !important;
+  }
+`,
+);
 
 const appSectionRefs = {};
 
 const AppSectionItem = props => {
-  const { projectId, sheet, appPkg, ids, item, appSectionDetail } = props;
+  const { projectId, sheet, appPkg, ids, item, unfoldAppSectionId, appSectionDetail } = props;
   const { onUpdateAppSectionItem, onDelAppSection } = props;
-  const { iconColor, currentPcNaviStyle, themeType } = appPkg;
+  const { iconColor, currentPcNaviStyle, themeType, pcNaviDisplayType } = appPkg;
   const [edit, setEdit] = useState(item.edit || false);
   const isCurrentChildren = !!findSheet(ids.worksheetId, item.items);
   const hideAppSection = appSectionDetail.length === 1 && _.isEmpty(item.workSheetName) && !item.edit;
   const childrenHideKey = `${item.workSheetId}-hide`;
-  const [childrenVisible, setChildrenVisible] = useState(localStorage.getItem(childrenHideKey) ? false : true);
+  const getDefaultVisible = () => {
+    if (pcNaviDisplayType === 1 && hideAppSection) {
+      return true;
+    }
+    if (pcNaviDisplayType === 2) {
+      return isCurrentChildren;
+    }
+    return localStorage.getItem(childrenHideKey) ? false : pcNaviDisplayType === 0;
+  };
+  const [childrenVisible, setChildrenVisible] = useState(getDefaultVisible());
   const [popupVisible, setPopupVisible] = useState(false);
   const [delAppItemVisible, setDelAppItemVisible] = useState(false);
   const [dialogImportExcel, setDialogImportExcel] = useState(false);
@@ -59,26 +83,28 @@ const AppSectionItem = props => {
     setEdit(item.edit);
   }, [item.edit]);
 
+  useEffect(() => {
+    if (unfoldAppSectionId && pcNaviDisplayType === 2 && unfoldAppSectionId !== item.workSheetId) {
+      setChildrenVisible(false);
+    }
+  }, [unfoldAppSectionId]);
+
   const bgColor = () => {
     if (currentPcNaviStyle === 1 && !['light'].includes(themeType)) {
       return themeType === 'theme' ? 'rgba(0, 0, 0, 0.15)' : 'rgba(255, 255, 255, 0.15)';
     } else {
       return convertColor(iconColor);
     }
-  }
+  };
 
-  const handleCreateAppItem = (type, name) => {
-    if (!name) {
-      alert(_l('请填写名称'), 3);
-      return;
-    }
+  const handleCreateAppItem = (type, args) => {
     const singleRef = getAppSectionRef(item.workSheetId);
     singleRef.dispatch(
       createAppItem({
         appId: ids.appId,
         groupId: item.workSheetId,
         type,
-        name: name.slice(0, 25),
+        ...args,
       }),
     );
     setCreateType('');
@@ -161,22 +187,32 @@ const AppSectionItem = props => {
 
   return (
     <div className="appGroupWrap">
-      <Drag appItem={item} appPkg={appPkg} isCharge={sheet.isCharge} onDragEnd={() => { window.dragNow = null; }}>
+      <Drag
+        appItem={item}
+        appPkg={appPkg}
+        isCharge={sheet.isCharge}
+        onDragEnd={() => {
+          window.dragNow = null;
+        }}
+      >
         {!hideAppSection && (
           <div
-            className={cx('appGroup flexRow alignItemsCenter pointer', { hover: popupVisible })}
+            className={cx('appGroup flexRow alignItemsCenter pointer', { hover: popupVisible, close: !childrenVisible || isDrag })}
             style={{
               backgroundColor: isActive && bgColor(),
             }}
             onClick={e => {
               const { classList } = e.target;
               if (classList.contains('appGroup') || classList.contains('nameWrap') || classList.contains('arrowIcon')) {
-                setChildrenVisible(!childrenVisible);
-                if (childrenVisible) {
-                  localStorage.setItem(childrenHideKey, 1);
-                } else {
-                  localStorage.removeItem(childrenHideKey);
-                }
+                props.setUnfoldAppSectionId(!childrenVisible ? item.workSheetId : null);
+                setTimeout(() => {
+                  setChildrenVisible(!childrenVisible);
+                  if (childrenVisible) {
+                    localStorage.setItem(childrenHideKey, 1);
+                  } else {
+                    localStorage.removeItem(childrenHideKey);
+                  }
+                }, 0);
               }
             }}
             onMouseDown={() => {
@@ -187,7 +223,7 @@ const AppSectionItem = props => {
               if (window.dragNow && now - window.dragNow > 50) {
                 setIsDrag(true);
                 setChildrenVisible(false);
-              };
+              }
             }}
             onMouseUp={() => {
               window.dragNow = null;
@@ -212,7 +248,7 @@ const AppSectionItem = props => {
                   }}
                 />
               ) : (
-                item.workSheetName || _l('未命名分组')
+                getTranslateInfo(ids.appId, item.workSheetId).name || item.workSheetName || _l('未命名分组')
               )}
             </div>
             {!edit && (
@@ -284,9 +320,10 @@ const AppSectionItem = props => {
 };
 
 const LeftAppGroup = props => {
-  const { appSectionDetail } = props;
+  const { appSectionDetail, appPkg, showRoleDebug = () => {}, roleSelectValue = [], roleDebugVisible } = props;
   const { updateALLSheetList, clearSheetList, getAllAppSectionDetail } = props;
   const [loading, setLoading] = useState(true);
+  const [unfoldAppSectionId, setUnfoldAppSectionId] = useState(null);
   const ids = getIds(props);
 
   useEffect(() => {
@@ -378,37 +415,85 @@ const LeftAppGroup = props => {
       });
   };
 
+  const getBorderColor = () => {
+    if (!appPkg.iconColor) return 'rgba(255, 255, 255, 0.3)';
+    return tinycolor(appPkg.iconColor).setAlpha(0.3).toRgbString();
+  };
+
   return (
-    <div className="LeftAppGroupWrap flex w100 flexColumn Relative">
-      {loading ? (
-        <Skeleton className="w100 h100" active={true} />
-      ) : (
-        <Fragment>
-          {appSectionDetail.length === 1 &&
-            _.isEmpty(appSectionDetail[0].items) &&
-            _.isEmpty(appSectionDetail[0].workSheetName) &&
-            !appSectionDetail[0].edit && <Skeleton className="w100 h100 Absolute" />}
-          <DndProvider key="navigationList" context={window} backend={HTML5Backend}>
-            <ScrollView>
-              {appSectionDetail.map((data, index) => (
-                <AppSectionItem
-                  key={data.workSheetId}
-                  ids={ids}
-                  item={{
-                    ...data,
-                    index,
-                  }}
-                  appSectionDetail={appSectionDetail}
-                  {...props}
-                  onUpdateAppSectionItem={handleUpdateAppSectionItem}
-                  onDelAppSection={handleDelAppSection}
-                />
-              ))}
-            </ScrollView>
-          </DndProvider>
-        </Fragment>
+    <React.Fragment>
+      <div className="LeftAppGroupWrap flex w100 flexColumn Relative">
+        {loading ? (
+          <Skeleton className="w100 h100" active={true} />
+        ) : (
+          <Fragment>
+            {appSectionDetail.length === 1 &&
+              _.isEmpty(appSectionDetail[0].items) &&
+              _.isEmpty(appSectionDetail[0].workSheetName) &&
+              !appSectionDetail[0].edit && <Skeleton className="w100 h100 Absolute" />}
+            <DndProvider key="navigationList" context={window} backend={HTML5Backend}>
+              <ScrollView>
+                {appSectionDetail.map((data, index) => (
+                  <AppSectionItem
+                    key={data.workSheetId}
+                    ids={ids}
+                    item={{
+                      ...data,
+                      index,
+                    }}
+                    unfoldAppSectionId={unfoldAppSectionId}
+                    setUnfoldAppSectionId={setUnfoldAppSectionId}
+                    appSectionDetail={appSectionDetail}
+                    {...props}
+                    onUpdateAppSectionItem={handleUpdateAppSectionItem}
+                    onDelAppSection={handleDelAppSection}
+                  />
+                ))}
+              </ScrollView>
+            </DndProvider>
+          </Fragment>
+        )}
+      </div>
+      {(appPkg.debugRole || {}).canDebug && (
+        <div className="mBottom2 pLeft12 pRight12 w100">
+          <RoleSelectWrap
+            className={cx('pLeft16 pRight12 valignWrapper roleSelectCon Hand', { active: roleDebugVisible })}
+            onClick={e => showRoleDebug()}
+            borderColor={getBorderColor()}
+          >
+            <span className="overflow_ellipsis flex bold valignWrapper LineHeight20">
+              {roleSelectValue.length === 1 && ICON_ROLE_TYPE[roleSelectValue[0].roleType] && (
+                <Icon icon={ICON_ROLE_TYPE[roleSelectValue[0].roleType]} className="icon mRight6 Font16" />
+              )}
+              {roleSelectValue.length === 0
+                ? _l('选择角色')
+                : roleSelectValue.length === 1
+                ? roleSelectValue[0].name
+                : _l('%0个角色', roleSelectValue.length)}
+            </span>
+            <Tooltip disable={!roleSelectValue.length} placement="bottom" text={_l('清空调试')}>
+              <Icon
+                icon={!!roleSelectValue.length ? 'cancel' : 'expand_more'}
+                className="Font16 roleSelectIcon"
+                onClick={e => {
+                  !!roleSelectValue.length && e.stopPropagation();
+                  if (!roleSelectValue.length) return;
+
+                  appManagementApi
+                    .setDebugRoles({
+                      appId: ids.appId,
+                      roleIds: [],
+                    })
+                    .then(res => {
+                      res && window.location.reload();
+                    });
+                }}
+              />
+            </Tooltip>
+          </RoleSelectWrap>
+        </div>
       )}
-    </div>
+    </React.Fragment>
   );
 };
 

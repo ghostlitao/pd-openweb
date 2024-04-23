@@ -175,7 +175,6 @@ export const sysRoleList = [
       return (
         <div>
           {_l('拥有所有权限')}
-          <span className="Gray_9e">（{_l('管理员为系统内置角色，不可修改')}）</span>
         </div>
       );
     },
@@ -217,3 +216,9 @@ export const sysRoleList = [
     },
   },
 ];
+
+export const ICON_ROLE_TYPE = {
+  100: 'manage_accounts', // 管理员
+  2: 'account_box', // 运营者
+  1: 'construction', // 开发者
+};

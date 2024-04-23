@@ -1,15 +1,19 @@
-import { formatFormulaDate, domFilterHtmlScript, getSelectedOptions } from '../../util';
+import { formatFormulaDate, domFilterHtmlScript, getSelectedOptions, checkIsTextControl } from '../../util';
 import { RELATION_TYPE_NAME } from './enum';
-import { accMul, toFixed } from 'src/util';
+import { accMul, formatStrZero, toFixed } from 'src/util';
 import { getSwitchItemNames } from 'src/pages/widgetConfig/util';
 import { getShowFormat } from 'src/pages/widgetConfig/util/setting.js';
-import { dealMaskValue } from 'src/pages/widgetConfig/widgetSetting/components/ControlMask/util';
+import { dealMaskValue } from 'src/pages/widgetConfig/widgetSetting/components/WidgetSecurity/util';
 import _ from 'lodash';
 import moment from 'moment';
+import { validate } from 'uuid';
 
 export default function renderText(cell, options = {}) {
   try {
     if (!cell) {
+      return '';
+    }
+    if (cell.controlId === 'rowid' && !validate(cell.value)) {
       return '';
     }
     let { type, value = '', unit, advancedSetting = {} } = cell;
@@ -23,6 +27,10 @@ export default function renderText(cell, options = {}) {
     }
     if (value === '' || value === null) {
       return '';
+    }
+    if (!checkIsTextControl(cell) && cell.value === '已删除') {
+      // 处理关联已删除，非文本作为标题时卡片标题显示异常问题
+      return _l('已删除');
     }
     if (type === 37) {
       if (cell.advancedSetting && cell.advancedSetting.summaryresult === '1') {
@@ -122,23 +130,21 @@ export default function renderText(cell, options = {}) {
           const showFormat = getShowFormat({ advancedSetting: { ...advancedSetting, showtype: cell.unit || '1' } });
           value = moment(cell.value, value.indexOf('-') > -1 ? undefined : showFormat).format(showFormat);
         } else {
-          if (_.includes(['1', '2', '6'], unit)) {
-            if (cell.advancedSetting.autocarry === '1' || cell.enumDefault === 1) {
-              value = formatFormulaDate({ value: cell.value, unit, dot: cell.dot });
-            } else {
-              value =
-                toFixed(value, cell.dot) +
+          if (cell.advancedSetting.autocarry === '1') {
+            value = (prefix || '') + formatFormulaDate({ value: cell.value, unit, dot: cell.dot });
+          } else {
+            value =
+              (prefix || '') +
+              toFixed(value, cell.dot) +
+              (suffix ||
                 {
                   1: _l('分钟'),
                   2: _l('小时'),
+                  3: _l('天'),
+                  4: _l('月'),
+                  5: _l('年'),
                   6: _l('秒'),
-                }[unit];
-            }
-          } else {
-            value =
-              (suffix ? '' : prefix) +
-              formatFormulaDate({ value: cell.value, unit, hideUnitStr: true, dot: cell.dot }) +
-              suffix;
+                }[unit]);
           }
         }
         break;
@@ -177,7 +183,7 @@ export default function renderText(cell, options = {}) {
           .map((option, index) => {
             if (option.key === 'other') {
               const otherValue = _.find(JSON.parse(cell.value || '[]'), i => i.includes(option.key));
-              value = otherValue === 'other' ? _l('其他') : _.replace(otherValue, 'other:', '') || _l('其他');
+              return otherValue === 'other' ? option.value : _.replace(otherValue, 'other:', '') || option.value;
             }
             return option.value;
           })
@@ -314,12 +320,15 @@ export default function renderText(cell, options = {}) {
       default:
         value = '';
     }
+    // 小数点不补零
+    if (_.get(cell, 'advancedSetting.dotformat') === '1') {
+      value = formatStrZero(value);
+    }
     // 走掩码 单行文本、数值、金额、手机、邮箱、证件
     if (
       !options.noMask &&
       ((type === 2 && cell.enumDefault === 2) || _.includes([3, 5, 7], type)) &&
-      _.get(cell, 'advancedSetting.datamask') === '1' &&
-      !window.shareState.shareId
+      _.get(cell, 'advancedSetting.datamask') === '1'
     ) {
       return dealMaskValue({ ...cell, value }) || value;
     }

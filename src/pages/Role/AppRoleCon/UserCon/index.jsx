@@ -17,6 +17,7 @@ const Wrap = styled.div`
   height: 100%;
   .navConList {
     overflow: auto !important;
+    padding: 6px 8px 10px;
   }
   .overflowHidden {
     overflow: hidden !important;
@@ -121,6 +122,7 @@ class Con extends React.Component {
       showDeleRoleByMoveUser: false,
       loading: true,
       delId: '',
+      selectDebugRole: [],
     };
   }
   componentDidMount() {
@@ -133,24 +135,27 @@ class Con extends React.Component {
       },
       getUserList,
       appId,
+      appDetail = {},
     } = this.props;
     const { roleInfos = [] } = appRole;
     const { quickTag } = appRole;
-    if (!isAdmin) {
+    if (quickTag.roleId) {
+      this.setState({
+        roleId: editType || quickTag.roleId,
+      });
     } else {
-      if (quickTag.roleId) {
-        this.setState({
-          roleId: quickTag.roleId,
-          roleId: editType || quickTag.roleId,
-        });
-      } else {
-        setRoleId(editType ? editType : appRole.roleId ? appRole.roleId : 'all');
-      }
+      setRoleId(editType ? editType : appRole.roleId ? appRole.roleId : 'all');
     }
     if (!!editType && editType !== 'all') {
       //申请加入等地址，获取全部项计数
       getUserList({ appId }, true);
     }
+    if ((appDetail.debugRole || {}).canDebug) {
+      this.setState({
+        selectDebugRole: appDetail.debugRole.selectedRoles,
+      });
+    }
+
     this.setState({
       roleList: roleInfos,
       loading: false,
@@ -273,7 +278,7 @@ class Con extends React.Component {
   };
 
   render() {
-    const { roleList, showDeleRoleByMoveUser, delId } = this.state;
+    const { roleList, showDeleRoleByMoveUser, delId, selectDebugRole } = this.state;
     const { appRole = {} } = this.props;
     const { pageLoading } = appRole;
     if (pageLoading) {
@@ -284,6 +289,7 @@ class Con extends React.Component {
         <RoleNav
           {...this.props}
           {...this.state}
+          selectDebugRole={selectDebugRole}
           onChange={data => {
             this.setState({ ...data });
           }}

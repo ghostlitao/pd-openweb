@@ -85,8 +85,6 @@ function MobileDraftList(props) {
     worksheetId,
     controls = [],
     draftData = [],
-    viewId,
-    worksheetInfo = {},
     getDraftData = () => {},
     sheetSwitchPermit,
   } = props;
@@ -116,11 +114,12 @@ function MobileDraftList(props) {
         ) &&
         controlState(item, 2).visible,
     );
+    const utimeControl = controls.find(v => _.includes(['utime'], v.controlId));
     const showControls = displayControls
       .filter(it => !it.attribute)
       .filter(it => !_.includes(['utime'], it.controlId))
       .slice(0, 2)
-      .concat(controls.find(v => _.includes(['utime'], v.controlId)));
+      .concat(utimeControl ? utimeControl : []);
 
     return (
       <div
@@ -141,8 +140,15 @@ function MobileDraftList(props) {
                   <CellControl
                     rowHeight={34}
                     cell={Object.assign({}, control, { value: data[control.controlId] })}
+                    row={data}
+                    worksheetId={worksheetId}
+                    sheetSwitchPermit={sheetSwitchPermit}
                     from={21}
                     className={'w100'}
+                    appId={appId}
+                    worksheetId={worksheetId}
+                    row={{ rowid: data.rowid }}
+                    disableDownload={true}
                   />
                 ) : (
                   <div className="emptyTag"></div>
@@ -202,7 +208,6 @@ function MobileDraftList(props) {
           visible={!!currentRowId}
           appId={appId}
           worksheetId={worksheetId}
-          viewId={viewId}
           rowId={currentRowId}
           sheetSwitchPermit={sheetSwitchPermit}
           draftFormControls={controls.filter(
@@ -240,7 +245,7 @@ function MobileDraftList(props) {
 }
 
 export default function MobileDraft(props) {
-  const { appId, controls = [], worksheetInfo,  sheetSwitchPermit } = props;
+  const { appId, controls = [], worksheetInfo, worksheetId, sheetSwitchPermit } = props;
   const [visible, setVisible] = useState(false);
   const [draftData, setDraftData] = useState([]);
 
@@ -252,7 +257,7 @@ export default function MobileDraft(props) {
     worksheetAjax
       .getFilterRows({
         appId,
-        worksheetId: worksheetInfo.worksheetId,
+        worksheetId: worksheetId || worksheetInfo.worksheetId,
         getType: 21,
       })
       .then(res => {

@@ -9,6 +9,7 @@ import { LoadDiv } from 'ming-ui';
 import { Con, Content, UserList, Search, Tabs } from './Comps';
 
 import { getUsers, getAccounts } from './util';
+import { BrowserRouter } from 'react-router-dom';
 
 export function UserSelector(props) {
   const {
@@ -42,11 +43,13 @@ export function UserSelector(props) {
   const [type, setType] = useState(selectRangeOptions ? 'range' : activeTab === 1 ? 'external' : 'normal');
   const [keywords, setKeywords] = useState();
   const [pageIndex, setPageIndex] = useState(1);
+  const [loadOuted, setLoadOuted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [list, setList] = useState([]);
   const [hadShowMore, setHadShowMore] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
-  const isStatic = !_.isEmpty(staticAccounts);
+  const isStatic =
+    !_.isEmpty(staticAccounts) && !(staticAccounts.length === 1 && _.get(staticAccounts, '0.accountId') === 'isEmpty');
   const baseArgs = {
     filterAccountIds: filterAccountIds.filter(_.identity),
     prefixAccountIds,
@@ -70,6 +73,9 @@ export function UserSelector(props) {
     getUsers({ ...baseArgs, type, keywords: (keywords || '').trim(), pageIndex }).then(data => {
       setList(l => l.concat(data));
       setLoading(false);
+      if (_.isEmpty(data)) {
+        setLoadOuted(true);
+      }
     });
   }
   const debounceLoadList = useCallback(_.debounce(loadList, 200), []);
@@ -92,13 +98,15 @@ export function UserSelector(props) {
   }
   if (type === 'external' || keywords) {
     prefixUsers = [];
-  } else {
+  }
+  if (!(type === 'external' && md.global.Account.isPortal)) {
     users = staticAccounts.concat(users);
   }
   function handleSelect(user) {
     const res = [_.pick(user, ['accountId', 'avatar', 'fullname', 'job'])];
     onSelect(res);
     selectCb(res);
+    setKeywords('');
     onClose();
   }
   useClickAway(conRef, e => {
@@ -197,7 +205,7 @@ export function UserSelector(props) {
         ref={scrollRef}
         style={{ minHeight }}
         onWheel={e => {
-          if (loading || type !== 'external') {
+          if (loading || type !== 'external' || loadOuted) {
             return;
           }
           const isDown = e.deltaY > 0;
@@ -220,11 +228,13 @@ export function UserSelector(props) {
           <Fragment>
             <UserList
               showMore
+              notShowCurrentUserName
               type={type}
               activeIndex={activeIndex}
               list={prefixUsers}
               onSelect={handleSelect}
               onShowMore={() => setHadShowMore(true)}
+              projectId={baseArgs.projectId}
             />
             <hr />
           </Fragment>
@@ -246,6 +256,8 @@ export function UserSelector(props) {
                 : users
             }
             onSelect={handleSelect}
+            appId={appId}
+            projectId={baseArgs.projectId}
           />
         }
         {!isStatic && loading && <LoadDiv />}
@@ -319,7 +331,7 @@ SelectWrapper.propTypes = {
 };
 
 export default function quickSelectUser(target, props = {}) {
-  const panelWidth = 280;
+  const panelWidth = 360;
   const panelHeight = 48 + (props.minHeight || 328);
   let targetLeft;
   let targetTop;
@@ -366,19 +378,21 @@ export default function quickSelectUser(target, props = {}) {
     }
   }
   ReactDOM.render(
-    <UserSelector
-      {...props}
-      onClose={force => {
-        if (!force && props.isDynamic) {
-          setTimeout(setPosition, 100);
-          return;
-        }
-        if (_.isFunction(props.onClose)) {
-          props.onClose();
-        }
-        destory();
-      }}
-    />,
+    <BrowserRouter>
+      <UserSelector
+        {...props}
+        onClose={force => {
+          if (!force && props.isDynamic) {
+            setTimeout(setPosition, 100);
+            return;
+          }
+          if (_.isFunction(props.onClose)) {
+            props.onClose();
+          }
+          destory();
+        }}
+      />
+    </BrowserRouter>,
     $con,
   );
 }

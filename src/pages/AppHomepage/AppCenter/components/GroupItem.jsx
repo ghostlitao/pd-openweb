@@ -70,13 +70,13 @@ const GroupItemCon = styled.div`
     background-color: #f5f5f5;
   }
   &.active {
-    color: #2196f3;
-    background-color: rgba(33, 150, 243, 0.1);
+    color: ${({ themeColor }) => themeColor};
+    background-color: ${({ activeColor }) => activeColor};
     .fontIcon {
-      color: #2196f3 !important;
+      color: ${({ themeColor }) => `${themeColor} !important`};
     }
     svg {
-      fill: #2196f3;
+      fill: ${({ themeColor }) => themeColor};
     }
     .name {
       font-weight: 500;
@@ -151,10 +151,13 @@ export default function GroupItem(props) {
     onEdit = () => {},
     onDelete = () => {},
     onMark = () => {},
+    dashboardColor,
   } = props;
   const [menuVisible, setMenuVisible] = useState();
   const content = (
     <GroupItemCon
+      themeColor={dashboardColor.themeColor}
+      activeColor={dashboardColor.activeColor}
       className={cx(className, {
         hover: menuVisible,
         isDragging,
@@ -181,7 +184,7 @@ export default function GroupItem(props) {
           <React.Fragment>
             <FlexSpacer />
             <VerticalMiddle
-              className="operate"
+              className="operate stopPropagation"
               onClick={e => {
                 e.stopPropagation();
                 e.preventDefault();
@@ -221,7 +224,7 @@ export default function GroupItem(props) {
                   }
                 >
                   <MoreBtnCon>
-                    <i className="icon icon-more_horiz Font18 Gray_9e Hand"></i>
+                    <i className="icon icon-more_horiz Font18 Gray_9e Hand" />
                   </MoreBtnCon>
                 </Trigger>
               )}
@@ -229,18 +232,21 @@ export default function GroupItem(props) {
               <Tooltip
                 disableAnimation
                 popupPlacement="right"
-                text={<span>{isMarked ? _l('取消标星') : _l('标星，显示在首页')}</span>}
+                text={<span>{isMarked ? _l('取消标星') : _l('标星')}</span>}
               >
                 <i
-                  className={cx(`star icon icon-${isMarked ? 'task-star' : 'star_outline'} Font18 Gray_9e mLeft5`, {
-                    isMarked,
-                  })}
+                  className={cx(
+                    `star icon icon-${isMarked ? 'task-star' : 'star_outline'} Font18 Gray_9e mLeft5 stopPropagation`,
+                    {
+                      isMarked,
+                    },
+                  )}
                   onClick={() => onMark(id)}
-                ></i>
+                />
               </Tooltip>
             </VerticalMiddle>
             {itemType !== 'star' && count !== 0 && <span className="num Gray_9e">{count}</span>}
-            {itemType !== 'star' && isMarked && <i className={cx('visibleStar icon-task-star Font18  mLeft8')}></i>}
+            {itemType !== 'star' && isMarked && <i className={cx('visibleStar icon-task-star Font18  mLeft8')} />}
           </React.Fragment>
         )}
       </VerticalMiddle>

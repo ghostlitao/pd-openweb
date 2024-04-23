@@ -4,12 +4,14 @@ import { autobind } from 'core-decorators';
 import { LoadDiv, ScrollView } from 'ming-ui';
 import sheetAjax from 'src/api/worksheet';
 import publicWorksheetAjax from 'src/api/publicWorksheet';
+import ChildTableContext from '../ChildTable/ChildTableContext';
 import { TextAbsoluteCenter } from 'worksheet/components/StyledComps';
 import { getFilter } from 'worksheet/common/WorkSheetFilter/util';
 import ReacordItem from './RecordItem';
 import _, { times } from 'lodash';
 
 export default class RelateRecordList extends React.PureComponent {
+  static contextType = ChildTableContext;
   static propTypes = {
     from: PropTypes.number,
     viewId: PropTypes.string,
@@ -43,10 +45,17 @@ export default class RelateRecordList extends React.PureComponent {
   con = React.createRef();
 
   componentDidMount() {
-    const { control } = this.props;
+    const { control, parentWorksheetId } = this.props;
     if (control) {
-      (window.isPublicWorksheet ? publicWorksheetAjax : sheetAjax)
-        .getWorksheetInfo({ worksheetId: control.dataSource, getTemplate: true })
+      (window.isPublicWorksheet && !_.get(window, 'shareState.isPublicWorkflowRecord')
+        ? publicWorksheetAjax
+        : sheetAjax
+      )
+        .getWorksheetInfo({
+          worksheetId: control.dataSource,
+          getTemplate: true,
+          relationWorksheetId: parentWorksheetId,
+        })
         .then(data => {
           this.setState(
             {
@@ -125,6 +134,7 @@ export default class RelateRecordList extends React.PureComponent {
   loadRecord() {
     const {
       from,
+      isQuickFilter,
       control,
       formData,
       viewId,
@@ -133,9 +143,12 @@ export default class RelateRecordList extends React.PureComponent {
       parentWorksheetId,
       recordId,
       controlId,
+      searchControl,
       multiple,
       staticRecords,
+      fastSearchControlArgs,
     } = this.props;
+    const _this = this;
     if (!_.isEmpty(staticRecords)) {
       return;
     }
@@ -145,14 +158,14 @@ export default class RelateRecordList extends React.PureComponent {
       return;
     }
     let filterControls;
+    if (!_.isEmpty(_.get(worksheetInfo, 'template.controls'))) {
+      control.relationControls = worksheetInfo.template.controls;
+    }
     if (control && control.advancedSetting.filters) {
-      if (worksheetInfo && worksheetInfo.template) {
-        control.relationControls = worksheetInfo.template.controls;
-      }
       filterControls = getFilter({ control, formData });
     }
     // 存在不符合条件值的条件
-    if (filterControls === false) {
+    if (filterControls === false && !isQuickFilter) {
       this.setState({ error: 'notCorrectCondition', loading: false });
       return;
     }
@@ -164,15 +177,38 @@ export default class RelateRecordList extends React.PureComponent {
       worksheetId: dataSource,
       viewId,
       searchType: 1,
-      pageSize: 20,
+      pageSize: 50,
       pageIndex,
       status: 1,
       keyWords,
       isGetWorksheet: true,
       getType: 7,
-      filterControls,
+      filterControls: filterControls || [],
     };
-    if (parentWorksheetId && controlId) {
+    if (fastSearchControlArgs) {
+      delete args['keyWords'];
+      if (String(keyWords || '').trim()) {
+        args.fastFilters = [
+          {
+            spliceType: 1,
+            isGroup: true,
+            groupFilters: [
+              {
+                controlId: fastSearchControlArgs.controlId,
+                dataType: 2,
+                spliceType: 1,
+                filterType: fastSearchControlArgs.filterType,
+                dateRange: 0,
+                dateRangeType: 1,
+                isDynamicsource: false,
+                values: [keyWords],
+              },
+            ],
+          },
+        ];
+      }
+    }
+    if (parentWorksheetId && controlId && _.get(parentWorksheetId, 'length') === 24) {
       args.relationWorksheetId = parentWorksheetId;
       args.controlId = controlId;
     }
@@ -182,22 +218,36 @@ export default class RelateRecordList extends React.PureComponent {
     if (!window.isPublicWorksheet) {
       getFilterRowsPromise = sheetAjax.getFilterRows;
     } else {
-      if (window.recordShareLinkId) {
-        args.linkId = window.recordShareLinkId;
-      }
-      args.formId = window.publicWorksheetShareId;
+      args.shareId = window.publicWorksheetShareId;
       getFilterRowsPromise = publicWorksheetAjax.getRelationRows;
     }
     this.searchAjax = getFilterRowsPromise(args);
     this.searchAjax.then(res => {
       if (res.resultCode === 1) {
-        let newRecords = res.data.filter(row => row.rowid !== recordId);
+        let ignoreRowIds = [];
+        if (control.unique || control.uniqueInRecord) {
+          ignoreRowIds = (_.get(_this, 'context.rows') || [])
+            .map(r => _.get(safeParse(r[control.controlId], 'array'), '0.sid'))
+            .filter(_.identity);
+        }
+        let newRecords = records.concat(
+          res.data.filter(row => row.rowid !== recordId && !_.includes(ignoreRowIds, row.rowid)),
+        );
+        const needSort =
+          keyWords && pageIndex === 1 && _.get(control, 'advancedSetting.searchcontrol') && searchControl;
+        if (needSort && _.get(control, 'advancedSetting.searchtype') !== '1') {
+          newRecords = newRecords.sort((a, b) => (b[searchControl.controlId] === keyWords ? 1 : -1));
+        }
         this.setState({
-          records: records.concat(newRecords),
+          records: newRecords,
           loading: false,
           loadouted: res.data.length < 20,
           controls: res.template ? res.template.controls : [],
           worksheet: res.worksheet || {},
+          activeId:
+            needSort && newRecords[0] && newRecords[0][searchControl.controlId] === keyWords
+              ? newRecords[0].rowid
+              : undefined,
         });
       } else {
         this.setState({
@@ -238,9 +288,11 @@ export default class RelateRecordList extends React.PureComponent {
       control,
       coverCid,
       showControls,
+      searchControl,
       multiple,
       selectedIds,
       showCoverAndControls,
+      staticRecords,
       prefixRecords = [],
       onItemClick,
       allowNewRecord,
@@ -261,6 +313,7 @@ export default class RelateRecordList extends React.PureComponent {
         className="RelateRecordList flexColumn"
         ref={this.con}
         style={_.assign({}, style, isMobile ? { width: window.innerWidth } : {})}
+        onClick={e => e.stopPropagation()}
       >
         <div
           className="flexColumn"
@@ -273,7 +326,7 @@ export default class RelateRecordList extends React.PureComponent {
             <ScrollView
               className="flex"
               onScrollEnd={() => {
-                if (!loading && !loadouted) {
+                if (!loading && !loadouted && _.isEmpty(staticRecords)) {
                   this.loadNext();
                 }
               }}
@@ -298,6 +351,7 @@ export default class RelateRecordList extends React.PureComponent {
                   <ReacordItem
                     active={activeId === record.rowid}
                     multiple={multiple}
+                    titleIsBold={searchControl && keyWords && record[searchControl.controlId] === keyWords}
                     selected={_.find(selectedIds, fid => record.rowid === fid)}
                     showCoverAndControls={showCoverAndControls}
                     control={control}
@@ -322,18 +376,21 @@ export default class RelateRecordList extends React.PureComponent {
           </div>
         </div>
         <div style={{ borderTop: '1px solid #ddd' }} />
-        {allowNewRecord && allowAdd && !window.isPublicWorksheet && (!error || error === 'notCorrectCondition') && (
-          <div
-            className={'RelateRecordList-create ' + (activeId === 'newRecord' ? 'active' : '')}
-            onClick={e => {
-              e.stopPropagation();
-              this.setState({ activeId: undefined });
-              onNewRecord(e);
-            }}
-          >
-            <i className="icon icon-plus"></i> {worksheet.entityName || (control && control.sourceEntityName)}
-          </div>
-        )}
+        {allowNewRecord &&
+          allowAdd &&
+          !(_.get(window, 'shareState.isPublicFormPreview') || _.get(window, 'shareState.isPublicForm')) &&
+          (!error || error === 'notCorrectCondition') && (
+            <div
+              className={'RelateRecordList-create ' + (activeId === 'newRecord' ? 'active' : '')}
+              onClick={e => {
+                e.stopPropagation();
+                this.setState({ activeId: undefined });
+                onNewRecord(e);
+              }}
+            >
+              <i className="icon icon-plus"></i> {worksheet.entityName || (control && control.sourceEntityName)}
+            </div>
+          )}
       </div>
     );
   }

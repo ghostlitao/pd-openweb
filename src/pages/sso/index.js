@@ -1,10 +1,22 @@
-import { ajax, login, browserIsMobile, getRequest, checkLogin, isBefore, replenishRet } from 'src/util/sso';
+import {
+  ajax,
+  login,
+  browserIsMobile,
+  getRequest,
+  checkLogin,
+  isBefore,
+  replenishRet,
+  formatOtherParam,
+  addOtherParam,
+} from 'src/util/sso';
 import { setPssId } from 'src/util/pssId';
-import _ from 'lodash';
+import preall from 'src/common/preall';
 
-const { t, i, ret, url, code, p, pc_slide = '' } = getRequest();
+const { t, i, ret, url, code, p, pc_slide = '', ...otherParam } = getRequest();
 const isPcSlide = pc_slide.includes('true');
 const isMobile = browserIsMobile();
+const otherParamString = formatOtherParam(otherParam);
+const newRet = addOtherParam(ret, otherParamString);
 
 function start() {
   if (t == '-1') {
@@ -26,6 +38,7 @@ function start() {
         succees: result => {
           const { accountResult, sessionId } = result.data;
           if (accountResult === 1) {
+            preall({ type: 'function' });
             setPssId(sessionId);
             if (url) {
               location.href = decodeURIComponent(url);
@@ -33,7 +46,7 @@ function start() {
               location.href = isMobile ? `/mobile` : `/app`;
             }
           } else {
-            _alert('登录失败');
+            window.nativeAlert('登录失败');
             login();
           }
         },
@@ -42,8 +55,8 @@ function start() {
     }
   } else if (t == '1') {
     if (checkLogin()) {
-      if (ret) {
-        location.href = ret;
+      if (newRet) {
+        location.href = newRet;
       } else {
         location.href = isMobile ? `/mobile/app/${i}#hideTabBar` : `/app/${i}`;
       }
@@ -57,7 +70,7 @@ function start() {
         async: true,
         succees: result => {
           const { corpId, state } = result.data;
-          const redirect_uri = encodeURIComponent(`${location.origin}/sso/workweixin?ret=${ret || ''}&i=${i || ''}`);
+          const redirect_uri = encodeURIComponent(`${location.origin}/sso/workweixin?ret=${newRet || ''}&i=${i || ''}`);
           location.href = `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${corpId}&redirect_uri=${redirect_uri}&state=${state}&response_type=code&scope=snsapi_base#wechat_redirect`;
         },
         error: login,
@@ -68,23 +81,23 @@ function start() {
 
     if (checkLogin()) {
       // expDate && checkLogin() && isBefore(expDate)
-      if (ret) {
-        location.href = `/${replenishRet(ret, pc_slide)}`;
+      if (newRet) {
+        location.href = `/${replenishRet(newRet, pc_slide)}`;
       } else {
         if (i) {
           location.href = isMobile || isPcSlide ? `/mobile/app/${i}#hideTabBar` : `/app/${i}`;
         } else {
-          location.href = isMobile || isPcSlide ? `/mobile/appHome` : `/app/my`;
+          location.href = isMobile || isPcSlide ? `/mobile/dashboard` : `/dashboard`;
         }
       }
     } else {
       const hosts = location.host.split('.');
       const projectId = p || hosts[0];
       function onFail(err) {
-        _alert(JSON.stringify(err));
+        window.nativeAlert(JSON.stringify(err));
       }
       // if (!dd.ios && !dd.android && !dd.pc) {
-      //   _alert('请在钉钉客户端内打开');
+      //   window.nativeAlert('请在钉钉客户端内打开');
       //   location.href = 'https://www.mingdao.com';
       // }
 
@@ -98,14 +111,14 @@ function start() {
         succees: result => {
           const { corpId, state, clientWorkingPattern } = result.data;
           if (corpId) {
-            dd.ready(function () {
+            dd.ready(function() {
               dd.runtime.permission.requestAuthCode({
                 corpId: corpId,
-                onSuccess: function (result) {
+                onSuccess: function(result) {
                   const { code } = result;
-                  const dingdingLoginUrl = `/sso/dingding?state=${state}&ret=${encodeURIComponent(ret || '')}&i=${
-                    i || ''
-                  }&code=${code}&pc_slide=${pc_slide}`;
+                  const dingdingLoginUrl = `/sso/dingding?state=${state}&ret=${encodeURIComponent(
+                    newRet || '',
+                  )}&i=${i || ''}&code=${code}&pc_slide=${pc_slide}`;
                   if (dd.pc && !isPcSlide) {
                     if (clientWorkingPattern === 1) {
                       document.body.innerText = '已在默认浏览器打开';
@@ -120,7 +133,7 @@ function start() {
                 onFail: onFail,
               });
             });
-            dd.error(function (error) {
+            dd.error(function(error) {
               onFail(error);
             });
           }

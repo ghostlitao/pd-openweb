@@ -5,8 +5,8 @@ import { DatePicker } from 'antd';
 import zhCN from 'antd/es/date-picker/locale/zh_CN';
 import moment from 'moment';
 import dialogSelectUser from 'src/components/dialogSelectUser/dialogSelectUser';
-import UserHead from 'src/pages/feed/components/userHead';
-import UserName from 'src/pages/feed/components/userName';
+import UserHead from 'src/components/userHead';
+import UserName from 'src/components/userName';
 import delegationApi from 'src/pages/workflow/api/delegation';
 import _ from 'lodash';
 
@@ -86,10 +86,11 @@ export default function TodoEntrustModal(props) {
   const disabledDateTime = date => {
     const hours = moment().hours();
     const minutes = moment().minutes();
-    if (date && moment(date).isSame(moment(), 'd')) {
+    if (!date || moment(date).isSame(moment(), 'd')) {
       return {
         disabledHours: () => Array.from(Array(hours), (_, k) => k),
-        disabledMinutes: () => (moment(date).isSame(moment(), 'h') ? Array.from(Array(minutes), (_, k) => k) : []),
+        disabledMinutes: () =>
+          !date || moment(date).isSame(moment(), 'h') ? Array.from(Array(minutes), (_, k) => k) : [],
       };
     }
     return {
@@ -157,7 +158,7 @@ export default function TodoEntrustModal(props) {
 
         <FormItem>
           <span className="bold">{_l('组织')}</span>
-          <span className="Red bold">{_l(' *')}</span>
+          <span className="Red bold"> *</span>
           <div>
             <Dropdown
               className="mTop10 w100 Font13"
@@ -172,7 +173,7 @@ export default function TodoEntrustModal(props) {
 
         <FormItem>
           <span className="bold">{_l('委托给')}</span>
-          <span className="Red bold">{_l(' *')}</span>
+          <span className="Red bold"> *</span>
           <div className="flexRow mTop10">
             {formData.trustee && (
               <UserItemWrapper>
@@ -182,7 +183,6 @@ export default function TodoEntrustModal(props) {
                     userHead: formData.trustee.avatar,
                     accountId: formData.trustee.accountId,
                   }}
-                  lazy={'false'}
                   size={26}
                 />
                 <UserName
@@ -207,7 +207,7 @@ export default function TodoEntrustModal(props) {
               <div className="Font13 mBottom5">{_l('开始')}</div>
               <DatePicker
                 style={{ width: '100%', borderRadius: '3px' }}
-                placeholder="此刻"
+                placeholder={_l('此刻')}
                 showTime
                 disabledDate={date => date < moment().subtract(1, 'd')}
                 disabledTime={disabledDateTime}
@@ -221,10 +221,11 @@ export default function TodoEntrustModal(props) {
             <div className="mTop10 dateItem">
               <div className="Font13 mBottom5">
                 {_l('结束')}
-                <span className="Red bold">{_l(' *')}</span>
+                <span className="Red bold"> *</span>
               </div>
               <DatePicker
                 style={{ width: '100%', borderRadius: '3px' }}
+                placeholder={_l('请选择日期')}
                 showTime
                 disabledDate={date => date < moment().subtract(1, 'd')}
                 disabledTime={disabledDateTime}

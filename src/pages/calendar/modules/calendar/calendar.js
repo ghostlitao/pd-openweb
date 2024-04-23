@@ -6,7 +6,7 @@ import calendarEdit from '../calendarDetail';
 import afterRefreshOp from '../calendarDetail/lib/afterRefreshOp';
 import recurCalendarUpdate from '../calendarDetail/lib/recurCalendarUpdateDialog';
 import './calendar.less';
-import 'src/components/createCalendar/createCalendar';
+import createCalendar from 'src/components/createCalendar/createCalendar';
 import listHtml from './tpl/list.html';
 import calendarAjax from 'src/api/calendar';
 import moment from 'moment';
@@ -94,7 +94,7 @@ Calendar.Method = {
       eventClick: function (events, jsEvent, view) {
         // 点击 日程时 事件
         if (events.isTask) {
-          $('#calendarEdit,.showActiveTitleMessage').remove();
+          $('.calendarEdit,.showActiveTitleMessage').remove();
           $('#calendar').trigger('openTask', events.eventID);
         } else {
           Calendar.settings.recurTime = events.recurTime;
@@ -198,7 +198,7 @@ Calendar.Method = {
 
         if (multiSelect) {
           // 多选创建日程
-          $.CreateCalendar(settings);
+          createCalendar(settings);
         }
       },
       eventMouseover: function (event, jsEvent, view) {

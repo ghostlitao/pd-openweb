@@ -4,6 +4,7 @@ import Trigger from 'rc-trigger';
 import { Menu, MenuItem, Icon, Dialog } from 'ming-ui';
 import styled from 'styled-components';
 import worksheetAjax from 'src/api/worksheet';
+import favoriteApi from 'src/api/favorite';
 import { copyRow } from 'worksheet/controllers/record';
 import { RECORD_INFO_FROM } from 'worksheet/constants/enum';
 import {
@@ -15,9 +16,11 @@ import {
 } from 'worksheet/common/recordInfo/crtl';
 import CustomButtons from 'worksheet/common/recordInfo/RecordForm/CustomButtons';
 import PrintList from 'worksheet/common/recordInfo/RecordForm/PrintList';
+import { replaceBtnsTranslateInfo } from 'worksheet/util';
 import { isOpenPermit } from 'src/pages/FormSet/util.js';
 import { permitList } from 'src/pages/FormSet/config.js';
 import _ from 'lodash';
+import { getCurrentProject } from 'src/util';
 
 // TODO 完善菜单关闭交互
 
@@ -109,11 +112,11 @@ export default function RecordOperate(props) {
     action = ['click'],
     isRelateRecordTable,
     allowAdd,
+    allowRecreate,
     popupAlign,
     shows = [],
     showHr = true,
     maxHeight,
-    disableLoadCustomButtons,
     children,
     preMenuItems = [],
     popupContainer,
@@ -130,6 +133,8 @@ export default function RecordOperate(props) {
     allowDelete,
     allowCopy,
     formdata,
+    disableCustomButtons,
+    defaultCustomButtons,
     sheetSwitchPermit = [],
     reloadRecord = () => {},
     onDelete,
@@ -140,27 +145,32 @@ export default function RecordOperate(props) {
     onRemoveRelation = () => {},
     onPopupVisibleChange = () => {},
     hideRecordInfo = () => {},
+    onRecreate = () => {},
+    hideFav,
   } = props;
-  const showShare =
-    _.includes(shows, 'share') &&
-    isOpenPermit(permitList.recordShareSwitch, sheetSwitchPermit, viewId) &&
-    !md.global.Account.isPortal;
+  const showShare = _.includes(shows, 'share') && !md.global.Account.isPortal;
   const showCopy =
-    _.includes(shows, 'copy') && allowCopy && isOpenPermit(permitList.recordCopySwitch, sheetSwitchPermit, viewId);
+    _.includes(shows, 'copy') &&
+    allowCopy &&
+    (isOpenPermit(permitList.recordCopySwitch, sheetSwitchPermit, viewId) || isSubList);
+  const showRecreate =
+    _.includes(shows, 'recreate') &&
+    allowRecreate &&
+    (isOpenPermit(permitList.recordRecreateSwitch, sheetSwitchPermit, viewId) || isSubList);
   const showPrint = _.includes(shows, 'print');
   const showTask = _.includes(shows, 'task') && !md.global.Account.isPortal;
   const showRemoveRelation = _.includes(shows, 'removeRelation');
   const showEditForm = _.includes(shows, 'editform') && isCharge;
   const showOpenInNew = _.includes(shows, 'openinnew');
-  let { defaultCustomButtons = [] } = props;
-  if (_.isFunction(defaultCustomButtons)) {
-    defaultCustomButtons = defaultCustomButtons();
-  }
   const customButtonActive = useRef();
   const [customButtons, setCustomButtons] = useState([]);
   const [customButtonLoading, setCustomButtonLoading] = useState();
   const [popupVisible, setPopupVisible] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(false);
   const DeleteItemWrap = isRelateRecordTable ? MenuItemWrap : RedMenuItemWrap;
+  const isExternal = _.isEmpty(getCurrentProject(projectId));
+  const canFav =
+    !hideFav && !window.shareState.shareId && !md.global.Account.isPortal && !isExternal && _.includes(shows, 'fav');
   function changePopupVisible(value) {
     if (customButtonActive.current) {
       return;
@@ -169,6 +179,7 @@ export default function RecordOperate(props) {
   }
   async function loadButtons() {
     try {
+      setCustomButtons([]);
       setCustomButtonLoading(true);
       const newButtons = await worksheetAjax.getWorksheetBtns({
         appId,
@@ -177,16 +188,56 @@ export default function RecordOperate(props) {
         rowId: recordId,
       });
       setCustomButtonLoading(false);
-      setCustomButtons(newButtons.filter(b => !b.disabled));
+      setCustomButtons(replaceBtnsTranslateInfo(appId, newButtons).filter(b => !b.disabled));
     } catch (err) {
       alert(_l('加载自定义按钮失败'), 3);
     }
   }
+  const checkFavoriteByRowId = () => {
+    favoriteApi.checkFavoriteByRowId({ rowId: recordId, worksheetId, viewId }).then(res => {
+      setIsFavorite(res);
+    });
+  };
   useEffect(() => {
-    if (popupVisible && !disableLoadCustomButtons && !customButtons.length) {
+    if (popupVisible && !defaultCustomButtons && !disableCustomButtons) {
       loadButtons();
     }
+    if (popupVisible && canFav) {
+      checkFavoriteByRowId();
+    }
   }, [popupVisible]);
+  const handleCollectRecord = () => {
+    if (isFavorite) {
+      // 取消收藏
+      favoriteApi
+        .removeFavorite({
+          projectId,
+          rowId: recordId,
+          worksheetId,
+          viewId,
+        })
+        .then(res => {
+          if (res) {
+            alert(_l('已取消收藏'));
+            setIsFavorite(false);
+          }
+        });
+    } else {
+      // 添加收藏
+      favoriteApi
+        .addFavorite({
+          worksheetId,
+          rowId: recordId,
+          viewId,
+        })
+        .then(res => {
+          if (res) {
+            alert(_l('收藏成功'));
+            setIsFavorite(true);
+          }
+        });
+    }
+  };
   return (
     <Trigger
       action={action}
@@ -216,7 +267,13 @@ export default function RecordOperate(props) {
       popup={
         <MenuWrap
           style={{ maxHeight: `${maxHeight || 508}px` }}
-          onClickAwayExceptions={['.customButtonConfirm', '.verifyPasswordConfirm', '.DropdownPrintTrigger', '#t_mask']}
+          onClickAwayExceptions={[
+            '.customButtonConfirm',
+            '.verifyPasswordConfirm',
+            '.DropdownPrintTrigger',
+            '#t_mask',
+            '.templateListSelect',
+          ]}
           onClickAway={() => changePopupVisible(false)}
         >
           {showRemoveRelation && (
@@ -263,22 +320,42 @@ export default function RecordOperate(props) {
             !showOpenInNew &&
             !allowDelete &&
             !showEditForm && <Empty>{_l('无可用的操作')}</Empty>}
-          {customButtonLoading && (!props.defaultCustomButtons || !!props.defaultCustomButtons.length) && (
+          {customButtonLoading && (!defaultCustomButtons || !!defaultCustomButtons.length) && (
             <Loading>
               <i className="icon icon-loading_button"></i>
             </Loading>
           )}
-          {!!(disableLoadCustomButtons ? defaultCustomButtons : customButtons).length && (
-            <CustomButtons
-              type="menu"
-              {...{ projectId, appId, viewId, worksheetId, recordId }}
-              buttons={disableLoadCustomButtons ? defaultCustomButtons : customButtons}
-              loadBtns={loadButtons}
-              triggerCallback={() => changePopupVisible(false)}
-              onUpdate={onUpdate}
-              reloadRecord={reloadRecord}
-              setCustomButtonActive={v => (customButtonActive.current = v)}
-            />
+          {!!(defaultCustomButtons || customButtons).length && (
+            <React.Fragment>
+              <CustomButtons
+                type="menu"
+                {...{ projectId, appId, viewId, worksheetId, recordId, isCharge }}
+                buttons={defaultCustomButtons || customButtons}
+                loadBtns={loadButtons}
+                triggerCallback={() => changePopupVisible(false)}
+                onUpdate={onUpdate}
+                reloadRecord={reloadRecord}
+                setCustomButtonActive={v => (customButtonActive.current = v)}
+              />
+              <Hr />
+            </React.Fragment>
+          )}
+          {canFav && (
+            <MenuItemWrap
+              className="printItem"
+              icon={
+                <Icon
+                  className="Font17 mLeft5"
+                  icon={!isFavorite ? 'star_outline' : 'star'}
+                  style={{ color: isFavorite ? '#ffc402' : '#9e9e9e' }}
+                />
+              }
+              onClick={() => {
+                handleCollectRecord();
+              }}
+            >
+              {isFavorite ? _l('取消收藏') : _l('收藏记录')}
+            </MenuItemWrap>
           )}
           {showShare && (
             <MenuItemWrap
@@ -295,6 +372,9 @@ export default function RecordOperate(props) {
                   worksheetId,
                   viewId,
                   recordId,
+                  hidePublicShare: !(
+                    isOpenPermit(permitList.recordShareSwitch, sheetSwitchPermit, viewId) && !md.global.Account.isPortal
+                  ),
                 });
                 changePopupVisible(false);
               }}
@@ -335,6 +415,22 @@ export default function RecordOperate(props) {
               }}
             >
               {_l('复制%02003')}
+            </MenuItemWrap>
+          )}
+          {showRecreate && (
+            <MenuItemWrap
+              className="printItem"
+              icon={<Icon icon="copy_all" className="Font17 mLeft5" />}
+              onClick={() => {
+                if (window.isPublicApp) {
+                  alert(_l('预览模式下，不能操作'), 3);
+                  return;
+                }
+                changePopupVisible(false);
+                onRecreate();
+              }}
+            >
+              {_l('重新创建')}
             </MenuItemWrap>
           )}
           {showPrint && (
@@ -379,7 +475,7 @@ export default function RecordOperate(props) {
               {_l('新页面打开%02001')}
             </MenuItemWrap>
           )}
-          {allowDelete && (!isRelateRecordTable || allowAdd) && from !== RECORD_INFO_FROM.WORKFLOW && (
+          {allowDelete && from !== RECORD_INFO_FROM.WORKFLOW && (
             <DeleteItemWrap
               className="deleteItem"
               icon={<Icon icon="task-new-delete" className="Font17 mLeft5" />}
@@ -410,11 +506,11 @@ export default function RecordOperate(props) {
                 if (showRemoveRelation) {
                   Dialog.confirm({
                     onlyClose: true,
-                    title: <DangerConfirmTitle>{_l('注意：此操作将彻底删除原始记录')}</DangerConfirmTitle>,
+                    title: <DangerConfirmTitle>{_l('注意：此操作将删除原始记录')}</DangerConfirmTitle>,
                     description: _l('如果只需要取消与当前记录的关联关系，仍保留原始记录。可以选择仅取消关联关系'),
                     buttonType: 'danger',
                     cancelType: 'ghostgray',
-                    okText: _l('彻底删除记录'),
+                    okText: _l('删除记录'),
                     cancelText: _l('仅取消关联关系'),
                     onOk: deleteRow,
                     onCancel: () => onRemoveRelation({ confirm: false }),
@@ -465,7 +561,6 @@ RecordOperate.propTypes = {
   showHr: PropTypes.bool,
   shows: PropTypes.arrayOf(PropTypes.string),
   maxHeight: PropTypes.number,
-  disableLoadCustomButtons: PropTypes.bool,
   children: PropTypes.element,
   preMenuItems: PropTypes.arrayOf(PropTypes.shape({})),
   popupContainer: PropTypes.element,
@@ -481,7 +576,6 @@ RecordOperate.propTypes = {
   instanceId: PropTypes.string,
   formdata: PropTypes.arrayOf(PropTypes.shape({})),
   /** ********** */
-  defaultCustomButtons: PropTypes.arrayOf(PropTypes.shape({})),
   sheetSwitchPermit: PropTypes.arrayOf(PropTypes.shape({})),
   onDelete: PropTypes.func,
   onDeleteSuccess: PropTypes.func,

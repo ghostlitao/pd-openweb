@@ -1,26 +1,12 @@
 import _ from 'lodash';
 import homeAppAjax from 'src/api/homeApp';
-
-export const getAppList = () => dispatch => {
-  dispatch({
-    type: 'MOBILE_FETCHHOMELIST_START',
-  });
-  Promise.all([homeAppAjax.getAllHomeApp().then()]).then(res => {
-    dispatch({
-      type: 'UPDATE_APPHOMELIST',
-      data: res,
-    });
-    dispatch({
-      type: 'MOBILE_FETCHHOMELIST_SUCCESS',
-    });
-  });
-};
+import favoriteAjax from 'src/api/favorite';
 
 export const getMyApp = projectId => dispatch => {
   dispatch({
     type: 'MOBILE_FETCHHOMELIST_START',
   });
-  homeAppAjax.getMyApp({ projectId }).then(res => {
+  homeAppAjax.getMyApp({ projectId, containsLinks: true }).then(res => {
     const { markedGroupIds = [], personalGroups = [], projectGroups = [], apps = [] } = res;
     let markedGroup = markedGroupIds
       .map(id => _.find([...personalGroups, ...projectGroups], { id }))
@@ -31,6 +17,10 @@ export const getMyApp = projectId => dispatch => {
       }));
     dispatch({
       type: 'UPDATE_MYAPPLIST',
+      data: { ...res, markedGroup },
+    });
+    dispatch({
+      type: 'PLATE_FORM_DATA',
       data: { ...res, markedGroup },
     });
     dispatch({
@@ -85,3 +75,43 @@ export const markedGroup =
       }
     });
   };
+
+export const getHomePlatformSetting = projectId => dispatch => {
+  homeAppAjax.getHomePlatformSetting({ projectId }).then(res => {
+    dispatch({
+      type: 'PLATE_FORM_SETTING',
+      data: res,
+    });
+  });
+};
+export const myPlatform = projectId => dispatch => {
+  dispatch({
+    type: 'MOBILE_FETCHHOMELIST_START',
+  });
+  homeAppAjax.myPlatform({ projectId, containsLinks: true }).then(res => {
+    const { markedGroupIds = [], personalGroups = [], projectGroups = [], apps = [] } = res;
+    let markedGroup = markedGroupIds
+      .map(id => _.find([...personalGroups, ...projectGroups], { id }))
+      .filter(_.identity)
+      .map(it => ({
+        apps: apps.filter(v => _.includes(v.groupIds, it.id)),
+        ...it,
+      }));
+    dispatch({
+      type: 'MOBILE_FETCHHOMELIST_SUCCESS',
+    });
+    dispatch({
+      type: 'PLATE_FORM_DATA',
+      data: { ...res, markedGroup },
+    });
+  });
+};
+
+export const getAllFavorites = projectId => (dispatch, getState) => {
+  favoriteAjax.getAllFavorites({ projectId, isRefresh: 1 }).then(res => {
+    dispatch({
+      type: 'COLLECT_RECORDS',
+      data: res,
+    });
+  });
+};

@@ -14,11 +14,16 @@ import CustomPage from 'mobile/CustomPage';
 import './index.less';
 import SvgIcon from 'src/components/SvgIcon';
 import FixedPage from './FixedPage';
+import UpgradeContent from 'src/components/UpgradeContent';
 import PortalUserSet from 'src/pages/PageHeader/components/PortalUserSet/index.jsx';
+import DebugInfo from '../components/DebugInfo';
 import WorksheetUnNormal from 'mobile/RecordList/State';
 import { canEditApp } from 'src/pages/worksheet/redux/actions/util';
+import { transferValue } from 'src/pages/widgetConfig/widgetSetting/components/DynamicDefaultValue/util';
+import { getEmbedValue } from 'src/components/newCustomFields/tools/utils.js';
 import MoreAction from './MoreAction';
 import _ from 'lodash';
+import { addBehaviorLog, getTranslateInfo } from 'src/util';
 const Item = List.Item;
 let modal = null;
 
@@ -33,6 +38,7 @@ class App extends Component {
       selectedTab: match.params.worksheetId || 'more',
       expandGroupKeys: [],
       viewHideNavi: false,
+      level2ExpandKeys: [],
     };
     if (isHideTabBar) {
       sessionStorage.setItem('hideTabBar', true);
@@ -59,9 +65,26 @@ class App extends Component {
       }
     }
     if (!_.isEqual(this.props.appDetail, nextProps.appDetail)) {
-      const { appSection = [] } = _.get(nextProps, 'appDetail') || {};
+      const { appSection = [], detail = {} } = _.get(nextProps, 'appDetail') || {};
       const { viewHideNavi } = _.get(nextProps, 'appDetail.detail') || {};
-      this.setState({ expandGroupKeys: appSection.map(item => item.appSectionId), viewHideNavi });
+      const appExpandGroupInfo =
+        (localStorage.getItem(`appExpandGroupInfo-${detail.id}`) &&
+          JSON.parse(localStorage.getItem(`appExpandGroupInfo-${detail.id}`))) ||
+        {};
+
+      const expandGroupKeys = appExpandGroupInfo.expandGroupKeys
+        ? appExpandGroupInfo.expandGroupKeys
+        : detail.appNaviDisplayType === 1
+        ? []
+        : detail.appNaviDisplayType === 2
+        ? [appSection[0].appSectionId]
+        : appSection.map(item => item.appSectionId);
+
+      this.setState({
+        expandGroupKeys,
+        viewHideNavi,
+        level2ExpandKeys: appExpandGroupInfo.level2ExpandKeys || [],
+      });
     }
   }
 
@@ -86,12 +109,12 @@ class App extends Component {
     this.props.history.push(url);
   }
 
-  detectionUrl = ({ appRoleType, isLock, appNaviStyle, appSectionDetail }) => {
+  detectionUrl = ({ permissionType, isLock, appNaviStyle, sections }) => {
     const { params } = this.props.match;
     if (appNaviStyle === 2 && !params.worksheetId && !sessionStorage.getItem('detectionUrl')) {
-      const isCharge = canEditApp(appRoleType, isLock);
-      const { appSectionId } = appSectionDetail[0];
-      const workSheetInfo = this.getWorksheetList(appSectionDetail);
+      const isCharge = canEditApp(permissionType, isLock);
+      const { appSectionId } = sections[0];
+      const workSheetInfo = this.getWorksheetList(sections);
       const { workSheetId } = isCharge
         ? workSheetInfo[0]
         : workSheetInfo.filter(o => o.status === 1 && !o.navigateHide)[0];
@@ -100,6 +123,7 @@ class App extends Component {
   };
 
   handleOpenSheet = (data, item) => {
+    addBehaviorLog(item.type == 0 ? 'worksheet' : 'customPage', item.workSheetId); // 埋点
     const { params } = this.props.match;
     localStorage.removeItem('currentNavWorksheetId');
     if (item.type === 0) {
@@ -110,7 +134,32 @@ class App extends Component {
       );
     }
     if (item.type === 1) {
-      this.navigateTo(`/mobile/customPage/${params.appId}/${data.appSectionId}/${item.workSheetId}`);
+      const { urlTemplate, configuration = {} } = item;
+      if (urlTemplate && configuration.openType == '2') {
+        const { detail } = this.props.appDetail;
+        const dataSource = transferValue(urlTemplate);
+        const urlList = [];
+        dataSource.map(o => {
+          if (!!o.staticValue) {
+            urlList.push(o.staticValue);
+          } else {
+            urlList.push(
+              getEmbedValue(
+                {
+                  projectId: detail.projectId,
+                  appId: params.appId,
+                  groupId: params.appSectionId,
+                  worksheetId: params.workSheetId,
+                },
+                o.cid,
+              ),
+            );
+          }
+        });
+        window.open(urlList.join(''));
+      } else {
+        this.navigateTo(`/mobile/customPage/${params.appId}/${data.appSectionId}/${item.workSheetId}`);
+      }
     }
   };
 
@@ -126,9 +175,11 @@ class App extends Component {
     const { appDetail } = this.props;
     const { detail } = appDetail;
     const { childSections = [], workSheetInfo = [] } = data;
+    const isCharge = canEditApp(detail.permissionType, detail.isLock);
 
     return workSheetInfo
       .filter(item => (viewHideNavi ? true : item.status !== 2))
+      .filter(it => (isCharge ? true : it.status === 1 && !it.navigateHide))
       .map(item => {
         if (item.type !== 2) {
           return (
@@ -145,15 +196,33 @@ class App extends Component {
                 this.handleOpenSheet(data, item);
               }}
             >
-              <span className="Font15 Gray LineHeight40">{item.workSheetName}</span>
+              <span className="Font15 Gray LineHeight40">{getTranslateInfo(detail.id, item.workSheetId).name || item.workSheetName}</span>
             </Item>
           );
         }
         const groupItem = _.assign(item, _.find(childSections, v => v.appSectionId === item.workSheetId) || {});
+        const appExpandGroupInfo =
+          (localStorage.getItem(`appExpandGroupInfo-${detail.id}`) &&
+            JSON.parse(localStorage.getItem(`appExpandGroupInfo-${detail.id}`))) ||
+          {};
 
         return (
-          <Accordion defaultActiveKey={[]}>
-            <Accordion.Panel header={this.renderHeader(groupItem, 'level2')} key={item.worksheetId}>
+          <Accordion
+            activeKey={this.state.level2ExpandKeys}
+            onChange={key => {
+              safeLocalStorageSetItem(
+                `appExpandGroupInfo-${detail.id}`,
+                JSON.stringify({
+                  ...appExpandGroupInfo,
+                  level2ExpandKeys: key,
+                  appNaviDisplayType: detail.appNaviDisplayType,
+                  appNaviStyle: detail.appNaviStyle,
+                }),
+              );
+              this.setState({ level2ExpandKeys: key });
+            }}
+          >
+            <Accordion.Panel header={this.renderHeader(groupItem, 'level2')} key={groupItem.appSectionId}>
               {this.renderList(groupItem, 'level2')}
             </Accordion.Panel>
           </Accordion>
@@ -167,6 +236,7 @@ class App extends Component {
     const { detail } = appDetail;
     const { childSections = [], workSheetInfo = [] } = data;
     const otherData = workSheetInfo.filter(it => it.type !== 2) || [];
+    const isCharge = canEditApp(detail.permissionType, detail.isLock);
 
     let groupData = workSheetInfo
       .filter(item => item.type === 2)
@@ -178,6 +248,7 @@ class App extends Component {
       type: 2,
       workSheetInfo: otherData,
     });
+    const screenWidth = $(window).width();
 
     return groupData
       .filter(item => (viewHideNavi ? true : item.status !== 2))
@@ -189,8 +260,15 @@ class App extends Component {
             <Flex className="sudokuWrapper" wrap="wrap">
               {v.workSheetInfo
                 .filter(v => (viewHideNavi ? true : v.status !== 2))
+                .filter(it => (isCharge ? true : it.status === 1 && !it.navigateHide))
                 .map(v => (
-                  <div key={v.workSheetId} className="sudokuItemWrapper">
+                  <div
+                    key={v.workSheetId}
+                    className={cx('sudokuItemWrapper', {
+                      sudokuWrapper16: detail.gridDisplayMode === 1 && screenWidth <= 600,
+                      sudokuItemWrapperAutoWidth: screenWidth > 600,
+                    })}
+                  >
                     <div
                       className="sudokuItem flexColumn valignWrapper"
                       onClick={() => {
@@ -198,8 +276,13 @@ class App extends Component {
                       }}
                     >
                       {v.status === 2 && <Icon icon="public-folder-hidden" />}
-                      <SvgIcon addClassName="mTop20" url={v.iconUrl} fill={detail.iconColor} size={30} />
-                      <div className="name">{v.workSheetName}</div>
+                      <SvgIcon
+                        addClassName={detail.gridDisplayMode === 1 && screenWidth <= 600 ? 'mTop16' : 'mTop20'}
+                        url={v.iconUrl}
+                        fill={detail.iconColor}
+                        size={detail.gridDisplayMode === 1 && screenWidth <= 600 ? 26 : 30}
+                      />
+                      <div className="name">{getTranslateInfo(detail.id, v.workSheetId).name || v.workSheetName}</div>
                     </div>
                   </div>
                 ))}
@@ -211,12 +294,13 @@ class App extends Component {
 
   renderHeader(data, level) {
     const { appDetail } = this.props;
-    const { appNaviStyle } = appDetail.detail;
+    const { id, appNaviStyle } = appDetail.detail;
     const { expandGroupKeys = [] } = this.state;
+    const name = getTranslateInfo(id, data.appSectionId).name || data.name;
     if (level == 'level1') {
       return (
         <div className="accordionHeaderWrap appSectionHeader">
-          <div className="Bold flex ellipsis">{data.name}</div>
+          <div className="Bold flex ellipsis">{name}</div>
           {_.includes(expandGroupKeys, data.appSectionId) ? (
             <Icon icon="minus" className="appSectionIcon" />
           ) : (
@@ -226,13 +310,13 @@ class App extends Component {
       );
     }
     if (appNaviStyle === 1) {
-      return <div className={cx('Gray_75 Font14 pLeft15 ellipsis mTop8', { mBottom12: data.name })}>{data.name}</div>;
+      return <div className={cx('Gray_75 Font14 pLeft15 ellipsis mTop8', { mBottom12: name })}>{name}</div>;
     }
     return (
       <div className="accordionHeaderWrap">
         <div className="flexRow mLeft5">
           <SvgIcon url={data.iconUrl} fill={data.iconColor} size={22} className="mRight12" />
-          <div className="flex ellipsis Font15 Bold">{data.name}</div>
+          <div className="flex ellipsis Font15 Bold">{name}</div>
         </div>
         <Icon icon="expand_more" className="Gray_75" />
       </div>
@@ -267,7 +351,7 @@ class App extends Component {
             }}
           >
             <Icon className="Font17" icon="knowledge_file" />
-            <div className="mLeft5 Font14">{_l('流程事项')}</div>
+            <div className="mLeft5 Font14">{_l('流程待办')}</div>
             {!!processCount && (
               <div className="flexRow valignWrapper processCount">{processCount > 99 ? '99+' : processCount}</div>
             )}
@@ -369,9 +453,12 @@ class App extends Component {
   };
 
   renderContent() {
-    const { appDetail, match } = this.props;
+    const { appDetail, match, debugRoles = [] } = this.props;
+
     let { appName, detail, appSection, status } = appDetail;
-    const { fixed, webMobileDisplay, fixAccount, fixRemark, permissionType } = detail;
+    const { fixed, webMobileDisplay, fixAccount, fixRemark, permissionType, appNaviDisplayType, appStatus, debugRole = {} } =
+      detail;
+    const isUpgrade = appStatus === 4;
     const isAuthorityApp = permissionType >= APP_ROLE_TYPE.ADMIN_ROLE;
     appSection = isAuthorityApp
       ? appSection
@@ -383,10 +470,24 @@ class App extends Component {
             };
           })
           .filter(o => o.workSheetInfo && o.workSheetInfo.length > 0);
-    const { isHideTabBar, appMoreActionVisible, viewHideNavi } = this.state;
+    const { isHideTabBar, appMoreActionVisible, viewHideNavi, expandGroupKeys } = this.state;
     const { params } = match;
-
+    const appExpandGroupInfo =
+      (localStorage.getItem(`appExpandGroupInfo-${detail.id}`) &&
+        JSON.parse(localStorage.getItem(`appExpandGroupInfo-${detail.id}`))) ||
+      {};
+    const accordionExtraParam =
+      appNaviDisplayType === 2
+        ? { activeKey: expandGroupKeys }
+        : {
+            defaultActiveKey: appExpandGroupInfo.expandGroupKeys
+              ? appExpandGroupInfo.expandGroupKeys
+              : appNaviDisplayType === 1 && (appSection.length > 1 || appSection[0].name)
+              ? []
+              : appSection.map(item => item.appSectionId),
+          };
     const isEmptyAppSection = appSection.length === 1 && !appSection[0].name;
+    const hasDebugRoles = (debugRole.canDebug) && !_.isEmpty(debugRoles);
     if (!detail || detail.length <= 0) {
       return <AppPermissionsInfo appStatus={2} appId={params.appId} />;
     } else if (status === 4) {
@@ -403,10 +504,14 @@ class App extends Component {
             }
           >
             {this.renderAppHeader()}
-            {(fixed && !isAuthorityApp) || webMobileDisplay ? (
-              <FixedPage fixAccount={fixAccount} fixRemark={fixRemark} isNoPublish={webMobileDisplay} />
+            {isUpgrade || (fixed && !isAuthorityApp) || webMobileDisplay ? (
+              isUpgrade ? (
+                <UpgradeContent appPkg={detail} isMobile={true} />
+              ) : (
+                <FixedPage fixAccount={fixAccount} fixRemark={fixRemark} isNoPublish={webMobileDisplay} />
+              )
             ) : (
-              <div className="appSectionCon flex">
+              <div className={cx('appSectionCon flex', { pBottom40: hasDebugRoles })}>
                 {status === 5 ||
                 (appSection.length <= 1 && (appSection.length <= 0 || appSection[0].workSheetInfo.length <= 0)) ? (
                   // 应用无权限||成员身份 且 无任何数据
@@ -420,10 +525,22 @@ class App extends Component {
                   <Fragment>
                     <Accordion
                       className={cx({ emptyAppSection: isEmptyAppSection })}
-                      defaultActiveKey={appSection.map(item => item.appSectionId)}
                       onChange={key => {
+                        if (appNaviDisplayType === 2) {
+                          key = key.filter(v => !_.includes(expandGroupKeys, v));
+                        }
+                        safeLocalStorageSetItem(
+                          `appExpandGroupInfo-${detail.id}`,
+                          JSON.stringify({
+                            expandGroupKeys: key,
+                            appNaviDisplayType: detail.appNaviDisplayType,
+                            appNaviStyle: detail.appNaviStyle,
+                            level2ExpandKeys: appExpandGroupInfo.level2ExpandKeys || [],
+                          }),
+                        );
                         this.setState({ expandGroupKeys: key });
                       }}
+                      {...accordionExtraParam}
                     >
                       {appSection.map(item => this.renderSection(item, 'level1'))}
                     </Accordion>
@@ -432,23 +549,15 @@ class App extends Component {
               </div>
             )}
           </div>
-          {((!isHideTabBar &&
-            !window.isPublicApp &&
-            !md.global.Account.isPortal &&
-            detail.appNaviStyle !== 2 &&
-            !fixed) ||
+          {((!isHideTabBar && !window.isPublicApp && !md.global.Account.isPortal && !fixed) ||
             (fixed && isAuthorityApp)) && (
             <Back
-              style={{ bottom: detail.appNaviStyle == 2 && location.href.includes('mobile/app') ? '78px' : '20px' }}
-              className="low"
+              style={{
+                bottom: detail.appNaviStyle === 2 ? `${hasDebugRoles ? 110 : 70}px` : `${hasDebugRoles ? 60 : 20}px`,
+              }}
+              icon="home"
               onClick={() => {
-                let currentGroupInfo =
-                  localStorage.getItem('currentGroupInfo') && JSON.parse(localStorage.getItem('currentGroupInfo'));
-                if (_.isEmpty(currentGroupInfo)) {
-                  this.navigateTo('/mobile/appHome');
-                } else {
-                  history.back();
-                }
+                this.navigateTo('/mobile/dashboard');
               }}
             />
           )}
@@ -472,6 +581,7 @@ class App extends Component {
               }}
             />
           )}
+          {<DebugInfo appId={detail.id} debugRoles={debugRoles} />}
         </Fragment>
       );
     }
@@ -483,7 +593,7 @@ class App extends Component {
     }
     const { type } = data;
     const { detail = {}, appSection } = this.props.appDetail;
-    const { appNaviStyle } = detail;
+    const { id, appNaviStyle } = detail;
     if (type === 0) {
       return <RecordList now={Date.now()} />;
     }
@@ -491,10 +601,11 @@ class App extends Component {
       return (
         <div className="flex">
           <CustomPage
-            pageTitle={data.workSheetName}
+            pageTitle={getTranslateInfo(id, data.workSheetId).name || data.workSheetName}
             now={Date.now()}
             appNaviStyle={appNaviStyle}
             appSection={appSection}
+            match={this.props.match}
           />
         </div>
       );
@@ -522,8 +633,9 @@ class App extends Component {
   };
 
   renderBody() {
+    const { debugRoles = [] } = this.props;
     const { appSection = {}, detail } = this.props.appDetail;
-    const { fixed, permissionType, webMobileDisplay } = detail;
+    const { fixed, permissionType, webMobileDisplay, debugRole = {} } = detail;
     const isAuthorityApp = permissionType >= APP_ROLE_TYPE.ADMIN_ROLE;
     const { batchOptVisible } = this.props;
 
@@ -541,7 +653,7 @@ class App extends Component {
     const data = _.find(sheetList, { workSheetId: selectedTab });
     const isHideNav = detail.permissionType < APP_ROLE_TYPE.ADMIN_ROLE && sheetList.length === 1 && !!data;
     return (
-      <div className="flexColumn h100">
+      <div className={cx('flexColumn h100', { 'bottomNavWrap pBottom40': debugRole.canDebug && !_.isEmpty(debugRoles) })}>
         <div className={cx('flex overflowHidden flexColumn', { recordListWrapper: !isHideNav })}>
           {/* 外部门户显示头部导航 */}
           {selectedTab !== 'more' && md.global.Account.isPortal && this.renderAppHeader()}
@@ -557,12 +669,13 @@ class App extends Component {
           >
             {sheetList.map((item, index) => (
               <TabBar.Item
-                title={item.workSheetName}
+                title={getTranslateInfo(detail.id, item.workSheetId).name || item.workSheetName}
                 key={item.workSheetId}
                 icon={<SvgIcon url={item.iconUrl} fill="#757575" size={20} />}
                 selectedIcon={<SvgIcon url={item.iconUrl} fill={detail.iconColor} size={20} />}
                 selected={selectedTab === item.workSheetId}
                 onPress={() => {
+                  addBehaviorLog(item.type == 0 ? 'worksheet' : 'customPage', item.workSheetId); // 埋点
                   this.handleSwitchSheet(item, data);
                 }}
               />
@@ -581,6 +694,7 @@ class App extends Component {
             />
           </TabBar>
         )}
+        {<DebugInfo appId={detail.id} debugRoles={debugRoles} />}
       </div>
     );
   }
@@ -603,12 +717,13 @@ class App extends Component {
 }
 
 export default connect(state => {
-  const { appDetail, isAppLoading, isQuitSuccess, batchOptVisible } = state.mobile;
+  const { appDetail, isAppLoading, isQuitSuccess, batchOptVisible, debugRoles } = state.mobile;
   // status: null, // 0: 加载中 1:正常 2:关闭 3:删除 4:不是应用成员 5:是应用成员但未分配视图
   return {
     appDetail,
     isAppLoading,
     isQuitSuccess,
     batchOptVisible,
+    debugRoles,
   };
 })(App);

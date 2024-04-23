@@ -1,9 +1,12 @@
 import _ from 'lodash';
 import dayjs from 'dayjs';
+import qs from 'query-string';
 import { formatControlValue } from 'src/pages/worksheet/util-purejs';
 import { WIDGETS_TO_API_TYPE_ENUM } from 'src/pages/widgetConfig/config/widget';
 import { functions } from './enum';
 import { asyncRun } from 'worksheet/util';
+import { handleDotAndRound } from 'src/components/newCustomFields/tools/DataFormat';
+import { toFixed } from 'src/util';
 
 function replaceControlIdToValue(expression, formData, inString) {
   expression = expression.replace(/\$(.+?)\$/g, matched => {
@@ -20,10 +23,16 @@ function replaceControlIdToValue(expression, formData, inString) {
     }
     return typeof value === 'string' ? value : `(${value})`;
   });
+  if (expression.indexOf('SYSTEM_URL_PARAMS') > -1) {
+    try {
+      expression = `var SYSTEM_URL_PARAMS=${JSON.stringify(qs.parse(location.search))};` + expression;
+    } catch (err) {}
+  }
   return expression;
 }
 
-function formatFunctionResult(controlType, value) {
+function formatFunctionResult(control, value) {
+  const controlType = control.type;
   let result = value;
   switch (controlType) {
     case WIDGETS_TO_API_TYPE_ENUM.TEXT:
@@ -35,7 +44,10 @@ function formatFunctionResult(controlType, value) {
     case WIDGETS_TO_API_TYPE_ENUM.NUMBER:
     case WIDGETS_TO_API_TYPE_ENUM.MONEY:
       try {
-        result = result.match(/^-?[\d\.]+/)[0];
+        result = (result || '').toString().match(/^-?[\d\.]+/)[0];
+        if (_.isNumber(Number(result)) && !_.isNaN(Number(result))) {
+          result = String(Number(toFixed(result, 10)));
+        }
       } catch (err) {}
       break;
     case WIDGETS_TO_API_TYPE_ENUM.DATE:
@@ -43,6 +55,25 @@ function formatFunctionResult(controlType, value) {
       break;
     case WIDGETS_TO_API_TYPE_ENUM.DATE_TIME:
       result = result && dayjs(result).isValid() ? dayjs(result).format('YYYY-MM-DD HH:mm:ss') : undefined;
+      break;
+    case WIDGETS_TO_API_TYPE_ENUM.FLAT_MENU:
+    case WIDGETS_TO_API_TYPE_ENUM.MULTI_SELECT:
+    case WIDGETS_TO_API_TYPE_ENUM.DROP_DOWN:
+      const filterOptions = (control.options || []).filter(i => !i.isDeleted);
+      const tempValue = (_.isString(result) ? result.split(',') : [].concat(result))
+        .map(item => {
+          return _.get(
+            _.find(filterOptions, option => option.value === item),
+            'key',
+          );
+        })
+        .filter(_.identity);
+
+      result = _.isEmpty(tempValue) ? '' : JSON.stringify(tempValue);
+      break;
+    case WIDGETS_TO_API_TYPE_ENUM.TIME:
+      const formatMode = _.includes(['6', '9'], control.unit) ? 'HH:mm:ss' : 'HH:mm';
+      result = result && dayjs(result).isValid() ? dayjs(result).format(formatMode) : undefined;
       break;
   }
   return result;
@@ -100,7 +131,11 @@ export default function (control, formData, { update, type } = {}) {
       if (is_iOS && fnType === 'javascript') {
         // iOS15以下不支持web worker，改为直接运行
         result = eval('function run() { ' + expression + ' } run()');
-        update(_.isUndefined(result) || _.isNaN(result) || _.isNull(result) ? '' : String(result));
+        update(
+          _.isUndefined(result) || _.isNaN(result) || _.isNull(result)
+            ? ''
+            : String(formatFunctionResult(control, result)),
+        );
         return;
       }
       if (type === 'lib') {
@@ -115,7 +150,7 @@ export default function (control, formData, { update, type } = {}) {
                 update(
                   _.isUndefined(value) || _.isNaN(value) || _.isNull(value)
                     ? ''
-                    : String(formatFunctionResult(control.type, value)),
+                    : String(formatFunctionResult(control, value)),
                 );
               } else {
                 console.log(err);
@@ -127,7 +162,7 @@ export default function (control, formData, { update, type } = {}) {
           result = eval(expression);
         }
       }
-      result = formatFunctionResult(control.type, result);
+      result = formatFunctionResult(control, result);
       if (_.isNaN(result)) {
         result = undefined;
       }

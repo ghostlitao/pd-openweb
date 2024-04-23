@@ -35,8 +35,8 @@ export const ROLE_TYPE = {
 };
 
 export const DETAIL_TYPE = {
-  SETTING: 'SETTING',
-  USE_DETAIL: 'USE_DETAIL',
+  SETTING: 'setting',
+  USE_DETAIL: 'useDetail',
 };
 
 export const CREATE_TYPE = {
@@ -50,13 +50,14 @@ export const TASK_STATUS_TYPE = {
   RUNNING: 'RUNNING',
   STOP: 'STOP',
   ERROR: 'ERROR',
+  CREATING: 'CREATING',
 };
 
 export const SOURCE_FROM_TYPE_TAB_LIST = [
   { key: SOURCE_FROM_TYPE.COMMON, text: _l('常用') },
   { key: SOURCE_FROM_TYPE.LOCAL, text: _l('本地数据库') },
   { key: SOURCE_FROM_TYPE.CLOUD, text: _l('云端数据库') },
-  // { key: SOURCE_FROM_TYPE.MESSAGE_QUEUE, text: _l('消息队列') },
+  { key: SOURCE_FROM_TYPE.MESSAGE_QUEUE, text: _l('消息队列') },
 ];
 
 export const ROLE_TYPE_TAB_LIST = [
@@ -69,7 +70,7 @@ export const FROM_TYPE_TAB_LIST = [
   { key: SOURCE_FROM_TYPE.ALL, text: _l('全部') },
   { key: SOURCE_FROM_TYPE.LOCAL, text: _l('本地数据库') },
   { key: SOURCE_FROM_TYPE.CLOUD, text: _l('云端数据库') },
-  // { key: SOURCE_FROM_TYPE.MESSAGE_QUEUE, text: _l('消息队列') },
+  { key: SOURCE_FROM_TYPE.MESSAGE_QUEUE, text: _l('消息队列') },
 ];
 
 export const CREATE_TYPE_RADIO_LIST = [
@@ -142,9 +143,34 @@ export const SYSTEM_FIELD_IDS = [
   'wfstatus',
 ];
 
-export const namePattern = /[^a-zA-Z0-9\u4E00-\u9FA5_]/g;
+export const sourceNamePattern = /[\r\n\s-]/g;
+export const namePattern = /[`~!@#$%^&*()\-+=<>?:"{}|,./;'\[\]·！￥…（）—《》？：“”【】、；‘，。\s\\]/g;
 
 export const SORT_TYPE = {
   ASC: 'ASC',
   DESC: 'DESC',
 };
+
+export const isValidName = name => {
+  return /^[^`~!@#$%^&*()\-+=<>?:"{}|,./;'\[\]·！￥…（）—《》？：“”【】、；‘，。\s\\]+$/.test(name);
+};
+
+export const TRIGGER_WORKFLOW_CHECKBOX_OPTIONS = [
+  { key: 'insertTrigger', text: _l('新增记录时触发') },
+  { key: 'updateTrigger', text: _l('更新记录时触发') },
+  { key: 'deleteTrigger', text: _l('删除记录时触发') },
+];
+
+export const PERSONNEL_FIELDS = [
+  { id: 'pName', name: '姓名' },
+  { id: 'jobNo', name: '工号' },
+  { id: 'pId', name: '人员ID' },
+];
+export const DEPT_FIELDS = [
+  { id: 'deptName', name: '名称' },
+  { id: 'deptId', name: '部门系统ID' },
+];
+export const RELATED_RECORD_FIELDS = [
+  { id: 'rId', name: 'ID' },
+  { id: 'rTitle', name: '标题' },
+];

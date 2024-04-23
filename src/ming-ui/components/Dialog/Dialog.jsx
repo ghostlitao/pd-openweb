@@ -165,6 +165,10 @@ class Dialog extends Component {
      * 滚动事件
      */
     onScroll: PropTypes.func,
+    /**
+     * 底部左侧内容自定义
+     */
+    footerLeftElement: PropTypes.element,
   };
 
   static defaultProps = {
@@ -254,14 +258,18 @@ class Dialog extends Component {
             <DialogHeader title={props.title} />
             {desc}
           </div>
-          <div
-            className={cx('mui-dialog-body', {
-              [props.bodyClass]: props.bodyClass,
-            })}
-            onScroll={this.props.onScroll}
-          >
-            {this.props.children}
-          </div>
+
+          {this.props.children && (
+            <div
+              className={cx('mui-dialog-body', {
+                [props.bodyClass]: props.bodyClass,
+              })}
+              onScroll={this.props.onScroll}
+            >
+              {this.props.children}
+            </div>
+          )}
+
           {props.showFooter && (
             <DialogFooter
               footer={props.footer}
@@ -274,6 +282,7 @@ class Dialog extends Component {
               confirm={props.confirm}
               showCancel={props.showCancel}
               buttonType={props.buttonType}
+              footerLeftElement={props.footerLeftElement}
             />
           )}
         </DialogBase>

@@ -1,0 +1,159 @@
+.orgManagementWrap {
+  flex: 1;
+  background-color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.orgManagementHeader {
+  height: 56px;
+  padding: 0 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #eaeaea;
+  font-size: 17px;
+  font-weight: 600;
+  .tabBox {
+    height: 100%;
+    display: flex;
+    align-items: center;
+  }
+  .tabItem {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    font-size: 17px;
+    font-weight: 600;
+    border-bottom: 2px solid transparent;
+    margin-right: 4px;
+    cursor: pointer;
+    padding: 0 16px;
+    &:hover {
+      background-color: #f5f5f5;
+    }
+    &.active {
+      color: #2196f3;
+      border-bottom-color: #2196f3;
+    }
+  }
+  .tabBox.singleTab {
+    .tabItem {
+      cursor: auto;
+      background-color: #fff;
+      padding: 0;
+      &.active {
+        border-bottom: none;
+        color: #333;
+      }
+    }
+  }
+}
+.orgManagementContent {
+  padding: 24px 32px 0;
+  flex: 1;
+  min-height: 0;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.mdAntTabs {
+  color: #333 !important;
+  height: 100%;
+  .ant-tabs-nav {
+    padding: 0 24px 0 8px;
+    height: 56px;
+    font-weight: 600;
+  }
+  .ant-tabs-tab {
+    font-size: 17px;
+    padding: 0 16px;
+    &:hover {
+      background-color: #f5f5f5;
+    }
+  }
+  .ant-tabs-tab + .ant-tabs-tab {
+    margin: 0 0 0 4px !important;
+  }
+  .ant-tabs-content {
+    height: 100%;
+    overflow: auto;
+  }
+  &.singleTab {
+    .ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn {
+      color: #333;
+    }
+    .ant-tabs-ink-bar {
+      display: none !important;
+    }
+  }
+  &.tabStyle {
+    .ant-tabs-tab-active {
+      background: #fff;
+      z-index: 1;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn {
+      color: #333;
+    }
+  }
+}
+
+.mdAntTable {
+  .ant-table {
+    .ant-table-column-sorters {
+      padding: 0 !important;
+    }
+    .ant-checkbox-input {
+      display: none;
+    }
+    .ant-table-column-sorter-full {
+      margin-top: -0.1em;
+      margin-bottom: 0.1em;
+    }
+    thead > tr > th {
+      height: 48px;
+      background: #fff;
+      padding: 1px 24px 12px 1px;
+      box-sizing: border-box;
+      font-weight: 600;
+      font-size: 13px;
+      color: #333333;
+      &:hover {
+        background: none !important;
+      }
+      &.ant-table-cell.ant-table-column-has-sorters {
+        &:nth-child(3) {
+          padding-left: 18px !important;
+        }
+      }
+    }
+    .ant-table-selection-column {
+      text-align: left;
+    }
+    tbody > tr > td {
+      height: 48px;
+      padding: 1px 24px 1px 1px;
+      box-sizing: border-box;
+      border-bottom: none;
+      font-size: 13px;
+      &.ant-table-column-sort {
+        background: none !important;
+      }
+    }
+    tbody > tr:hover > td {
+      background: #f5f5f5;
+      &.ant-table-column-sort {
+        background: #f5f5f5 !important;
+      }
+    }
+    &.ant-table-empty {
+      tbody > tr > td {
+        height: unset;
+        background: #fff;
+      }
+    }
+  }
+}

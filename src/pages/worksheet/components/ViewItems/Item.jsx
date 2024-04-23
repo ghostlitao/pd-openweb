@@ -1,16 +1,16 @@
 import React, { Component } from 'react';
 import cx from 'classnames';
-import { Menu, MenuItem, Icon, MdLink } from 'ming-ui';
+import { Icon, MdLink, Tooltip } from 'ming-ui';
 import Trigger from 'rc-trigger';
 import 'rc-trigger/assets/index.css';
-import ViewDisplayMenu from './viewDisplayMenu';
 import './ViewItems.less';
 import { VIEW_DISPLAY_TYPE } from 'src/pages/worksheet/constants/enum';
-import { getDefaultViewSet } from 'src/pages/worksheet/constants/common';
 import { isOpenPermit } from 'src/pages/FormSet/util.js';
 import { permitList } from 'src/pages/FormSet/config.js';
-import HiddenMenu from './HiddenMenu';
+import { getTranslateInfo } from 'src/util';
 import _ from 'lodash';
+import { navigateTo } from 'src/router/navigateTo';
+import SettingMenu from './SettingMenu';
 export default class Item extends Component {
   static defaultProps = {
     item: {},
@@ -20,236 +20,67 @@ export default class Item extends Component {
     this.state = {
       visible: false,
       isEdit: false,
-      changeViewDisplayTypeVisible: false,
-      changeHiddenTypeVisible: false,
     };
   }
   componentWillMount() {
     clearTimeout(this.timer);
   }
 
+  isDelCustomize = () => {
+    const { item } = this.props;
+    const isCustomize = ['customize'].includes(VIEW_DISPLAY_TYPE[item.viewType]);
+    return isCustomize && !_.get(item, 'pluginInfo.id');
+  };
+
   canShare = () => {
-    const { item, currentView, sheetSwitchPermit } = this.props;
-    return isOpenPermit(permitList.viewShareSwitch, sheetSwitchPermit, item.viewId) && !md.global.Account.isPortal;
+    if (this.isDelCustomize()) {
+      return false;
+    }
+    return !md.global.Account.isPortal;
   };
   canExport = () => {
     const { item, sheetSwitchPermit } = this.props;
+    if (this.isDelCustomize()) {
+      return false;
+    }
     return isOpenPermit(permitList.viewExportSwitch, sheetSwitchPermit, item.viewId);
   };
   renderSettingMenu = () => {
-    const { item, isCharge, changeViewDisplayType, currentView, sheetSwitchPermit, updateAdvancedSetting, isLock } =
-      this.props;
-
-    const { changeViewDisplayTypeVisible, changeHiddenTypeVisible } = this.state;
-
-    if (isLock) {
-      return (
-        <Menu className="viewItemMoreOperate">
-          {/* 分享视图权限 目前只有表视图才能分享*/}
-          {this.canShare() && (
-            <MenuItem
-              icon={<Icon icon="share" className="Font18" />}
-              onClick={() => {
-                if (window.isPublicApp) {
-                  alert(_l('预览模式下，不能操作'), 3);
-                  return;
-                }
-                this.props.onShare(item);
-                this.setState({
-                  visible: false,
-                });
-              }}
-            >
-              <span className="text">{_l('分享')}</span>
-            </MenuItem>
-          )}
-          {/* 导出视图下记录权限 */}
-          {this.canExport() && (
-            <MenuItem
-              icon={<Icon icon="download" className="Font18" />}
-              onClick={() => {
-                if (window.isPublicApp) {
-                  alert(_l('预览模式下，不能操作'), 3);
-                  return;
-                }
-                this.props.onExport(item);
-                this.setState({
-                  visible: false,
-                });
-              }}
-            >
-              <span className="text">{_l('导出')}</span>
-            </MenuItem>
-          )}
-        </Menu>
-      );
-    }
+    const {
+      item,
+      updateAdvancedSetting,
+      list,
+      getNavigateUrl,
+    } = this.props;
 
     return (
-      <Menu className="viewItemMoreOperate">
-        {isCharge && (
-          <MenuItem
-            icon={<Icon icon="settings" className="Font18" />}
-            onClick={() => {
-              this.props.onOpenView(item);
-              this.setState({
-                visible: false,
-              });
-            }}
-          >
-            <span className="text">{_l('配置视图%05024')}</span>
-          </MenuItem>
-        )}
-        {isCharge && (
-          <Trigger
-            popupVisible={changeViewDisplayTypeVisible}
-            onPopupVisibleChange={changeViewDisplayTypeVisible => {
-              this.setState({ changeViewDisplayTypeVisible });
-            }}
-            popupClassName="DropdownPanelTrigger"
-            action={['hover']}
-            popupPlacement="bottom"
-            popupAlign={{ points: ['tl', 'tr'], offset: [0, -6], overflow: { adjustX: true, adjustY: true } }}
-            popup={() => {
+      <SettingMenu
+        {...this.props}
+        changeViewType={true}
+        onChangeHidden={showhiden => {
+          updateAdvancedSetting({
+            ...item,
+            advancedSetting: {
+              ...item.advancedSetting,
+              showhide: showhiden,
+            },
+          });
+          if (showhiden.search(/hide|hpc/g) > -1) {
+            let showList = list.filter(l => {
               return (
-                <ViewDisplayMenu
-                  style={{
-                    borderRadius: '3px',
-                  }}
-                  onClick={(viewType = 'sheet') => {
-                    if (viewType !== VIEW_DISPLAY_TYPE[item.viewType]) {
-                      changeViewDisplayType(
-                        getDefaultViewSet({
-                          ...item,
-                          viewControl: 'gunter' === viewType ? '' : item.viewControl, //转换成甘特图，viewControl清空
-                          viewControls: [],
-                          viewType: VIEW_DISPLAY_TYPE[viewType],
-                          filters: item.filters, // formatValuesOfOriginConditions(item.filters),
-                          advancedSetting: _.omit(item.advancedSetting || {}, ['navfilters', 'navshow']), //更换视图类型，把分组清空
-                        }),
-                      );
-                    }
-                    this.setState({ changeViewDisplayTypeVisible: false, visible: false });
-                  }}
-                />
+                l.viewId !== item.viewId &&
+                _.get(l, 'advancedSetting.showhide') &&
+                _.get(l, 'advancedSetting.showhide').search(/hide|hpc/g) === -1
               );
-            }}
-          >
-            <MenuItem className="changeViewDisplayTypeMenuWrap" icon={<Icon icon="swap_horiz" className="Font18" />}>
-              <span className="text">{_l('更改视图类型%05023')}</span>
-              <Icon icon="arrow-right-tip Font15" style={{ fontSize: '16px', right: '10px', left: 'initial' }} />
-            </MenuItem>
-          </Trigger>
-        )}
-        {isCharge && (
-          <MenuItem
-            icon={<Icon icon="content-copy" className="Font16" />}
-            onClick={() => {
-              this.props.onCopyView(item);
-              this.setState({
-                visible: false,
-              });
-            }}
-          >
-            <span className="text">{_l('复制%05022')}</span>
-          </MenuItem>
-        )}
-        {isCharge && <hr className="splitLine" />}
-        {/* 分享视图权限 目前只有表视图才能分享*/}
-        {this.canShare() && (
-          <MenuItem
-            icon={<Icon icon="share" className="Font18" />}
-            onClick={() => {
-              if (window.isPublicApp) {
-                alert(_l('预览模式下，不能操作'), 3);
-                return;
-              }
-              this.props.onShare(item);
-              this.setState({
-                visible: false,
-              });
-            }}
-          >
-            <span className="text">{_l('分享%05021')}</span>
-          </MenuItem>
-        )}
-        {/* 导出视图下记录权限 */}
-        {this.canExport() && (
-          <MenuItem
-            icon={<Icon icon="download" className="Font18" />}
-            onClick={() => {
-              if (window.isPublicApp) {
-                alert(_l('预览模式下，不能操作'), 3);
-                return;
-              }
-              this.props.onExport(item);
-              this.setState({
-                visible: false,
-              });
-            }}
-          >
-            <span className="text">{_l('导出%05020')}</span>
-          </MenuItem>
-        )}
-        {isCharge && (
-          <Trigger
-            popupVisible={changeHiddenTypeVisible}
-            onPopupVisibleChange={changeHiddenTypeVisible => {
-              this.setState({ changeHiddenTypeVisible });
-            }}
-            popupClassName="DropdownPanelTrigger"
-            action={['hover']}
-            popupPlacement="bottom"
-            popupAlign={{ points: ['tl', 'tr'], offset: [0, -6], overflow: { adjustX: true, adjustY: true } }}
-            popup={() => {
-              return (
-                <HiddenMenu
-                  showhide={item.advancedSetting.showhide || 'show'}
-                  onClick={showhiden => {
-                    updateAdvancedSetting({
-                      ...item,
-                      advancedSetting: {
-                        ...item.advancedSetting,
-                        showhide: showhiden,
-                      },
-                    });
-                    this.setState({ visible: false, changeHiddenTypeVisible: false });
-                  }}
-                />
-              );
-            }}
-          >
-            <MenuItem
-              icon={
-                <Icon
-                  icon={item.advancedSetting.showhide !== 'hide' ? 'visibility_off' : 'visibility'}
-                  className="Font18"
-                />
-              }
-              className="hiddenTypeMenuWrap"
-            >
-              <span className="text">
-                {item.advancedSetting.showhide !== 'hide' ? _l('从导航栏中隐藏%05019') : _l('取消隐藏')}
-              </span>
-              <Icon icon="arrow-right-tip Font15" style={{ fontSize: '16px', right: '10px', left: 'initial' }} />
-            </MenuItem>
-          </Trigger>
-        )}
-        {isCharge && (
-          <MenuItem
-            icon={<Icon icon="hr_delete" className="Font18" />}
-            className="delete"
-            onClick={() => {
-              this.props.onRemoveView(item);
-              this.setState({
-                visible: false,
-              });
-            }}
-          >
-            <span className="text">{_l('删除视图%05018')}</span>
-          </MenuItem>
-        )}
-      </Menu>
+            });
+
+            if (showList.length === 0) return;
+            navigateTo(getNavigateUrl(showList[0]));
+          }
+          this.setState({ visible: false });
+        }}
+        handleClose={() => this.setState({ visible: false })}
+      />
     );
   };
   handleSaveName = event => {
@@ -265,26 +96,45 @@ export default class Item extends Component {
     });
   };
   render() {
-    const { item, currentViewId, isCharge, sheetSwitchPermit, currentView, getNavigateUrl } = this.props;
+    const { appId, item, currentViewId, isCharge, sheetSwitchPermit, currentView, getNavigateUrl } = this.props;
     const { isEdit } = this.state;
+
+    const customViewDebugUrl = window.localStorage.getItem(`customViewDebugUrl_${item.viewId}`);
+    const pluginIsPublished = _.get(item, 'pluginInfo.source') === 1;
+    const pluginIsDeleted = !_.get(item, 'pluginInfo.id');
+    const codeUrl = _.get(item, 'pluginInfo.codeUrl');
+    const showWidgetDebugIcon = item.viewType === 21 && !pluginIsPublished && !pluginIsDeleted;
 
     return (
       <div
-        className={cx('valignWrapper workSheetViewItem pointer', {
+        className={cx('valignWrapper workSheetViewItem pointer', `workSheetViewItemViewId-${item.viewId}`, {
           active: currentViewId === item.viewId,
         })}
         style={
-          item.advancedSetting.showhide && item.advancedSetting.showhide.search(/hide|hpc/g) !== -1
+          _.get(item, 'advancedSetting.showhide') && _.get(item, 'advancedSetting.showhide').search(/hide|hpc/g) !== -1
             ? { display: 'none' }
             : {}
         }
       >
         <MdLink
           className={cx('name valignWrapper overflowHidden h100', {
-            pRight20: !(isCharge || this.canExport()),
+            pRight20: !(isCharge || this.canExport() || this.canShare()),
           })}
           to={getNavigateUrl(item)}
         >
+          {showWidgetDebugIcon && (
+            <Tooltip
+              text={
+                customViewDebugUrl
+                  ? _l('开发调试中，本地脚本: %0', customViewDebugUrl)
+                  : codeUrl
+                  ? _l('视图插件调试中，使用的是提交历史中的版本。')
+                  : _l('视图插件调试中')
+              }
+            >
+              <i className="developIcon icon icon-setting"></i>
+            </Tooltip>
+          )}
           {isEdit ? (
             <input
               autoFocus
@@ -298,7 +148,7 @@ export default class Item extends Component {
               }}
             />
           ) : (
-            <span className="ellipsis bold">{item.name}</span>
+            <span className="ellipsis bold">{getTranslateInfo(appId, item.viewId).name || item.name}</span>
           )}
         </MdLink>
         {isCharge || this.canExport() || this.canShare() ? (

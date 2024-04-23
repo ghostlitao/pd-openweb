@@ -19,7 +19,6 @@ const GenerateJSONBox = styled.textarea`
   width: 100%;
   border: 1px solid #ddd;
   resize: none;
-  margin-bottom: -22px;
   &:focus {
     border-color: #2196f3;
   }
@@ -34,6 +33,7 @@ const getDefaultParameters = () => {
     required: false,
     desc: '',
     workflowDefaultValue: '',
+    attribute: 0,
   };
 };
 
@@ -55,6 +55,7 @@ export default ({ data, updateSource, isIntegration }) => {
     16: _l('默认值 (2019-10-01 09:00)'),
     26: _l('默认值 (人员ID)'),
     27: _l('默认值 (部门ID)'),
+    48: _l('默认值 (组织角色ID)'),
     10000007: _l('默认值 (示例：[] )'),
     10000008: _l('默认值 (示例：[] )'),
   };
@@ -184,6 +185,30 @@ export default ({ data, updateSource, isIntegration }) => {
               checked={item.required}
               onClick={checked => updateControls('required', !checked, item)}
             />
+            {item.type < 10000000 && !item.dataSource && (
+              <span
+                className="mLeft10"
+                data-tip={item.attribute === 0 ? _l('设为标题') : _l('取消设为标题')}
+                style={{ height: 16 }}
+              >
+                <i
+                  className={cx(
+                    'Font16 Gray_9e ThemeHoverColor3 pointer',
+                    item.attribute === 0 ? 'icon-title' : 'icon-ic_title ThemeColor3',
+                  )}
+                  onClick={() => {
+                    let controls = [].concat(data.controls).map(o => {
+                      o.attribute = o.controlId === item.controlId ? (item.attribute ? 0 : 1) : 0;
+
+                      return o;
+                    });
+
+                    updateSource({ controls });
+                  }}
+                />
+              </span>
+            )}
+
             <i
               className="icon-delete2 Font16 Gray_9e ThemeHoverColor3 mLeft10 pointer"
               onClick={() => {
@@ -269,6 +294,7 @@ export default ({ data, updateSource, isIntegration }) => {
                   required: item.required,
                   desc: '',
                   workflowDefaultValue: '',
+                  attribute: 0,
                 };
               };
 
@@ -340,7 +366,7 @@ export default ({ data, updateSource, isIntegration }) => {
           </span>
           <div className="ThemeHoverColor3 pointer Gray_75" onClick={generateJSON}>
             <i className="Font14 icon-knowledge-upload" />
-            {_l('从json示例生成')}
+            {_l('从JSON示例生成')}
           </div>
         </div>
 

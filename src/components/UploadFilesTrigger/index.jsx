@@ -8,7 +8,7 @@ import withClickAway from 'ming-ui/decorators/withClickAway';
 import createDecoratedComponent from 'ming-ui/decorators/createDecoratedComponent';
 import _ from 'lodash';
 import './index.less';
-import { getRandomString } from 'src/util';
+import { generateRandomPassword } from 'src/util';
 
 const ClickAwayable = createDecoratedComponent(withClickAway);
 
@@ -35,7 +35,7 @@ export default class UploadFilesTrigger extends Component {
       dragVisible: false,
       isComplete: true,
     };
-    this.id = props.id || getRandomString(16);
+    this.id = props.id || generateRandomPassword(16);
   }
   componentDidMount() {
     if (this.props.popupVisible) {
@@ -115,16 +115,10 @@ export default class UploadFilesTrigger extends Component {
     this.textarea && this.textarea.focus();
   }
   renderHeader() {
-    const { advancedSetting: { max, maxcount } = {} } = this.props;
     return (
       <div className="panelHeader flexRow valignWrapper Font15">
         <div className="flex">
           <span>{_l('添加附件')}</span>
-          {max || maxcount ? null : (
-            <span className="mLeft5" data-tip={_l('0B/1G(至多本地,知识,链接各20个)')}>
-              <Icon icon="knowledge-message" className="Gray_bd pointer Font16" />
-            </span>
-          )}
         </div>
         <Icon
           icon="close"
@@ -156,8 +150,8 @@ export default class UploadFilesTrigger extends Component {
       <ClickAwayable
         component="div"
         onClickAwayExceptions={[
-          '#folderSelectDialog_container',
-          '#addLinkFileDialog_container',
+          '.folderSelectDialog',
+          '.addLinkFileDialog',
           '.attachmentsPreview',
           '.UploadFilesTriggerPanel',
           '.triggerTraget',

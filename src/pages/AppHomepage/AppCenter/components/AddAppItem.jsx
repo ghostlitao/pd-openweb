@@ -5,12 +5,13 @@ import Menu from 'ming-ui/components/Menu';
 import MenuItem from 'ming-ui/components/MenuItem';
 import Dialog from 'ming-ui/components/Dialog';
 import DialogImportExcelCreate from 'src/pages/worksheet/components/DialogImportExcelCreate';
-import ImportApp from 'src/pages/Admin/appManagement/modules/ImportApp.jsx';
+import ImportApp from 'src/pages/Admin/app/appManagement/modules/ImportApp.jsx';
 import { navigateTo } from 'src/router/navigateTo';
-import { COLORS } from 'src/pages/AppHomepage/components/SelectIcon/config';
 import { generate } from '@ant-design/colors';
-import { getFeatureStatus, buriedUpgradeVersionDialog } from 'src/util';
+import { getFeatureStatus, buriedUpgradeVersionDialog, getThemeColors } from 'src/util';
+import { VersionProductType } from 'src/util/enum';
 import _ from 'lodash';
+import ExternalLinkDialog from './ExternalLinkDialog';
 
 const ADD_APP_MODE = [
   { id: 'createFromEmpty', icon: 'plus', text: _l('从空白创建%01003'), href: '/app/lib' },
@@ -30,7 +31,7 @@ const ADD_APP_MODE = [
     id: 'installLoacal',
     icon: 'file_upload',
     text: _l('导入%01006'),
-    featureId: 2,
+    featureId: VersionProductType.appImportExport,
     href: '#',
   },
 ];
@@ -46,7 +47,7 @@ export default class AddAppItem extends Component {
     createAppFromEmpty: _.noop,
   };
 
-  state = { addTypeVisible: false };
+  state = { addTypeVisible: false, externalLinkDialogVisible: false };
 
   handleClick = ({ id, href }) => {
     const { projectId, type } = this.props;
@@ -60,6 +61,7 @@ export default class AddAppItem extends Component {
         }
         break;
       case 'createFromEmpty':
+        const COLORS = getThemeColors(projectId);
         const iconColor = COLORS[_.random(0, COLORS.length - 1)];
         this.setState({ addTypeVisible: false });
         const lightColor = generate(iconColor)[0];
@@ -83,7 +85,7 @@ export default class AddAppItem extends Component {
     }
   };
 
-  rednerImportApp = () => {
+  renderImportApp = () => {
     const { projectId, groupId, groupType } = this.props;
     const { importAppDialog } = this.state;
     return (
@@ -113,8 +115,8 @@ export default class AddAppItem extends Component {
   };
 
   render() {
-    const { groupId, projectId, groupType, children, className = '' } = this.props;
-    const { addTypeVisible, dialogImportExcel } = this.state;
+    const { groupId, projectId, groupType, children, className = '', createAppFromEmpty } = this.props;
+    const { addTypeVisible, dialogImportExcel, externalLinkDialogVisible } = this.state;
     return (
       <div className={'addAppItemWrap ' + className}>
         {children ? (
@@ -135,7 +137,7 @@ export default class AddAppItem extends Component {
           >
             {ADD_APP_MODE.filter(o => !(o.id === 'installFromLib' && md.global.SysSettings.hideTemplateLibrary)).map(
               ({ id, icon, text, href, featureId }) => {
-                const featureType = getFeatureStatus(projectId, 2);
+                const featureType = getFeatureStatus(projectId, VersionProductType.appImportExport);
                 if (featureId && !featureType) return;
                 return (
                   <MenuItem
@@ -143,7 +145,7 @@ export default class AddAppItem extends Component {
                     icon={<Icon icon={icon} className="addItemIcon Font18" />}
                     onClick={() => {
                       if (featureType === 2) {
-                        buriedUpgradeVersionDialog(projectId, 2);
+                        buriedUpgradeVersionDialog(projectId, VersionProductType.appImportExport);
                         return;
                       }
                       if (id === 'importExcelCreateApp') {
@@ -157,6 +159,14 @@ export default class AddAppItem extends Component {
                 );
               },
             )}
+            <hr className="divider" />
+            <MenuItem
+              key="externalLink"
+              icon={<Icon icon="add_link" className="addItemIcon Font18" />}
+              onClick={() => this.setState({ externalLinkDialogVisible: true })}
+            >
+              {_l('添加外部链接')}
+            </MenuItem>
           </Menu>
         )}
         {dialogImportExcel && (
@@ -168,7 +178,14 @@ export default class AddAppItem extends Component {
             createType="app"
           />
         )}
-        {this.rednerImportApp()}
+        {this.renderImportApp()}
+        {externalLinkDialogVisible && (
+          <ExternalLinkDialog
+            projectId={projectId}
+            createAppFromEmpty={createAppFromEmpty}
+            onCancel={() => this.setState({ externalLinkDialogVisible: false })}
+          />
+        )}
       </div>
     );
   }

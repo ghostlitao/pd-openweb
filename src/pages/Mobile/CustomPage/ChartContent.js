@@ -2,8 +2,8 @@ import React, { useEffect, useState, Fragment, useRef } from 'react';
 import { useDeepCompareEffect } from 'react-use';
 import styled from 'styled-components';
 import cx from 'classnames';
-import { Icon, LoadDiv } from 'ming-ui';
-import { Modal } from 'antd-mobile';
+import { Icon } from 'ming-ui';
+import { Modal, Flex, ActivityIndicator } from 'antd-mobile';
 import report from 'statistics/api/report';
 import Chart from '../components/Chart';
 import ChartFilter from '../components/Chart/Filter';
@@ -35,6 +35,7 @@ const ModalContent = styled.div`
   }
   .scrollView {
     overflow: auto;
+    max-height: 400px;
   }
 `;
 
@@ -66,10 +67,10 @@ const HorizontalChartContent = styled.div`
   }
 `;
 
-function ChartContent(props) {
-  const { widget, reportId, name, accessToken, filters = [], pageComponents } = props;
-  const objectId = _.get(widget, 'config.objectId');
+function ChartComponent(props) {
+  const { widget, reportId, name, accessToken, filters = [], pageComponents, projectId, themeColor, filtersGroup = [] } = props;
   const mobileCount = _.get(widget, 'config.mobileCount');
+  const mobileFontSize = _.get(widget, 'config.mobileFontSize');
   const [loading, setLoading] = useState(true);
   const [filterVisible, setFilterVisible] = useState(false);
   const [zoomVisible, setZoomVisible] = useState(false);
@@ -81,16 +82,17 @@ function ChartContent(props) {
     share: shareAuthor,
     access_token: accessToken,
   };
-  const filtersGroup = formatFiltersGroup(objectId, props.filtersGroup);
+  const pageConfig = {
+    ...props.pageConfig,
+    filters: filters.length ? filters : undefined,
+    filtersGroup: filtersGroup.length ? filtersGroup : undefined
+  };
+  
   const request = useRef(null);
 
   useDeepCompareEffect(() => {
     handleReportRequest();
-  }, [filtersGroup]);
-
-  useEffect(() => {
-    handleReportRequest();
-  }, [reportId]);
+  }, [reportId, filtersGroup]);
 
   const handleReportRequest = param => {
     let requestParam = {
@@ -115,12 +117,12 @@ function ChartContent(props) {
       );
     }
     setLoading(true);
-    if (request.current && request.current.state() === 'pending' && request.current.abort) {
-      request.current.abort();
-    }
-    if (request.current && request.current.state() === 'resolved') {
-      setData({ ...data, map: [] });
-    }
+    // if (request.current && request.current.state() === 'pending' && request.current.abort) {
+    //   request.current.abort();
+    // }
+    // if (request.current && request.current.state() === 'resolved') {
+    //   setData({ ...data, map: [] });
+    // }
     request.current = report.getData(requestParam, (shareAuthor || accessToken) ? { headersConfig } : { fireImmediately: true });
     request.current.then(data => {
         data.reportId = reportId;
@@ -217,7 +219,11 @@ function ChartContent(props) {
       <Chart
         data={data}
         loading={loading}
+        mobileFontSize={mobileFontSize}
+        projectId={projectId}
         mobileCount={mobileCount}
+        themeColor={themeColor}
+        pageConfig={pageConfig}
         onOpenFilterModal={handleOpenFilterModal}
         onOpenZoomModal={handleOpenZoomModal}
       />
@@ -256,10 +262,13 @@ function ChartContent(props) {
           {zoomVisible && (
             <Chart
               isHorizontal={true}
+              projectId={projectId}
+              themeColor={themeColor}
+              pageConfig={pageConfig}
               pageComponents={pageComponents}
               data={zoomData}
               loading={loading}
-              mobileCount={mobileCount}
+              mobileFontSize={mobileFontSize}
               onOpenFilterModal={handleOpenFilterModal}
               onOpenZoomModal={handleOpenZoomModal}
               onLoadBeforeData={(index) => {
@@ -278,15 +287,54 @@ function ChartContent(props) {
   );
 }
 
-ChartContent.defaultProps = {
-  filtersGroup: []
+const emptyArray = [];
+
+function ChartContent(props) {
+  const { widget, filterComponents, loadFilterComponentCount } = props;
+  const columnWidthConfig = _.get(widget, 'config.columnWidthConfig');
+  const objectId = _.get(widget, 'config.objectId');
+  const filtersGroup = formatFiltersGroup(objectId, props.filtersGroup);
+
+  useEffect(() => {
+    if (columnWidthConfig) {
+      sessionStorage.setItem(`pivotTableColumnWidthConfig-${widget.value}`, columnWidthConfig);
+    }
+  }, []);
+
+  if (!_.get(window, 'shareState.shareId') && filterComponents.length && loadFilterComponentCount < filterComponents.length) {
+    return (
+      <Flex justify="center" align="center" className="h100 w100">
+        <ActivityIndicator size="large" />
+      </Flex>
+    );
+  }
+
+  const isClickSearch = !!filterComponents.map(data => {
+    const { filters, advancedSetting } = data;
+    const result = _.find(filters, { objectId });
+    return result && advancedSetting.clicksearch === '1';
+  }).filter(n => n).length;
+
+  if (isClickSearch && !filtersGroup.length) {
+    return (
+      <Flex justify="center" align="center" className="h100 w100">
+        <span className="Font15 bold Gray_9e">{_l('执行查询后显示结果')}</span>
+      </Flex>
+    );
+  }
+
+  return (
+    <ChartComponent {...props} filtersGroup={filtersGroup.length ? filtersGroup : emptyArray} />
+  );
 }
 
 export const StateChartContent = connect(
   state => ({
-    filtersGroup: state.mobile.filtersGroup
+    filtersGroup: state.mobile.filtersGroup,
+    filterComponents: state.mobile.filterComponents,
+    loadFilterComponentCount: state.mobile.loadFilterComponentCount,
   })
 )(ChartContent);
 
-export default ChartContent;
+export default ChartComponent;
 

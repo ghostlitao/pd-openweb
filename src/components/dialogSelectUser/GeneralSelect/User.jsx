@@ -1,7 +1,6 @@
 import React, { Component, Fragment } from 'react';
 import { Checkbox } from 'ming-ui';
-import UserHead from 'src/pages/feed/components/userHead';
-import UserName from 'src/pages/feed/components/userName';
+import UserHead from 'src/components/userHead';
 import departmentAjax from 'src/api/department.js';
 import { Tooltip } from 'antd';
 import cx from 'classnames';
@@ -28,8 +27,11 @@ export default class User extends Component {
     });
   };
   render() {
-    let { projectId, user, checked, includeUndefinedAndMySelf, currentId } = this.props;
-    const shouldShowInfo = !(includeUndefinedAndMySelf && user.accountId === md.global.Account.accountId);
+    let { projectId, user, checked, includeMySelf, includeUndefinedAndMySelf, currentId } = this.props;
+    const shouldShowInfo = !(
+      (includeMySelf || includeUndefinedAndMySelf) &&
+      user.accountId === md.global.Account.accountId
+    );
     let { departmentName, departmentId } = _.get(user, 'departmentInfo') || {};
     let { currentFullDepartment = '' } = this.state;
 
@@ -49,22 +51,15 @@ export default class User extends Component {
               userHead: user.avatar,
               accountId: user.accountId,
             }}
-            lazy={'false'}
             size={28}
+            projectId={projectId}
           />
         </div>
         {!shouldShowInfo ? (
           <div className="GSelect-User__fullname">{_l('我自己')}</div>
         ) : (
           <div className="GSelect-User__fullname">
-            <UserName
-              className="Gray"
-              isSecretary
-              user={{
-                userName: user.fullname,
-                accountId: user.accountId,
-              }}
-            />
+            <span className="Gray">{user.fullname}</span>
           </div>
         )}
 

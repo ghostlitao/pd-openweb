@@ -1,6 +1,8 @@
 import React, { Component } from 'react';
 import Commenter from 'src/components/comment/commenter';
-import UserHead from 'src/pages/feed/components/userHead';
+import UserHead from 'src/components/userHead';
+import { getCurrentProject } from 'src/util';
+import _ from 'lodash';
 
 export default class WorkSheetCommenter extends Component {
   render() {
@@ -20,7 +22,7 @@ export default class WorkSheetCommenter extends Component {
       forReacordDiscussion,
       entityType,
       atData,
-      placeholder: window.isPublicApp ? _l('预览模式下，不能参与讨论') : _l('发表评论'),
+      placeholder: window.isPublicApp ? _l('预览模式下，不能参与讨论') : _l('发送讨论'),
       activePlaceholder: _l('输入@成员，按Ctrl+Enter快速发布'),
       sourceId: id,
       sourceType: rowId ? Commenter.TYPES.WORKSHEETROW : Commenter.TYPES.WORKSHEET,
@@ -58,6 +60,7 @@ export default class WorkSheetCommenter extends Component {
             accountId: md.global.Account.accountId,
           }}
           size={32}
+          projectId={projectId}
         />
         <Commenter {...props} />
       </div>

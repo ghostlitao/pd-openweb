@@ -25,7 +25,7 @@ import { openControlAttachmentInNewTab } from 'worksheet/controllers/record';
 import RecordInfoContext from 'worksheet/common/recordInfo/RecordInfoContext';
 import plupload from '@mdfe/jquery-plupload';
 import { navigateTo } from 'src/router/navigateTo';
-import addLinkFile from 'src/components/addLinkFile/addLinkFile';
+import addLinkFile from 'src/components/addLinkFile/addLinkFile.jsx';
 import _ from 'lodash';
 
 export const errorCode = {
@@ -57,6 +57,10 @@ export default class UploadFiles extends Component {
      * 是否显示添加链接文件
      */
     canAddLink: PropTypes.bool,
+    /**
+     * 是否显示添加知识文件
+     */
+    canAddKnowledge: PropTypes.bool,
     /**
      * 文件的最小宽度
      */
@@ -137,6 +141,7 @@ export default class UploadFiles extends Component {
   };
   static defaultProps = {
     canAddLink: false,
+    canAddKnowledge: true,
     minWidth: 140,
     maxWidth: 200,
     height: 118,
@@ -230,7 +235,8 @@ export default class UploadFiles extends Component {
     let { maxTotalSize } = this.state;
     const { nativeFile } = this;
     let { noTotal, dropPasteElement, from, projectId, advancedSetting } = this.props;
-    const isPublic = from === FROM.PUBLIC || from === FROM.WORKFLOW || window.isPublicWorksheet;
+    const isPublicWorkflow = _.get(window, 'shareState.isPublicWorkflowRecord');
+    const isPublic = from === FROM.PUBLIC_ADD || from === FROM.WORKFLOW || window.isPublicWorksheet || isPublicWorkflow;
 
     const { licenseType } = _.find(md.global.Account.projects, item => item.projectId === projectId) || {};
 
@@ -273,7 +279,7 @@ export default class UploadFiles extends Component {
 
 
           //判断应用上传量是否达到上限
-          if (projectId && !window.isPublicApp && !window.isPublicWorksheet) {
+          if (projectId && !window.isPublicApp && !window.isPublicWorksheet && !isPublicWorkflow) {
             const params = { projectId, fromType: 9 };
             checkAccountUploadLimit(filesSize, params).then(available => {
               if (!available) {
@@ -311,26 +317,25 @@ export default class UploadFiles extends Component {
           if (isValid(files)) {
             alert(_l('含有不支持格式的文件'), 3);
             _this.onRemoveAll(uploader);
+            _this.props.onUploadComplete(true);
             return false;
           }
 
-          const temporaryDataLength = _this.state.temporaryData.filter(
-            attachment => attachment.fileExt !== '.url',
-          ).length;
+          const temporaryDataLength = _this.state.temporaryData.filter(attachment => attachment.fileExt !== '.url')
+            .length;
           const filesLength = files.filter(attachment => attachment.fileExt !== '.url').length;
           const currentFileLength = temporaryDataLength + filesLength;
 
           // 限制文件数量
-          if (temporaryDataLength > 20) {
-            alert(_l('附件数量超过限制，一次上传不得超过20个附件'), 3);
+          if (temporaryDataLength > 100) {
+            alert(_l('附件数量超过限制，一次上传不得超过100个附件'), 3);
             return false;
-          } else if (currentFileLength > 20) {
-            alert(_l('附件数量超过限制，一次上传不得超过20个附件'), 3);
-            const num = currentFileLength - 20;
+          } else if (currentFileLength > 100) {
+            alert(_l('附件数量超过限制，一次上传不得超过100个附件'), 3);
+            const num = currentFileLength - 100;
             files.splice(files.length - num, num).map(file => {
               uploader.removeFile({ id: file.id });
             });
-
           }
 
           const tokenFiles = [];
@@ -359,11 +364,11 @@ export default class UploadFiles extends Component {
             tokenFiles.push({ bucket: isPic ? 4 : 3, ext: fileExt });
           });
 
-          const { projectId, appId, worksheetId } = _this.props;
+          const { appId, worksheetId } = _this.props;
           getToken(tokenFiles, 0, {
             projectId,
             appId,
-            worksheetId
+            worksheetId,
           }).then(res => {
             files.forEach((item, i) => {
               item.token = res[i].uptoken;
@@ -378,6 +383,10 @@ export default class UploadFiles extends Component {
         },
         BeforeUpload(uploader, file) {
           _this.currentFile = uploader;
+          if (!file.key) {
+            _this.removeUploadingFile(file.id);
+            return;
+          }
           const fileExt = `.${File.GetExt(file.name)}`;
 
           uploader.settings.multipart_params = {
@@ -389,7 +398,12 @@ export default class UploadFiles extends Component {
           uploader.settings.multipart_params['x:filePath'] = (file.key || '').replace(file.fileName, '');
           uploader.settings.multipart_params['x:fileName'] = (file.fileName || '').replace(/\.[^\.]*$/, '');
           uploader.settings.multipart_params['x:originalFileName'] = encodeURIComponent(
-            file.name.indexOf('.') > -1 ? file.name.split('.').slice(0, -1).join('.') : file.name,
+            file.name.indexOf('.') > -1
+              ? file.name
+                  .split('.')
+                  .slice(0, -1)
+                  .join('.')
+              : file.name,
           );
           uploader.settings.multipart_params['x:fileExt'] = fileExt;
         },
@@ -495,8 +509,8 @@ export default class UploadFiles extends Component {
       if (!isAvailable) return;
 
       // 最多只能上传20个知识文件
-      if (newKcAttachmentData.length > 20) {
-        alert(_l('附件数量超过限制，一次上传不得超过20个附件'), 3);
+      if (newKcAttachmentData.length > 100) {
+        alert(_l('附件数量超过限制，一次上传不得超过100个附件'), 3);
         return false;
       }
 
@@ -527,21 +541,24 @@ export default class UploadFiles extends Component {
       },
       () => {
         this.props.onTemporaryDataUpdate(newTemporaryData);
+        if (!newTemporaryData.length) {
+          this.props.onUploadComplete(true);
+        }
       },
     );
   }
   openLinkDialog(item) {
     const _this = this;
 
-    new addLinkFile({
+    addLinkFile({
       showTitleTip: false,
       callback: link => {
         const { linkName, linkContent } = link;
         const { temporaryData } = this.state;
         if (
-          temporaryData.filter(attachment => attachment.fileExt === '.url' && attachment.originLinkUrl).length >= 20
+          temporaryData.filter(attachment => attachment.fileExt === '.url' && attachment.originLinkUrl).length >= 100
         ) {
-          alert(_l('附件数量超过限制，一次上传不得超过20个附件'), 3);
+          alert(_l('附件数量超过限制，一次上传不得超过100个附件'), 3);
           return;
         }
         const newTemporaryData = temporaryData.concat({
@@ -614,6 +631,11 @@ export default class UploadFiles extends Component {
     );
   }
   resetFileName(id, newName) {
+    newName = newName.trim();
+    if (_.isEmpty(newName)) {
+      alert(_l('名称不能为空'), 2);
+      return;
+    }
     const newTemporaryData = this.state.temporaryData.map(item => {
       if (item.fileID === id) {
         item.originalFileName = newName;
@@ -720,7 +742,7 @@ export default class UploadFiles extends Component {
         },
       );
     } else if (quIndex >= 0) {
-      let hideFunctions = ['editFileName'];
+      let hideFunctions = ['editFileName', 'share', 'saveToKnowlege'];
       previewAttachments(
         {
           attachments: quData.map(item => {
@@ -759,7 +781,7 @@ export default class UploadFiles extends Component {
         attachments: res.map(item => item.node),
         index: findIndex(res, id),
         callFrom: 'kc',
-        hideFunctions: ['editFileName'],
+        hideFunctions: ['editFileName', 'share', 'saveToKnowlege'],
       },
       {
         openControlAttachmentInNewTab: this.props.controlId && this.handleOpenControlAttachmentInNewTab.bind(this),
@@ -811,7 +833,7 @@ export default class UploadFiles extends Component {
     }
   }
   render() {
-    let { controlId, isUpload, arrowLeft, minWidth, maxWidth, height, canAddLink, from } = this.props;
+    let { controlId, isUpload, arrowLeft, minWidth, maxWidth, height, canAddLink, canAddKnowledge, from } = this.props;
     let { temporaryData, kcAttachmentData, attachmentData } = this.state;
     let { totalSize, currentPrograss } = getAttachmentTotalSize(temporaryData);
     let length = temporaryData.length + kcAttachmentData.length + attachmentData.length;
@@ -844,12 +866,19 @@ export default class UploadFiles extends Component {
                 <i className="icon icon-knowledge-upload Gray_9e Font19" />
                 <span>{_l('本地')}</span>
               </div>
-              {!md.global.Account.isPortal && from !== FROM.DRAFT && !md.global.SysSettings.forbidSuites.includes('4') && (
-                <div className="flexRow valignWrapper" onClick={this.onOpenFolderSelectDialog.bind(this)}>
-                  <i className="icon icon-folder Gray_9e Font18" />
-                  <span>{_l('知识')}</span>
-                </div>
-              )}
+              {canAddKnowledge &&
+                md.global.Account.accountId &&
+                md.global.Account.accountId.length === 36 &&
+                from !== FROM.DRAFT &&
+                !md.global.SysSettings.forbidSuites.includes('4') &&
+                !_.get(window, 'shareState.isPublicForm') &&
+                !_.get(window, 'shareState.isPublicFormPreview') &&
+                !_.get(window, 'shareState.isPublicWorkflowRecord') && (
+                  <div className="flexRow valignWrapper" onClick={this.onOpenFolderSelectDialog.bind(this)}>
+                    <i className="icon icon-folder Gray_9e Font18" />
+                    <span>{_l('知识')}</span>
+                  </div>
+                )}
               {canAddLink && (
                 <div className="flexRow valignWrapper" onClick={this.openLinkDialog.bind(this)}>
                   <i className="icon icon-link2 Gray_9e Font19" />
@@ -864,7 +893,7 @@ export default class UploadFiles extends Component {
               <div className="UploadFiles-info">
                 {totalSize}
                 /{md.global.SysSettings.fileUploadLimitSize}M(
-                {canAddLink ? _l('至多本地,链接各20个') : _l('至多本地文件各20个')})
+                {canAddLink ? _l('至多本地,链接各100个') : _l('至多本地文件各100个')})
               </div>
             </div>
           </div>

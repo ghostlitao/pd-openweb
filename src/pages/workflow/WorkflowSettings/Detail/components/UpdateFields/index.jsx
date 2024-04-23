@@ -7,13 +7,17 @@ import _ from 'lodash';
 export default class UpdateFields extends Component {
   static defaultProps = {
     type: 1, // 1：更新字段 2：更新参数
+    isBatch: false,
     isSubProcessNode: false,
     companyId: '',
     processId: '',
+    relationId: '',
     selectNodeId: '',
     nodeId: '',
     controls: [],
     fields: [],
+    showCurrent: false,
+    filterType: 0,
     formulaMap: {},
     updateSource: () => {},
   };
@@ -27,7 +31,7 @@ export default class UpdateFields extends Component {
     if (item.type === 29) {
       return (
         <div className="flexRow">
-          <div className="flex ellipsis">
+          <div>
             <span className="Gray_9e mRight5">[{CONTROLS_NAME[item.type]}]</span>
             <span>{item.controlName}</span>
           </div>
@@ -97,19 +101,24 @@ export default class UpdateFields extends Component {
    * 渲染操作类型
    */
   renderOperatorType(item, i) {
-    const { type } = this.props;
-    const TYPES = [{ text: _l('设为'), value: 0 }, { text: _l('增加'), value: 1 }, { text: _l('减少'), value: 2 }];
+    const { type, isBatch } = this.props;
+    const TYPES = [
+      { text: _l('设为'), value: 0 },
+      { text: _l('增加'), value: 1 },
+      { text: _l('减少'), value: 2 },
+    ];
 
     // 附件没有减少
     if (item.type === 14) {
       _.remove(TYPES, o => o.value === 2);
     }
 
-    // 数值 || 金额 || 选项 || 附件 || 人员 || 部门 || 关联他表多条
+    // 数值 || 金额 || 选项 || 附件 || 人员 || 部门 || 组织角色 || 关联他表多条
     if (
       item.fieldId &&
-      (_.includes([6, 8, 9, 10, 11, 14, 26, 27], item.type) || (item.type === 29 && item.enumDefault === 2)) &&
-      type === 1
+      (_.includes([6, 8, 9, 10, 11, 14, 26, 27, 48], item.type) || (item.type === 29 && item.enumDefault === 2)) &&
+      type === 1 &&
+      !isBatch
     ) {
       return (
         <Dropdown
@@ -145,11 +154,15 @@ export default class UpdateFields extends Component {
       formulaMap,
       updateSource,
       companyId,
+      relationId,
       processId,
       selectNodeId,
       type,
       nodeId,
       isSubProcessNode,
+      showCurrent,
+      isBatch,
+      filterType,
     } = this.props;
     const relationList = controls
       .filter(v => v.type === 29)
@@ -209,14 +222,18 @@ export default class UpdateFields extends Component {
 
                 <SingleControlValue
                   showClear
+                  showCurrent={showCurrent}
+                  isBatch={isBatch}
                   companyId={companyId}
                   processId={processId}
+                  relationId={relationId}
                   selectNodeId={selectNodeId}
                   sourceNodeId={nodeId}
                   controls={controls}
                   formulaMap={formulaMap}
                   fields={fields}
                   updateSource={updateSource}
+                  filterType={filterType}
                   item={item}
                   i={i}
                 />
@@ -226,7 +243,7 @@ export default class UpdateFields extends Component {
             </Fragment>
           );
         })}
-        <div className="addActionBtn mTop25">
+        <div className="addActionBtn mTop20">
           <span className="ThemeBorderColor3" onClick={this.addFields}>
             <i className="icon-add Font16" />
             {type === 1 ? _l('添加字段') : _l('添加参数')}

@@ -162,6 +162,7 @@ export default class JSONParse extends Component {
    */
   getNodeDetail(props, sId) {
     const { processId, selectNodeId, selectNodeType, isIntegration } = props;
+    const { data } = this.state;
 
     flowNode
       .getNodeDetail(
@@ -172,7 +173,7 @@ export default class JSONParse extends Component {
         if (result.selectNodeId && !result.outputs.length && (!result.appId || sId)) {
           result.outputs = [getDefaultParameters()];
         }
-        this.setState({ data: result, foldIds: [], selectFiledId: '' });
+        this.setState({ data: !sId ? result : { ...result, name: data.name }, foldIds: [], selectFiledId: '' });
       });
   }
 
@@ -323,11 +324,10 @@ export default class JSONParse extends Component {
                 <div className="mLeft30">
                   <TriggerCondition
                     processId={this.props.processId}
+                    relationId={this.props.relationId}
                     selectNodeId={this.props.selectNodeId}
                     isIntegration={isIntegration}
-                    controls={data.outputs.filter(
-                      item => !item.dataSource && !_.includes([10000007, 10000008], item.type),
-                    )}
+                    controls={data.outputs.filter(item => !item.dataSource)}
                     data={data.conditions}
                     updateSource={data => this.updateSource({ conditions: data })}
                     projectId={this.props.companyId}
@@ -335,7 +335,9 @@ export default class JSONParse extends Component {
                 </div>
                 <div className="mTop20 bold">{_l('指定触发错误时返回的错误消息')}</div>
                 <CustomTextarea
+                  projectId={this.props.companyId}
                   processId={this.props.processId}
+                  relationId={this.props.relationId}
                   selectNodeId={this.props.selectNodeId}
                   isIntegration={isIntegration}
                   type={2}
@@ -539,7 +541,7 @@ export default class JSONParse extends Component {
           <Support
             type={3}
             className="workflowDialogSupport"
-            href="https://help.mingdao.com/zh/flow75.html"
+            href="https://help.mingdao.com/flow75"
             text={_l('了解 JSON Path')}
           />
         </span>
@@ -731,7 +733,7 @@ export default class JSONParse extends Component {
             </div>
           </OutputList>
           {isIntegration && (
-            <div className="mBottom10 flexRow alignItemsCenter">
+            <div className={cx('mBottom10 flexRow alignItemsCenter', { pLeft20: item.dataSource })}>
               <input
                 type="text"
                 className="ThemeBorderColor3 actionControlBox pTop0 pBottom0 pLeft10 pRight10 flex"
@@ -853,7 +855,7 @@ export default class JSONParse extends Component {
           bg="BGBlueAsh"
           updateSource={this.updateSource}
         />
-        <div className="flex mTop20">
+        <div className="flex">
           <ScrollView>
             <div className="workflowDetailBox">{this.renderContent()}</div>
           </ScrollView>

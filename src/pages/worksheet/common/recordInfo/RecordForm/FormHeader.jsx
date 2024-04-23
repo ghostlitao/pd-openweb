@@ -1,12 +1,13 @@
 import React, { useRef } from 'react';
 import PropTypes from 'prop-types';
 import cx from 'classnames';
-import UserHead from 'src/pages/feed/components/userHead';
+import UserHead from 'src/components/userHead';
 import { controlState } from 'src/components/newCustomFields/tools/utils';
 import { handleChangeOwner, updateRecordOwner } from '../crtl';
 import { isOpenPermit } from 'src/pages/FormSet/util.js';
 import { permitList } from 'src/pages/FormSet/config.js';
 import { RECORD_INFO_FROM } from 'worksheet/constants/enum';
+import { getTranslateInfo } from 'src/util';
 import _ from 'lodash';
 export default function FormHeader(props) {
   const {
@@ -33,7 +34,7 @@ export default function FormHeader(props) {
     formData,
     appId,
   } = recordinfo;
-  const isPublicShare = _.get(window, 'shareState.isPublicRecord') || _.get(window, 'shareState.isPublicView');
+  const isPublicShare = _.get(window, 'shareState.isPublicRecord') || _.get(window, 'shareState.isPublicView') || _.get(window, 'shareState.isPublicPage');
   const { forceShowFullValue, maskPermissions, handleUnMask } = maskinfo;
   const ownerRef = useRef();
   const ownerControl = _.find(formData, c => c.controlId === 'ownerid');
@@ -48,7 +49,8 @@ export default function FormHeader(props) {
     ownerControl &&
     controlState(ownerControl).editable &&
     !isLock &&
-    from !== RECORD_INFO_FROM.DRAFT;
+    from !== RECORD_INFO_FROM.DRAFT &&
+    !window.isPublicApp;
   let isOpenLogs = true;
   if (!isOpenPermit(permitList.recordLogSwitch, sheetSwitchPermit, viewId)) {
     isOpenLogs = false;
@@ -60,10 +62,10 @@ export default function FormHeader(props) {
         <div className="worksheetNameCon" style={{ marginTop: 16 }}>
           {!(window.isPublicApp || md.global.Account.isPortal) ? (
             <a className="worksheetName Gray_9e InlineBlock" target="_blank" href={`/worksheet/${worksheetId}`}>
-              {worksheetName}
+              {getTranslateInfo(appId, worksheetId).name || worksheetName}
             </a>
           ) : (
-            <span className="worksheetName Gray_9e InlineBlock">{worksheetName}</span>
+            <span className="worksheetName Gray_9e InlineBlock">{getTranslateInfo(appId, worksheetId).name || worksheetName}</span>
           )}
           <div className="Right">
             {createTime && isOpenLogs && (
@@ -109,13 +111,12 @@ export default function FormHeader(props) {
                     <UserHead
                       className="cursorDefault"
                       size={24}
-                      bindBusinessCard={
-                        !_.includes(['user-workflow', 'user-publicform', 'user-api'], ownerAccount.accountId)
-                      }
                       user={{
                         accountId: ownerAccount.accountId,
                         userHead: ownerAccount.avatar,
                       }}
+                      appId={appId}
+                      projectId={projectId}
                       headClick={() => {}}
                     />
                   </span>

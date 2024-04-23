@@ -11,6 +11,12 @@ import { v4 as uuidv4 } from 'uuid';
 import LoadDiv from 'ming-ui/components/LoadDiv';
 import PublishFail from 'src/pages/integration/components/PublishFail';
 import { navigateTo } from 'src/router/navigateTo';
+import { Dialog } from 'ming-ui';
+import 'src/pages/integration/dataIntegration/connector/style.less';
+import PublishSetDialog from 'src/pages/integration/dataIntegration/TaskCon/TaskCanvas/components/PublishSetDialog';
+import { DATABASE_TYPE } from 'src/pages/integration/dataIntegration/constant.js';
+import dataSourceApi from 'src/pages/integration/api/datasource.js';
+
 const Wrap = styled.div`
   height: 100%;
 `;
@@ -31,6 +37,7 @@ class Task extends Component {
       jobId: props.jobId,
       updating: false,
       currentProjectId: '',
+      errorMsgList: [],
     };
   }
 
@@ -102,24 +109,65 @@ class Task extends Component {
     });
   };
   //获取流信息
-  getSynsTask = () => {
+  getSynsTask = errIds => {
     const { flowId = '' } = this.state;
     TaskFlow.getTaskFlow({
       flowId,
     }).then(res => {
       let flowData = res || {};
+      if (errIds) {
+        errIds.map(o => {
+          flowData = {
+            ...flowData,
+            flowNodes: { ...flowData.flowNodes, [o]: { ...flowData.flowNodes[o], status: 'ERR' } },
+          };
+        });
+      }
       this.setProJectInfo(flowData.projectId);
-      this.setState({
-        flowData,
-        flowId: flowId,
-        loading: false,
-        taskId: flowData.taskId || '',
-        jobId: flowData.jobId || '',
-        currentProjectId: flowData.projectId,
-        isUpdate: res.taskStatus === 'ERROR',
+      this.getDatasourcesList(flowData, flowData.projectId, datasources => {
+        this.setState({
+          flowData: { ...flowData, datasources },
+          flowId: flowId,
+          loading: false,
+          taskId: flowData.taskId || '',
+          jobId: flowData.jobId || '',
+          currentProjectId: flowData.projectId,
+          isUpdate: res.taskStatus === 'ERROR' || res.status === 'EDITING', //PUBLISHED：已发布
+          isNew: ['UN_PUBLIC'].includes(res.taskStatus),
+          //    * 未发布
+          //   'UN_PUBLIC',
+          //   //  * 运行中
+          //   // 'RUNNING',
+          //   //  * 停止
+          //   // 'STOP',
+          //   //  * 异常
+          //   // 'ERROR',
+          //    * 创建中
+          //   // 'CREATING',
+        });
       });
     });
   };
+  //获取当前画布所有的数据源信息
+  getDatasourcesList = (flowData, projectId, cb) => {
+    const nodes =
+      _.values(flowData.flowNodes).filter(
+        o =>
+          ['DEST_TABLE', 'SOURCE_TABLE'].includes(_.get(o, 'nodeType')) &&
+          _.get(o, 'nodeConfig.config.dsType') !== DATABASE_TYPE.APPLICATION_WORKSHEET,
+      ) || {};
+    dataSourceApi
+      .getDatasources({
+        projectId,
+        datasourceIds: nodes.map(
+          o => _.get(o, 'nodeConfig.config.datasourceId') || _.get(o, 'nodeConfig.config.dataDestId'),
+        ),
+      })
+      .then(datasources => {
+        cb(datasources);
+      });
+  };
+
   //修改同步任务属性(name)
   updateSyncTask = taskName => {
     const { currentProjectId: projectId } = this.state;
@@ -195,36 +243,83 @@ class Task extends Component {
     );
   };
   publishTask = () => {
-    const { currentProjectId: projectId } = this.state;
-    const { flowId = '', flowData, updating } = this.state;
+    const { updating, flowData = {}, isNew } = this.state;
     if (updating) {
       return;
     }
+    const destData = _.values(flowData.flowNodes).find(o => _.get(o, 'nodeType') === 'DEST_TABLE') || {};
+    const isDestMDType = _.get(destData, 'nodeConfig.config.dsType') === DATABASE_TYPE.APPLICATION_WORKSHEET;
+    if (isDestMDType && !_.get(destData, 'nodeConfig.config.createTable') && !isNew) {
+      //目的地是表 且选择已有表
+      this.setState({
+        showPublishDialog: true,
+      });
+    } else {
+      this.publishTaskAction();
+    }
+  };
+
+  publishTaskAction = info => {
+    const { currentProjectId: projectId } = this.state;
+    const { flowId = '', flowData } = this.state;
     this.setState({
       updating: true,
+      showPublishDialog: false,
     });
     TaskFlow.publishTask({
       projectId,
       flowId: flowId,
+      ...info,
     }).then(
       res => {
         this.setState({
           updating: false,
         });
-        if (res) {
+        const { jobId, errorMsgList = [], isSucceeded, errorNodeIds = [], errorType } = res;
+        if (isSucceeded) {
           this.setState({
             isNew: false,
             isUpdate: false,
-            jobId: res,
+            jobId,
             flowData: {
               ...flowData,
               taskStatus: 'RUNNING',
-              // showPublishFail: true, //有错误 ?????
             },
+            errorMsgList: [],
           });
         } else {
-          alert(_l('失败，请稍后再试'), 2);
+          this.setState(
+            {
+              isNew: false,
+              isUpdate: false,
+              jobId,
+              showPublishFail: errorType === 0, //有错误
+              errorMsgList: errorMsgList,
+            },
+            () => {
+              if (errorType === 1 && errorMsgList.length > 0) {
+                return Dialog.confirm({
+                  title: _l('报错信息'),
+                  className: 'connectorErrorDialog',
+                  description: (
+                    <div className="errorInfo" style={{ marginBottom: -30, 'max-height': 400, overflow: 'auto' }}>
+                      {errorMsgList.map((error, index) => {
+                        return (
+                          <div key={index} className="mTop5">
+                            {error}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ),
+                  removeCancelBtn: true,
+                  okText: _l('关闭'),
+                });
+              }
+            },
+          );
         }
+        this.getSynsTask(errorNodeIds);
       },
       () => {
         this.setState({
@@ -233,6 +328,7 @@ class Task extends Component {
       },
     );
   };
+
   renderCon = () => {
     const { tab, flowData, curId, jobId } = this.state;
     switch (tab) {
@@ -280,7 +376,18 @@ class Task extends Component {
     }
   };
   render() {
-    const { flowData = {}, loading, isNew, isUpdate, showPublishFail, updating } = this.state;
+    const {
+      flowData = {},
+      loading,
+      isNew,
+      isUpdate,
+      showPublishFail,
+      updating,
+      errorMsgList = [],
+      showPublishDialog,
+    } = this.state;
+    const destData = _.values(flowData.flowNodes).find(o => _.get(o, 'nodeType') === 'DEST_TABLE') || {};
+    const { writeMode, isCleanDestTableData, fieldForIdentifyDuplicate } = _.get(destData, 'nodeConfig.config') || {};
     if (loading) {
       return <LoadDiv />;
     }
@@ -325,11 +432,32 @@ class Task extends Component {
               });
             }}
             name={flowData.taskName || _l('数据同步任务')}
-            errInfo={['sadsa', 'sad']}
+            errorMsgList={errorMsgList}
             onCancel={() => {
               this.setState({
                 showPublishFail: false,
               });
+            }}
+          />
+        )}
+        {showPublishDialog && (
+          <PublishSetDialog
+            controls={(
+              _.get(
+                _.values(flowData.flowNodes).find(o => _.get(o, 'nodeType') === 'DEST_TABLE') || {},
+                'nodeConfig.fields',
+              ) || []
+            ).filter(o => o.isCheck && [1, 2, 7, 5, 3, 4, 33].includes(o.mdType))} //文本1 2、证件7、邮箱5、电话3 4、自动编号33
+            onClose={() => {
+              this.setState({
+                showPublishDialog: false,
+              });
+            }}
+            fieldForIdentifyDuplicate={fieldForIdentifyDuplicate}
+            writeMode={writeMode}
+            isCleanDestTableData={!!isCleanDestTableData}
+            onOk={data => {
+              this.publishTaskAction(data);
             }}
           />
         )}

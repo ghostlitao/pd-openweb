@@ -72,7 +72,11 @@ export default class Level extends React.Component {
   }
   @autobind
   handleChange(value) {
-    const { updateCell } = this.props;
+    const { cell, updateCell } = this.props;
+    if (cell.required && !value) {
+      alert(_l('%0为必填字段', cell.controlName), 3);
+      return;
+    }
     this.setState({ value });
     updateCell({
       value,
@@ -80,7 +84,7 @@ export default class Level extends React.Component {
   }
 
   render() {
-    const { from, className, style, cell, editable, isediting, onClick } = this.props;
+    const { from, recordId, className, style, cell, editable, isediting, onClick } = this.props;
     const { value } = this.state;
     const isMobile = browserIsMobile();
     if (isMobile) {
@@ -101,20 +105,23 @@ export default class Level extends React.Component {
         style={style}
         onClick={onClick}
       >
-        <div className="flex flexRow">
-          {isMobile && (
-            <span className="mRight5" style={{ marginTop: '-2px' }}>
-              {value}
-            </span>
-          )}
-          <CustomScore
-            hideTip
-            score={value}
-            data={cell}
-            disabled={!editable || from === FROM.CARD}
-            callback={this.handleChange}
-          />
-        </div>
+        {recordId !== 'empty' && (
+          <div className="flex flexRow">
+            {isMobile && (
+              <span className="mRight5" style={{ marginTop: '-2px' }}>
+                {value}
+              </span>
+            )}
+            <CustomScore
+              hideTip
+              backgroundColor="rgba(0,0,0,0.16)"
+              score={value}
+              data={cell}
+              disabled={!editable || from === FROM.CARD}
+              callback={this.handleChange}
+            />
+          </div>
+        )}
       </div>
     );
   }

@@ -29,7 +29,7 @@ const formatChartMap = (data, yaxisList) => {
       value: Math.abs(data.value[0].v),
       originalValue: data.value[0].v,
     }
-  }).filter(item => item.originalValue);
+  });
 }
 
 export default class extends Component {
@@ -54,8 +54,10 @@ export default class extends Component {
     this.PieChart && this.PieChart.destroy();
   }
   componentWillReceiveProps(nextProps) {
-    const { displaySetup } = nextProps.reportData;
-    const { displaySetup: oldDisplaySetup } = this.props.reportData;
+    const { displaySetup, style } = nextProps.reportData;
+    const { displaySetup: oldDisplaySetup, style: oldStyle } = this.props.reportData;
+    const chartColor = _.get(nextProps, 'customPageConfig.chartColor');
+    const oldChartColor = _.get(this.props, 'customPageConfig.chartColor');
     if (
       displaySetup.showTotal !== oldDisplaySetup.showTotal ||
       displaySetup.showLegend !== oldDisplaySetup.showLegend ||
@@ -63,7 +65,10 @@ export default class extends Component {
       displaySetup.showDimension !== oldDisplaySetup.showDimension ||
       displaySetup.showNumber !== oldDisplaySetup.showNumber ||
       displaySetup.showPercent !== oldDisplaySetup.showPercent ||
-      displaySetup.magnitudeUpdateFlag !== oldDisplaySetup.magnitudeUpdateFlag
+      displaySetup.magnitudeUpdateFlag !== oldDisplaySetup.magnitudeUpdateFlag ||
+      style.tooltipValueType !== oldStyle.tooltipValueType ||
+      !_.isEqual(chartColor, oldChartColor) ||
+      nextProps.themeColor !== this.props.themeColor
     ) {
       const pieConfig = this.getPieConfig(nextProps);
       this.PieChart.update(pieConfig);
@@ -87,10 +92,11 @@ export default class extends Component {
     const { xaxes } = this.props.reportData;
     const event = data.gEvent;
     const currentData = data.data;
-    const isNumber = isFormatNumber(xaxes.controlType);
     const param = {};
     if (xaxes.cid) {
-      param[xaxes.cid] = isNumber ? Number(currentData.data.originalId) : currentData.data.originalId;
+      const isNumber = isFormatNumber(xaxes.controlType);
+      const value = currentData.data.originalId;
+      param[xaxes.cid] = isNumber && value ? Number(value) : value;
     }
     this.setState({
       dropdownVisible: true,
@@ -141,15 +147,19 @@ export default class extends Component {
     }
   }
   getPieConfig(props) {
-    const { map, displaySetup, yaxisList, summary, style, xaxes, reportId } = props.reportData;
+    const { themeColor, projectId, customPageConfig = {}, reportData } = props;
+    const { chartColor, chartColorIndex = 1 } = customPageConfig;
+    const { map, displaySetup, yaxisList, summary, xaxes, reportId } = reportData;
+    const styleConfig = reportData.style || {};
+    const style = chartColor && chartColorIndex >= (styleConfig.chartColorIndex || 0) ? { ...styleConfig, ...chartColor } : styleConfig;
     const data = xaxes.controlId ? formatChartData(map[0].value) : formatChartMap(map, yaxisList);
     const { position } = getLegendType(displaySetup.legendType);
     const isLabelVisible = displaySetup.showDimension || displaySetup.showNumber || displaySetup.showPercent;
     const newYaxisList = formatYaxisList(data, yaxisList);
     const isAnnular = displaySetup.showChartType === 1;
-    const colors = getChartColors(style);
+    const colors = getChartColors(style, themeColor, projectId);
     const isNewChart = _.isUndefined(reportId) && _.isEmpty(style);
-    const isAlienationColor = getIsAlienationColor(props.reportData);
+    const isAlienationColor = getIsAlienationColor(reportData);
     const isOptionsColor = isNewChart ? isAlienationColor : style ? style.colorType === 0 && isAlienationColor : false;
     const { clientWidth, clientHeight } = this.chartEl;
     const height = clientHeight / 2;
@@ -196,9 +206,10 @@ export default class extends Component {
             formatter: ({ value, originalId }) => {
               const name = findName(originalId);
               const { dot } = yaxisList[0] || {};
+              const labelValue = formatrChartValue(value, false, newYaxisList, value ? undefined : originalId);
               return {
                 name,
-                value: _.isNumber(value) ? value.toLocaleString('zh', { minimumFractionDigits: dot }) : '--',
+                value: _.isNumber(value) ? style.tooltipValueType ? labelValue : value.toLocaleString('zh', { minimumFractionDigits: dot }) : '--',
               };
             },
           },
@@ -237,6 +248,8 @@ export default class extends Component {
                     item.originalValue,
                     false,
                     newYaxisList,
+                    null,
+                    false
                   )}`
                 : '';
               const percentText = displaySetup.showPercent ? `(${toFixed(item.percent * 100, 2)}%)` : '';

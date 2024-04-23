@@ -47,11 +47,12 @@ export default class FindSystem extends Component {
    */
   getNodeDetail(props, sId, fields) {
     const { processId, selectNodeId, selectNodeType } = props;
+    const { data } = this.state;
 
     flowNode
       .getNodeDetail({ processId, nodeId: selectNodeId, flowNodeType: selectNodeType, selectNodeId: sId, fields })
       .then(result => {
-        this.setState({ data: result });
+        this.setState({ data: !sId ? result : { ...result, name: data.name } });
       });
   }
 
@@ -277,12 +278,14 @@ export default class FindSystem extends Component {
         ) : (
           <TriggerCondition
             processId={this.props.processId}
+            relationId={this.props.relationId}
             selectNodeId={this.props.selectNodeId}
             controls={data.actionId === ACTION_ID.RELATION ? data.relationControls : data.controls}
             data={data.conditions}
             updateSource={data => this.updateSource({ conditions: data })}
             projectId={this.props.companyId}
             singleCondition={data.appType === APP_TYPE.EXTERNAL_USER}
+            excludingDepartmentSpecialFilter
           />
         )}
 
@@ -333,17 +336,13 @@ export default class FindSystem extends Component {
     const { data } = this.state;
 
     return (
-      <div className="mTop25">
+      <div className="addActionBtn mTop25">
         <span
-          className={cx(
-            'workflowDetailStartBtn',
-            data.appId
-              ? 'ThemeColor3 ThemeBorderColor3 ThemeHoverColor2 ThemeHoverBorderColor2'
-              : 'Gray_bd borderColor_c',
-          )}
+          className={data.appId ? 'ThemeBorderColor3' : 'Gray_bd borderColor_c'}
           onClick={() => this.updateSource({ conditions: [[{}]] })}
         >
-          {_l('设置筛选条件')}
+          <i className="icon-add Font16" />
+          {_l('筛选条件')}
         </span>
       </div>
     );
@@ -366,7 +365,7 @@ export default class FindSystem extends Component {
           bg="BGBlue"
           updateSource={this.updateSource}
         />
-        <div className="flex mTop20">
+        <div className="flex">
           <ScrollView>
             <div className="workflowDetailBox">{this.renderContent()}</div>
           </ScrollView>

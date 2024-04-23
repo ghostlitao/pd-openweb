@@ -1,5 +1,5 @@
 import React, { useState, Fragment, useEffect } from 'react';
-import { Dialog, Checkbox } from 'ming-ui';
+import { Dialog, Checkbox, Support } from 'ming-ui';
 import cx from 'classnames';
 import styled from 'styled-components';
 import { useSetState } from 'react-use';
@@ -29,12 +29,12 @@ const FORMAT_CONFIG = [
     regExp: '^https?:\\/\\/\\w+\\.\\w+\\.\\w+.*$',
   },
   {
-    text: _l('车牌号'),
+    text: _l('车牌号%04012'),
     value: 'car',
     regExp: '^[京津沪渝冀豫云辽黑湘皖鲁新苏浙赣鄂桂甘晋蒙陕吉闽贵粤青藏川宁琼使领]\\w{4,9}$',
   },
   {
-    text: _l('身份证号'),
+    text: _l('身份证号%04013'),
     value: 'idCard',
     regExp: '^\\d{17}[\\dX]$',
   },
@@ -93,7 +93,7 @@ const FormatInfo = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 0 12px;
-  margin-top: 12px;
+  margin-top: 8px;
   border-radius: 3px;
   border: 1px solid #e0e0e0;
   background-color: #f5f5f5;
@@ -155,14 +155,13 @@ export default function InputFormatConfig({ data, onChange }) {
         onCancel={() => {
           setVisible(false);
         }}
-        title={<span className="bold">{_l('限定输入格式')}</span>}>
+        title={<span className="bold">{_l('限定输入格式')}</span>}
+      >
         <ConfigWrap>
           <div className="formatList">
             <div className="title Gray_75">
               {_l('选择下方常用表达式或自定义输入')}
-              <a href="https://help.mingdao.com/zh/sheet31.html" target="__blank" className="mLeft4">
-                {_l('帮助')}
-              </a>
+              <Support href="https://help.mingdao.com/sheet31" type={3} text={_l('帮助')} />
             </div>
             <ul className="list">
               {FORMAT_CONFIG.map(item => (

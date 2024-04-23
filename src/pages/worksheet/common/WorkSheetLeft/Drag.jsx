@@ -47,6 +47,9 @@ const spliceTarget = (groups, target, data) => {
       }
     });
   } else {
+    if (!target.parentId) {
+      data.parentId = undefined;
+    }
     groups.splice(data.first ? index : index + 1, 0, data);
     return groups;
   }
@@ -127,7 +130,6 @@ const Drag = props => {
           const hoverBoundingRect = ref.current.getBoundingClientRect();
           const hoverClientX = clientOffset.x - hoverBoundingRect.left;
           const hoverClientY = clientOffset.y - hoverBoundingRect.top;
-          // console.log('hoverClientX', hoverClientX);
           currentPcNaviStyle === 2 ? setActiveFirst(hoverClientX <= 30) : setActiveFirst(hoverClientY <= 10);
         } else {
           setActiveFirst(false);
@@ -199,7 +201,8 @@ const Drag = props => {
           icon: dragData.icon,
           iconColor: appPkg.iconColor,
           iconUrl: dragData.iconUrl,
-          workSheetName: dragData.workSheetName
+          workSheetName: dragData.workSheetName,
+          createType: dragData.createType,
         }]
       }).then(result => {
         if (!result) {
@@ -234,7 +237,8 @@ const Drag = props => {
             icon: dragData.icon,
             iconColor: appPkg.iconColor,
             iconUrl: dragData.iconUrl,
-            workSheetName: dragData.workSheetName
+            workSheetName: dragData.workSheetName,
+            createType: dragData.createType,
           }]
         }).then(result => {
           if (result) {

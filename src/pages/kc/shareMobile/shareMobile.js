@@ -1,5 +1,5 @@
 import './css/mobileShare.less';
-import doT from '@mdfe/dot';
+import doT from 'dot';
 import qs from 'query-string';
 import { downloadFile, formatFileSize, getClassNameByExt } from 'src/util';
 import mobileShareHtml from './tpl/mobileShare.htm';
@@ -46,10 +46,10 @@ var MobileSharePreview = function (options) {
         MSP.init();
       } else {
         if (data.actionResult === 2) {
-          window._alert(_l('请先登录'));
+          window.nativeAlert(_l('请先登录'));
           location.href = md.global.Config.WebUrl + 'login?ReturnUrl=' + location.href;
         } else {
-          window._alert(_l('当前文件不存在或您没有查看权限'));
+          window.nativeAlert(_l('当前文件不存在或您没有查看权限'));
         }
       }
     });
@@ -61,7 +61,7 @@ var MobileSharePreview = function (options) {
         MSP.nodeData.isValid = data.isValid;
         MSP.init();
       } else {
-        _alert(_l('当前文件不存在或您没有查看权限'));
+        window.nativeAlert(_l('当前文件不存在或您没有查看权限'));
       }
     });
   } else {
@@ -208,7 +208,7 @@ MobileSharePreview.prototype = {
         MSP.alert(_l('请先登录'));
         setTimeout(function () {
           window.location =
-            '/login.htm?ReturnUrl=' + encodeURIComponent(window.location.href.replace('checked=login', ''));
+            '/login?ReturnUrl=' + encodeURIComponent(window.location.href.replace('checked=login', ''));
         }, 1000);
       } else if (!MSP.file.canDownload) {
         MSP.alert(_l('您权限不足，无法保存。请联系文件夹管理员或文件上传者'));

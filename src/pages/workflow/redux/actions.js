@@ -41,17 +41,23 @@ export const updatePublishState = obj => (dispatch, getState) => {
   });
 
   if (!obj.pending && obj.state !== 13) {
-    getProcessById(workflowDetail.id)(dispatch);
+    getProcessById(workflowDetail.id, null)(dispatch);
   }
 };
 
 // 获取工作流配置详情
-export const getProcessById = processId => (dispatch, getState) => {
-  flowNode.get({ processId }, { isIntegration: location.href.indexOf('integration') > -1 }).then(result => {
+export const getProcessById = (processId, count = 200) => (dispatch, getState) => {
+  flowNode.get({ processId, count }, { isIntegration: location.href.indexOf('integration') > -1 }).then(result => {
+    const isSimple = count && Object.keys(result.flowNodeMap).length > count;
+
     dispatch({
       type: 'GET_PROCESS_INFO',
-      data: result,
+      data: Object.assign({}, result, { isSimple }),
     });
+
+    if (isSimple) {
+      getProcessById(processId, null)(dispatch);
+    }
   });
 };
 
@@ -93,7 +99,11 @@ export const addFlowNode = (processId, args, callback = () => {}) => (dispatch, 
 
         if (nodeId) {
           result.addFlowNodes.concat(result.updateFlowNodes).forEach(item => {
-            workflowDetail.flowNodeMap[nodeId].processNode.flowNodeMap[item.id] = item;
+            if ((workflowDetail.flowNodeMap[nodeId].processNode.flowNodeMap[item.id] || {}).appType === 9) {
+              workflowDetail.flowNodeMap[nodeId].processNode.flowNodeMap[item.id].nextId = item.nextId;
+            } else {
+              workflowDetail.flowNodeMap[nodeId].processNode.flowNodeMap[item.id] = item;
+            }
           });
         }
       } else {
@@ -137,7 +147,11 @@ export const deleteFlowNode = (processId, nodeId) => (dispatch, getState) => {
 
           // 更新老数据
           result.updateFlowNodes.forEach(item => {
-            workflowDetail.flowNodeMap[nodeId].processNode.flowNodeMap[item.id] = item;
+            if ((workflowDetail.flowNodeMap[nodeId].processNode.flowNodeMap[item.id] || {}).appType === 9) {
+              workflowDetail.flowNodeMap[nodeId].processNode.flowNodeMap[item.id].nextId = item.nextId;
+            } else {
+              workflowDetail.flowNodeMap[nodeId].processNode.flowNodeMap[item.id] = item;
+            }
           });
         }
       } else {
@@ -256,10 +270,48 @@ export const updateBranchGatewayType = (processId, nodeId, gatewayType) => (disp
     .then(result => {
       const { workflowDetail } = _.cloneDeep(getState().workflow);
 
-      workflowDetail.flowNodeMap[nodeId].gatewayType = gatewayType;
+      if (workflowDetail.id !== processId) {
+        const approvalNodeId = getApprovalProcessNodeId(workflowDetail.flowNodeMap, processId);
+
+        workflowDetail.flowNodeMap[approvalNodeId].processNode.flowNodeMap[nodeId].gatewayType = gatewayType;
+      } else {
+        workflowDetail.flowNodeMap[nodeId].gatewayType = gatewayType;
+      }
 
       dispatch({
         type: 'UPDATE_NODE_GATEWAY',
+        data: workflowDetail,
+      });
+
+      dispatch({
+        type: 'UPDATE_PUBLISH_STATUS',
+        publishStatus: 1,
+      });
+    });
+};
+
+/**
+ * 调整分支顺序
+ */
+export const updateBranchSort = (processId, nodeId, flowIds) => (dispatch, getState) => {
+  flowNode
+    .saveNode({
+      nodeId,
+      processId,
+      flowIds,
+    })
+    .then(result => {
+      const { workflowDetail } = _.cloneDeep(getState().workflow);
+
+      if (workflowDetail.id !== processId) {
+        const approvalNodeId = getApprovalProcessNodeId(workflowDetail.flowNodeMap, processId);
+        workflowDetail.flowNodeMap[approvalNodeId].processNode.flowNodeMap[nodeId].flowIds = flowIds;
+      } else {
+        workflowDetail.flowNodeMap[nodeId].flowIds = flowIds;
+      }
+
+      dispatch({
+        type: 'UPDATE_BRANCH_SORT',
         data: workflowDetail,
       });
 

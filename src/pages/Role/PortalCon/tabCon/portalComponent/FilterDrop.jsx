@@ -36,12 +36,12 @@ export default function FilterDrop(props) {
         '.dropdownTrigger',
         '.filterControlOptionsList',
         '.mui-dialog-container',
-        '.mdDialog',
         '.mui-datetimepicker',
         '.mui-datetimerangepicker',
-        '.CityPicker',
         '.worksheetFilterOperateList',
         '.ant-picker-dropdown',
+        '.CityPicker',
+        '.CityPicker-wrapper',
       ]}
       onClick={() => setShow(true)}
       onClickAway={() => setShow(false)}

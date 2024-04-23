@@ -9,7 +9,13 @@ export default {
   * @param {string} args.navColor 导航颜色
   * @param {string} args.lightColor 背景色
   * @param {string} args.groupId 分组id
-  * @param {} args.groupType 分组类型 0 = 个人，1= 网络
+  * @param {} args.groupType
+  * @param {string} args.urlTemplate url链接模板
+  * @param {object} args.configuratiuon 链接配置
+  * @param {} args.createType
+  * @param {boolean} args.pcDisplay Pc端显示,
+  * @param {boolean} args.webMobileDisplay web移动端显示
+  * @param {boolean} args.appDisplay app端显示
   * @param {Object} options 配置参数
   * @param {Boolean} options.silent 是否禁止错误弹层
   * @returns {Promise<Boolean, ErrorModel>}
@@ -77,9 +83,11 @@ export default {
      return $.api('HomeApp', 'RestoreApp', args, options);
    },
   /**
-  * 标星应用
+  * 标星应用或应用项
   * @param {Object} args 请求参数
   * @param {string} args.appId 应用id
+  * @param {string} args.itemId 应用项id
+  * @param {integer} args.type 0 = 应用，1 = 自定义页面，2 = 工作表
   * @param {boolean} args.isMark 是否标星（true or false）
   * @param {string} args.projectId 网络id(可空为个人应用)
   * @param {Object} options 配置参数
@@ -104,6 +112,15 @@ export default {
   * @param {boolean} args.viewHideNavi 查看影藏导航项
   * @param {string} args.navColor 导航栏颜色
   * @param {string} args.lightColor 淡色色值
+  * @param {integer} args.gridDisplayMode 宫格显示模式
+  * @param {integer} args.appNaviDisplayType 导航列表显示类型
+  * @param {string} args.urlTemplate 外部链接url
+  * @param {object} args.configuration 链接配置
+  * @param {boolean} args.pcDisplay Pc端显示,
+  * @param {boolean} args.webMobileDisplay web移动端显示
+  * @param {boolean} args.appDisplay app端显示
+  * @param {integer} args.selectAppItmeType 导航应用项默认是否选中
+  * @param {integer} args.pcNaviDisplayType 导航分组展开样式
   * @param {Object} options 配置参数
   * @param {Boolean} options.silent 是否禁止错误弹层
   * @returns {Promise<Boolean, ErrorModel>}
@@ -111,18 +128,6 @@ export default {
    editAppInfo: function (args, options = {}) {
      
      return $.api('HomeApp', 'EditAppInfo', args, options);
-   },
-  /**
-  * 获取应用导航信息
-  * @param {Object} args 请求参数
-  * @param {string} args.appId 应用id
-  * @param {Object} options 配置参数
-  * @param {Boolean} options.silent 是否禁止错误弹层
-  * @returns {Promise<Boolean, ErrorModel>}
-  **/
-   getNavigationInfo: function (args, options = {}) {
-     
-     return $.api('HomeApp', 'GetNavigationInfo', args, options);
    },
   /**
   * 更新首页应用排序
@@ -140,24 +145,12 @@ export default {
      return $.api('HomeApp', 'UpdateAppSort', args, options);
    },
   /**
-  * 编辑首页网络排序
-  * @param {Object} args 请求参数
-  * @param {array} args.projectIds 排序后的网络id集合
-  * @param {Object} options 配置参数
-  * @param {Boolean} options.silent 是否禁止错误弹层
-  * @returns {Promise<Boolean, ErrorModel>}
-  **/
-   editProjectIndex: function (args, options = {}) {
-     
-     return $.api('HomeApp', 'EditProjectIndex', args, options);
-   },
-  /**
   * 复制应用
   * @param {Object} args 请求参数
   * @param {string} args.appId 应用id
   * @param {string} args.appName 新的应用名称
   * @param {string} args.groupId 分组id
-  * @param {} args.groupType 分组类型 0 = 个人，1= 网络
+  * @param {} args.groupType
   * @param {Object} options 配置参数
   * @param {Boolean} options.silent 是否禁止错误弹层
   * @returns {Promise<Boolean, ErrorModel>}
@@ -214,6 +207,7 @@ export default {
   /**
   * 获取首页所有应用信息
   * @param {Object} args 请求参数
+  * @param {boolean} args.containsLinks
   * @param {Object} options 配置参数
   * @param {Boolean} options.silent 是否禁止错误弹层
   * @returns {Promise<Boolean, ErrorModel>}
@@ -223,22 +217,10 @@ export default {
      return $.api('HomeApp', 'GetAllHomeApp', args, options);
    },
   /**
-  * 获取应用分组的详情（包含导航头和工作表基础信息）
-  * @param {Object} args 请求参数
-  * @param {string} args.appId 应用id
-  * @param {Object} options 配置参数
-  * @param {Boolean} options.silent 是否禁止错误弹层
-  * @returns {Promise<Boolean, ErrorModel>}
-  **/
-   getAppInfo: function (args, options = {}) {
-     
-     return $.api('HomeApp', 'GetAppInfo', args, options);
-   },
-  /**
   * 获取应用下所有工作表信息
   * @param {Object} args 请求参数
   * @param {string} args.appId 应用id
-  * @param {} args.type 应用分组下实体类型（0=工作表，1=自定义页面）
+  * @param {} args.type
   * @param {Object} options 配置参数
   * @param {Boolean} options.silent 是否禁止错误弹层
   * @returns {Promise<Boolean, ErrorModel>}
@@ -265,7 +247,7 @@ export default {
      return $.api('HomeApp', 'GetAttachementImages', args, options);
    },
   /**
-  * 获取自定义页面详情
+  * 进入应用刷新页面，前端路由匹配接口
   * @param {Object} args 请求参数
   * @param {string} args.id
   * @param {string} args.sectionId 分组id
@@ -278,7 +260,7 @@ export default {
      return $.api('HomeApp', 'GetPageInfo', args, options);
    },
   /**
-  * 
+  * 批量获取应用项信息
   * @param {Object} args 请求参数
   * @param {Object} options 配置参数
   * @param {Boolean} options.silent 是否禁止错误弹层
@@ -289,27 +271,31 @@ export default {
      return $.api('HomeApp', 'GetAppItemDetail', args, options);
    },
   /**
-  * 获取应用详细信息
+  * 获取应用详情（包含分组信息，请求参数可选）
   * @param {Object} args 请求参数
-  * @param {string} args.appId 应用id
+  * @param {string} args.ticket 验证码返票据
+  * @param {string} args.randStr 票据随机字符串
+  * @param {} args.captchaType
   * @param {string} args.clientId 客户端标识
 记录输入密码之后，页面刷新不用重复输入密码操作
 滑动过期
-  * @param {string} args.ticket 验证码返票据
-  * @param {string} args.randStr 票据随机字符串
-  * @param {} args.captchaType 验证码类型（默认腾讯云）
+  * @param {string} args.appId 应用id
+  * @param {boolean} args.getSection 是否获取分组信息
+  * @param {boolean} args.getManager 是否获取管理员列表信息
+  * @param {boolean} args.getProject 获取组织信息
+  * @param {boolean} args.getLang 是否获取应用语种信息
   * @param {Object} options 配置参数
   * @param {Boolean} options.silent 是否禁止错误弹层
   * @returns {Promise<Boolean, ErrorModel>}
   **/
-   getAppDetail: function (args, options = {}) {
+   getApp: function (args, options = {}) {
      
-     return $.api('HomeApp', 'GetAppDetail', args, options);
+     return $.api('HomeApp', 'GetApp', args, options);
    },
   /**
   * 验证应用有效性
   * @param {Object} args 请求参数
-  * @param {string} args.appId 应用id
+  * @param {string} args.appId
   * @param {Object} options 配置参数
   * @param {Boolean} options.silent 是否禁止错误弹层
   * @returns {Promise<Boolean, ErrorModel>}
@@ -342,18 +328,6 @@ export default {
    getAppSimpleInfo: function (args, options = {}) {
      
      return $.api('HomeApp', 'GetAppSimpleInfo', args, options);
-   },
-  /**
-  * 应用分享详情获取
-  * @param {Object} args 请求参数
-  * @param {string} args.shareId
-  * @param {Object} options 配置参数
-  * @param {Boolean} options.silent 是否禁止错误弹层
-  * @returns {Promise<Boolean, ErrorModel>}
-  **/
-   getShare: function (args, options = {}) {
-     
-     return $.api('HomeApp', 'GetShare', args, options);
    },
   /**
   * 根据应用分组id获取详情
@@ -475,6 +449,7 @@ export default {
   * 获取应用open api文档
   * @param {Object} args 请求参数
   * @param {string} args.appId 应用id
+  * @param {boolean} args.notOnSettingPage 不是在 配置页面（ 当为 ture 时，代表是在 前台/非管理 页面，此时 需要验证 角色负责人）
   * @param {Object} options 配置参数
   * @param {Boolean} options.silent 是否禁止错误弹层
   * @returns {Promise<Boolean, ErrorModel>}
@@ -487,6 +462,8 @@ export default {
   * 获取我的应用
   * @param {Object} args 请求参数
   * @param {string} args.projectId 网络id
+  * @param {boolean} args.containsLinks 是否包含外部链接
+  * @param {boolean} args.getMarkApp 是否获取标记 (默认获取，10.1新版本后可以不用获取)
   * @param {Object} options 配置参数
   * @param {Boolean} options.silent 是否禁止错误弹层
   * @returns {Promise<Boolean, ErrorModel>}
@@ -498,9 +475,11 @@ export default {
   /**
   * 获取首页分组详情
   * @param {Object} args 请求参数
-  * @param {string} args.id 首页分组id
-  * @param {} args.groupType 分组类型 0 = 个人，1= 网络
   * @param {string} args.projectId 网络id
+  * @param {boolean} args.containsLinks 是否包含外部链接
+  * @param {boolean} args.getMarkApp 是否获取标记 (默认获取，10.1新版本后可以不用获取)
+  * @param {string} args.id 首页分组id
+  * @param {} args.groupType
   * @param {Object} options 配置参数
   * @param {Boolean} options.silent 是否禁止错误弹层
   * @returns {Promise<Boolean, ErrorModel>}
@@ -540,10 +519,10 @@ export default {
   /**
   * 标星分组
   * @param {Object} args 请求参数
-  * @param {boolean} args.isMarked
   * @param {string} args.id 分组id
-  * @param {} args.groupType 分组类型 0 = 个人，1= 网络
+  * @param {} args.groupType
   * @param {string} args.projectId
+  * @param {boolean} args.isMarked
   * @param {Object} options 配置参数
   * @param {Boolean} options.silent 是否禁止错误弹层
   * @returns {Promise<Boolean, ErrorModel>}
@@ -558,7 +537,7 @@ export default {
   * @param {string} args.projectId
   * @param {string} args.name
   * @param {string} args.icon
-  * @param {} args.groupType 分组类型 0 = 个人，1= 网络
+  * @param {} args.groupType
   * @param {Object} options 配置参数
   * @param {Boolean} options.silent 是否禁止错误弹层
   * @returns {Promise<Boolean, ErrorModel>}
@@ -570,12 +549,12 @@ export default {
   /**
   * 编辑分组信息
   * @param {Object} args 请求参数
+  * @param {string} args.id 分组id
+  * @param {} args.groupType
+  * @param {string} args.projectId
   * @param {string} args.name
   * @param {string} args.icon
-  * @param {} args.displayType 选项卡类型  0 = 平铺，1= 选项卡 (没有修改可不传这个参数)
-  * @param {string} args.id 分组id
-  * @param {} args.groupType 分组类型 0 = 个人，1= 网络
-  * @param {string} args.projectId
+  * @param {} args.displayType
   * @param {Object} options 配置参数
   * @param {Boolean} options.silent 是否禁止错误弹层
   * @returns {Promise<Boolean, ErrorModel>}
@@ -588,7 +567,7 @@ export default {
   * 删除分组
   * @param {Object} args 请求参数
   * @param {string} args.id 分组id
-  * @param {} args.groupType 分组类型 0 = 个人，1= 网络
+  * @param {} args.groupType
   * @param {string} args.projectId
   * @param {Object} options 配置参数
   * @param {Boolean} options.silent 是否禁止错误弹层
@@ -616,9 +595,14 @@ export default {
   * 修改首页自定义显示设置
   * @param {Object} args 请求参数
   * @param {string} args.projectId 网络id
-  * @param {} args.displayType 显示方式  0 = 平铺，1= 选项卡
-  * @param {} args.markedAppDisplay 标星应用显示 0 =当前网络，1= 全部
+  * @param {} args.displayType
+  * @param {} args.markedAppDisplay
+  * @param {} args.todoDisplay
   * @param {boolean} args.exDisplay 是否显示外部应用
+  * @param {boolean} args.displayCommonApp 是否显示常用应用
+  * @param {boolean} args.isAllAndProject 是否开启全部和组织分组
+  * @param {boolean} args.displayMark 是否显示星标应用
+  * @param {boolean} args.rowCollect 记录收藏
   * @param {Object} options 配置参数
   * @param {Boolean} options.silent 是否禁止错误弹层
   * @returns {Promise<Boolean, ErrorModel>}
@@ -626,5 +610,73 @@ export default {
    editHomeSetting: function (args, options = {}) {
      
      return $.api('HomeApp', 'EditHomeSetting', args, options);
+   },
+  /**
+  * 批量标记应用和应用项目
+  * @param {Object} args 请求参数
+  * @param {array} args.items 标记的应用和应用项
+  * @param {string} args.projectId 组织id
+  * @param {Object} options 配置参数
+  * @param {Boolean} options.silent 是否禁止错误弹层
+  * @returns {Promise<Boolean, ErrorModel>}
+  **/
+   markApps: function (args, options = {}) {
+     
+     return $.api('HomeApp', 'MarkApps', args, options);
+   },
+  /**
+  * 编辑平台设置
+  * @param {Object} args 请求参数
+  * @param {string} args.projectId 组织id
+  * @param {array} args.bulletinBoards 宣传栏
+  * @param {string} args.color 颜色
+  * @param {string} args.slogan 标语
+  * @param {string} args.logo 组织logo
+  * @param {boolean} args.logoSwitch logo开关
+  * @param {boolean} args.boardSwitch 宣传栏目开关
+  * @param {integer} args.logoHeight logo高度
+  * @param {Object} options 配置参数
+  * @param {Boolean} options.silent 是否禁止错误弹层
+  * @returns {Promise<Boolean, ErrorModel>}
+  **/
+   editPlatformSetting: function (args, options = {}) {
+     
+     return $.api('HomeApp', 'EditPlatformSetting', args, options);
+   },
+  /**
+  * 工作台
+  * @param {Object} args 请求参数
+  * @param {string} args.projectId 组织id
+  * @param {Object} options 配置参数
+  * @param {Boolean} options.silent 是否禁止错误弹层
+  * @returns {Promise<Boolean, ErrorModel>}
+  **/
+   myPlatform: function (args, options = {}) {
+     
+     return $.api('HomeApp', 'MyPlatform', args, options);
+   },
+  /**
+  * 获取应用下应用项
+  * @param {Object} args 请求参数
+  * @param {string} args.appId
+  * @param {Object} options 配置参数
+  * @param {Boolean} options.silent 是否禁止错误弹层
+  * @returns {Promise<Boolean, ErrorModel>}
+  **/
+   getAppItems: function (args, options = {}) {
+     
+     return $.api('HomeApp', 'GetAppItems', args, options);
+   },
+  /**
+  * 获取平台设置
+  * @param {Object} args 请求参数
+  * @param {string} args.projectId 组织id
+  * @param {Object} options 配置参数
+  * @param {Boolean} options.silent 是否禁止错误弹层
+  * @returns {Promise<Boolean, ErrorModel>}
+  **/
+   getHomePlatformSetting: function (args, options = {}) {
+     
+     return $.api('HomeApp', 'GetHomePlatformSetting', args, options);
    },
 };

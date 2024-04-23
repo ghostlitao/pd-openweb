@@ -1,33 +1,33 @@
 import React, { Fragment, useEffect, useState } from 'react';
-import { Dialog, Menu, MenuItem, LoadDiv, Dropdown, Checkbox } from 'ming-ui';
+import { LoadDiv } from 'ming-ui';
 import { useSetState } from 'react-use';
 import { Tooltip } from 'antd';
-import update from 'immutability-helper';
 import { v4 as uuidv4 } from 'uuid';
-import cx from 'classnames';
 import worksheetAjax from 'src/api/worksheet';
-import appManagementAjax from 'src/api/appManagement';
 import styled from 'styled-components';
 import { getSortData } from 'src/pages/worksheet/util';
 import SortColumns from 'src/pages/worksheet/components/SortColumns/SortColumns';
-import SheetComponents from '../components/relateSheet';
-import { EditInfo, InfoWrap, SettingItem, WidgetIntroWrap } from '../../styled';
-import { getControlsSorts, getDefaultShowControls, handleAdvancedSettingChange } from '../../util/setting';
-import Components from '../components';
+import { EditInfo, SettingItem } from '../../styled';
 import {
-  canSetAsTitle,
+  getControlsSorts,
+  getDefaultShowControls,
+  handleAdvancedSettingChange,
+  canAsUniqueWidget,
+} from '../../util/setting';
+import {
   getAdvanceSetting,
   resortControlByColRow,
   dealControlData,
   formatSearchConfigs,
+  toEditWidgetPage,
 } from '../../util';
 import subListComponents from '../components/sublist';
 import _, { isEmpty, find, filter, findIndex } from 'lodash';
-import { DEFAULT_INTRO_LINK } from '../../config';
-import { DEFAULT_SETTING_OPTIONS } from '../../config/setting';
 import DynamicDefaultValue from '../components/DynamicDefaultValue';
 import WidgetVerify from '../components/WidgetVerify';
+import RelateDetailInfo from '../components/RelateDetailInfo';
 import { SYSTEM_CONTROLS } from 'worksheet/constants/enum';
+import { ALL_SYS } from '../../config/widget';
 const { AddSubList, ConfigureControls, Sort } = subListComponents;
 
 const SettingModelWrap = styled.div`
@@ -45,46 +45,50 @@ const SettingModelWrap = styled.div`
     padding: 0 12px;
     border-radius: 3px;
   }
+  .globalDetail {
+    width: 100%;
+    min-height: 36px;
+    background: #f5f5f5;
+    line-height: 1.5;
+    padding: 8px 12px;
+  }
 `;
 
 export default function SubListSetting(props) {
-  const { status, allControls, info, data, globalSheetInfo, onChange } = props;
-  const { widgetName, icon, intro, moreIntroLink } = info;
-  const { worksheetId: currentWorksheetId } = globalSheetInfo;
-  const { controlId, dataSource, relationControls = [], showControls = [], advancedSetting = {} } = data;
-  const { allowadd, allowsingle } = advancedSetting;
-  const batchcids = getAdvanceSetting(data, 'batchcids') || [];
+  const { status, allControls, data, onChange } = props;
+  const { controlId, dataSource, relationControls = [], showControls = [], needUpdate } = data;
   const [sheetInfo, setInfo] = useState({});
   const [subQueryConfigs, setSubQueryConfigs] = useState([]);
   const [subListMode, setMode] = useState('new');
   const [loading, setLoading] = useState(false);
-  const [visible, setVisible] = useState(batchcids.length > 0);
 
-  const [{ setTitleVisible, switchVisible, sortVisible }, setConfig] = useSetState({
-    setTitleVisible: false,
-    switchVisible: false,
+  const [{ sortVisible }, setConfig] = useSetState({
     sortVisible: false,
   });
   const sorts = _.isArray(getAdvanceSetting(data, 'sorts')) ? getAdvanceSetting(data, 'sorts') : [];
-  const worksheetControls = relationControls
-    .filter(item => item.type === 29)
-    .map(({ controlId: value, controlName: text }) => ({ value, text }));
+  const uniqueControls = getAdvanceSetting(data, 'uniquecontrols') || [];
+
+  // 支持配置不允许重复
+  const supportControls = relationControls.filter(i => canAsUniqueWidget(i) && !_.includes(ALL_SYS, i.controlId));
+  // 支持配置不允许重复并且已被设为可见的字段
+  const supportUniqControls = supportControls.filter(i => _.includes(showControls, i.controlId));
+  // 全局不重复id合集
+  const globalUniqControlIds = subListMode === 'new' ? [] : supportControls.filter(i => i.unique).map(i => i.controlId);
+  // 本记录不重复controls
+  const recordUniqControls = supportUniqControls.filter(i => !_.includes(globalUniqControlIds, i.controlId));
+  // 本记录不重复id合集
+  const showUniqueControls = recordUniqControls
+    .filter(r => _.includes(uniqueControls, r.controlId))
+    .map(i => i.controlId)
+    .filter(_.identity);
 
   useEffect(() => {
-    setVisible(batchcids.length > 0);
     if (dataSource && window.subListSheetConfig[controlId]) {
       const { sheetInfo, subQueryConfigs = [] } = window.subListSheetConfig[controlId] || {};
       setInfo(sheetInfo);
       setSubQueryConfigs(subQueryConfigs);
     }
   }, [controlId]);
-
-  useEffect(() => {
-    // 兼容老数据
-    if (_.isUndefined(allowsingle) && !batchcids.length) {
-      onChange(handleAdvancedSettingChange(data, { allowsingle: '1' }));
-    }
-  }, [allowsingle]);
 
   useEffect(() => {
     const { saveIndex } = status;
@@ -94,10 +98,11 @@ export default function SubListSetting(props) {
     if (saveIndex && dataSource && !dataSource.includes('-')) {
       setLoading(true);
       worksheetAjax
-        .getWorksheetInfo({ worksheetId: dataSource, getTemplate: true })
+        .getWorksheetInfo({ worksheetId: dataSource, getTemplate: true, getControlType: 11 })
         .then(res => {
+          if (res.resultCode === 4) return;
           const controls = _.get(res, ['template', 'controls']);
-          const saveData = _.find(allControls, i => i.controlId === data.controlId);
+          const saveData = _.find(allControls, i => i.controlId === data.controlId) || {};
 
           // 关联表子表因为无法新增字段 所以不需要更新relationControls
           if (res.type !== 2) return;
@@ -148,7 +153,22 @@ export default function SubListSetting(props) {
   };
 
   const filterRelationControls = info => {
-    return (_.get(info, ['template', 'controls']) || []).filter(item => !_.includes([45, 47, 49], item.type));
+    const reControls = _.get(info, ['template', 'controls']) || _.get(info, 'relationControls') || [];
+    const needShow = (showControls || []).some(i => {
+      const c = _.find(reControls || [], a => a.controlId === i) || {};
+      return (
+        c.type === 34 ||
+        (c.type === 29 && String(c.enumDefault) === '2' && _.get(c, 'advancedSetting.showtype') === '2')
+      );
+    });
+    return reControls.filter(item =>
+      needShow
+        ? !_.includes([43, 45, 47, 49, 51, 52, 10010], item.type)
+        : !(
+            _.includes([34, 43, 45, 47, 49, 51, 52, 10010], item.type) ||
+            (item.type === 29 && String(item.enumDefault) === '2' && _.get(item, 'advancedSetting.showtype') === '2')
+          ),
+    );
   };
 
   useEffect(() => {
@@ -158,14 +178,15 @@ export default function SubListSetting(props) {
       setMode('new');
       return;
     }
-    if ((window.subListSheetConfig[controlId] || {}).status) {
+    if ((window.subListSheetConfig[controlId] || {}).status && !needUpdate) {
       setMode(_.get(window.subListSheetConfig[controlId], 'mode'));
       return;
     }
     setLoading(true);
     worksheetAjax
-      .getWorksheetInfo({ worksheetId: dataSource, getTemplate: true })
+      .getWorksheetInfo({ worksheetId: dataSource, getTemplate: true, getControlType: 11 })
       .then(res => {
+        if (res.resultCode === 4) return;
         const controls = filterRelationControls(res);
         const defaultShowControls = getDefaultShowControls(controls);
         setInfo(res);
@@ -176,14 +197,17 @@ export default function SubListSetting(props) {
           sheetInfo: res,
         };
         setMode(res.type === 2 ? 'new' : 'relate');
-        let oriShowControls = isEmpty(showControls) ? defaultShowControls : showControls;
+        let oriShowControls = isEmpty(showControls)
+          ? defaultShowControls
+          : _.isEmpty(showControls.filter(s => find(controls, c => c.controlId === s)))
+          ? defaultShowControls.slice(0, (showControls || []).length)
+          : showControls;
         let nextData = {
           showControls:
             res.type === 2 ? oriShowControls.filter(i => !_.includes(['caid', 'utime', 'ctime'], i)) : oriShowControls,
         };
-        // if ([0, 1].includes(res.type)) {
-        nextData = { ...nextData, relationControls: dealControlData(controls) };
-        // }
+        nextData = { ...nextData, relationControls: dealControlData(controls), needUpdate: false };
+
         // 子表工作表查询
         getQueryConfigs(res);
         onChange(nextData);
@@ -191,7 +215,7 @@ export default function SubListSetting(props) {
       .always(() => {
         setLoading(false);
       });
-  }, [dataSource]);
+  }, [dataSource, needUpdate]);
 
   const onOk = ({ createType, sheetId, appId, controlName }) => {
     // 从空白创建时,创建一个占位dataSource
@@ -199,53 +223,6 @@ export default function SubListSetting(props) {
       onChange({ dataSource: uuidv4() });
     } else {
       onChange({ appId, dataSource: sheetId, controlName });
-    }
-  };
-
-  const switchType = type => {
-    if (type === 'relate') {
-      Dialog.confirm({
-        title: _l('将子表转为关联记录'),
-        description: _l('将子表字段转为关联记录字段'),
-        okText: _l('确定'),
-        onOk: () => {
-          onChange({
-            type: 29,
-          });
-        },
-      });
-      return;
-    }
-    const isHaveCanSetAsTitle = _.some(relationControls, canSetAsTitle);
-    if (isHaveCanSetAsTitle) {
-      Dialog.confirm({
-        title: _l('将子表转为工作表'),
-        description: _l(
-          '将从空白创建的子表转为一个实体工作表。此工作表将成为当前表单的一个关联子表，并可以在应用配置、流程、权限中被使用',
-        ),
-        okText: _l('确定'),
-        onOk: () => {
-          appManagementAjax
-            .changeSheet({
-              sourceWorksheetId: currentWorksheetId,
-              worksheetId: dataSource,
-              name: data.controlName,
-            })
-            .then(res => {
-              if (res) {
-                setMode('relate');
-                if (window.subListSheetConfig[controlId]) {
-                  window.subListSheetConfig[controlId].mode = 'relate';
-                }
-                alert(_l('转换成功'));
-              } else {
-                alert(_l('转换失败'));
-              }
-            });
-        },
-      });
-    } else {
-      setConfig({ setTitleVisible: true });
     }
   };
 
@@ -280,6 +257,7 @@ export default function SubListSetting(props) {
             min1msg={_l('至少显示一列')}
             showControls={showControls}
             columns={sortedControls}
+            maxSelectedNum={100}
             controlsSorts={getControlsSorts(data, sortedControls)}
             onChange={({ newShowControls, newControlSorts }) => {
               const nextShowControls = newControlSorts.filter(item => _.includes(newShowControls, item));
@@ -296,63 +274,83 @@ export default function SubListSetting(props) {
     );
   };
 
+  const renderUniqText = isGlobal => {
+    const textControls = isGlobal ? globalUniqControlIds : showUniqueControls;
+    const textArr = textControls
+      .map(i => {
+        return _.get(
+          _.find(relationControls, r => r.controlId === i),
+          'controlName',
+        );
+      })
+      .filter(_.identity)
+      .join('、');
+
+    if (isGlobal) {
+      if (!textControls.length) {
+        return <span className="Gray_9e">{_l('未设置')}</span>;
+      } else {
+        return <span>{textArr}</span>;
+      }
+    }
+
+    return (
+      <div className="Dropdown--input Dropdown--border Hand">
+        <span>{textArr}</span>
+        <div className="ming Icon icon icon-arrow-down-border mLeft8 Gray_9e" />
+      </div>
+    );
+  };
+
+  const renderUniqControls = () => {
+    return (
+      <SortColumns
+        noempty={false}
+        showControls={showUniqueControls}
+        columns={recordUniqControls}
+        children={renderUniqText()}
+        showOperate={false}
+        onChange={({ newShowControls }) => {
+          onChange(handleAdvancedSettingChange(data, { uniquecontrols: JSON.stringify(newShowControls) }));
+        }}
+      />
+    );
+  };
+
   return (
     <SettingModelWrap>
-      <WidgetIntroWrap>
-        {subListMode === 'new' ? (
-          <div className="title relative">
-            <i className={cx('icon Font20', `icon-${icon}`)} />
-            <span>{widgetName}</span>
-            <Tooltip placement={'bottom'} title={intro}>
-              <span
-                className="iconWrap pointer"
-                onClick={() => {
-                  window.open(moreIntroLink || DEFAULT_INTRO_LINK);
-                }}
-              >
-                <i className="icon-help Gray_9e Font16"></i>
-              </span>
-            </Tooltip>
-            {dataSource && dataSource.includes('-') ? null : (
-              <div className="transferToSheet" onClick={() => switchType('new')}>
-                {_l('转为工作表')}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="title relative">
-            <i className={cx('icon Font20', `icon-${icon}`)} />
-            <span>{widgetName}</span>
-            <Tooltip placement={'bottom'} title={intro}>
-              <span
-                className="iconWrap pointer"
-                onClick={() => {
-                  window.open(moreIntroLink || DEFAULT_INTRO_LINK);
-                }}
-              >
-                <i className="icon-help Gray_9e Font16"></i>
-              </span>
-            </Tooltip>
-            <div className="transferToRelate">
-              <span data-tip={_l('变更类型')} onClick={() => setConfig({ switchVisible: true })}>
-                <i className="icon icon-swap_horiz pointer Font22" />
-              </span>
-              {switchVisible && (
-                <Menu className={cx('introSwitchMenu')} onClickAway={() => setConfig({ switchVisible: false })}>
-                  <MenuItem onClick={() => switchType('relate')} icon={<i className="icon-link-worksheet" />}>
-                    {_l('关联记录')}
-                  </MenuItem>
-                </Menu>
-              )}
-            </div>
-          </div>
-        )}
-      </WidgetIntroWrap>
-      <Components.WidgetName {...props} />
       {!dataSource && <AddSubList {...props} onOk={onOk} />}
-      {subListMode !== 'new' && <Components.RelateSheetInfo name={sheetInfo.name} id={sheetInfo.worksheetId} />}
+      {subListMode !== 'new' && <RelateDetailInfo {...props} sheetInfo={sheetInfo} />}
       <SettingItem>{getConfigContent()}</SettingItem>
       <WidgetVerify {...props} />
+
+      {/**子表不允许重复 */}
+      {subListMode !== 'new' && (
+        <SettingItem>
+          <div className="settingItemTitle Normal">
+            {_l('全局不允许重复输入')}
+            <Tooltip
+              placement={'bottom'}
+              title={_l(
+                '以下字段在关联表中设为不允许重复。除了在本记录中不能重复输入外，也不能与关联表中的所有数据重复。',
+              )}
+            >
+              <i className="icon-help tipsIcon Gray_9e Font16 pointer" />
+            </Tooltip>
+          </div>
+          <div className="globalDetail">{renderUniqText(true)}</div>
+        </SettingItem>
+      )}
+      <SettingItem>
+        <div className="settingItemTitle Normal">
+          {_l('本记录内不允许重复输入')}
+          <Tooltip placement={'bottom'} title={_l('以下字段不允许在当前主记录内重复输入')}>
+            <i className="icon-help tipsIcon Gray_9e Font16 pointer" />
+          </Tooltip>
+        </div>
+        {renderUniqControls()}
+      </SettingItem>
+
       {relationControls.length > 0 && (
         <SettingItem>
           <div className="settingItemTitle">{_l('排序')}</div>
@@ -366,7 +364,7 @@ export default function SubListSetting(props) {
                     const control = sortsRelationControls.find(({ controlId }) => item.controlId === controlId) || {};
                     const flag = item.isAsc === true ? 2 : 1;
                     const { text } = getSortData(control.type, control).find(item => item.value === flag);
-                    const value = control.controlId ? _l('%0: %1', control.controlName, text) : '';
+                    const value = control.controlId ? `${control.controlName}：${text}` : '';
                     return p ? `${p}；${value}` : value;
                   }, '')
                 : _l('创建时间-最旧的在前')}
@@ -380,102 +378,11 @@ export default function SubListSetting(props) {
           )}
         </SettingItem>
       )}
-      <DynamicDefaultValue {...props} />
-      <SettingItem>
-        <div className="settingItemTitle">{_l('操作')}</div>
-        {DEFAULT_SETTING_OPTIONS.map(item => {
-          return (
-            <Checkbox
-              className="mTop4 Block"
-              size="small"
-              text={item.text}
-              checked={advancedSetting[item.id] === '1'}
-              onClick={checked =>
-                onChange(
-                  handleAdvancedSettingChange(data, {
-                    [item.id]: checked ? '0' : '1',
-                  }),
-                )
-              }
-            />
-          );
-        })}
-      </SettingItem>
-      {allowadd === '1' && (
-        <SettingItem>
-          <div className="settingItemTitle Normal">{_l('新增方式')}</div>
-          <div className="labelWrap">
-            <Checkbox
-              size="small"
-              checked={allowsingle === '1'}
-              text={_l('单行添加')}
-              onClick={checked => {
-                if (checked && !batchcids.length) return;
-                onChange(
-                  handleAdvancedSettingChange(data, {
-                    allowsingle: checked ? '0' : '1',
-                  }),
-                );
-              }}
-            />
-          </div>
-          <div className="labelWrap">
-            <Checkbox
-              size="small"
-              checked={visible}
-              text={_l('批量选择添加')}
-              onClick={checked => {
-                if (checked && allowsingle !== '1') return;
-                setVisible(!checked);
-                if (checked) {
-                  onChange(
-                    handleAdvancedSettingChange(data, {
-                      batchcids: JSON.stringify([]),
-                    }),
-                  );
-                }
-              }}
-            >
-              <Tooltip
-                placement={'bottom'}
-                title={_l(
-                  '如：在添加订单明细时需要先选择关联的产品。此时您可以设置为从产品字段添加明细。设置后，您可以直接一次选择多个产品，并为每个产品都添加一行订单明细',
-                )}
-              >
-                <i className="icon-help Gray_bd Font16 pointer"></i>
-              </Tooltip>
-            </Checkbox>
-          </div>
-          {visible && (
-            <Dropdown
-              border
-              style={{ marginTop: '10px' }}
-              trigger={['click']}
-              placeholder={_l('选择子表中的关联记录字段')}
-              noneContent={_l('没有可选字段')}
-              value={batchcids[0] || undefined}
-              data={worksheetControls}
-              onChange={value => {
-                onChange(
-                  handleAdvancedSettingChange(data, {
-                    batchcids: JSON.stringify([value]),
-                  }),
-                );
-              }}
-            />
-          )}
-        </SettingItem>
-      )}
-      {subListMode !== 'new' && dataSource !== currentWorksheetId && (
-        <SheetComponents.BothWayRelate
-          worksheetInfo={sheetInfo}
-          onOk={obj => {
-            onChange(update(data, { sourceControl: { $set: { ...obj, type: 29 } } }));
-          }}
-          {...props}
-        />
-      )}
-      {setTitleVisible && <Components.NoTitleControlDialog onClose={() => setConfig({ setTitleVisible: false })} />}
+      <DynamicDefaultValue
+        {...props}
+        data={{ ...data, relationControls: relationControls || [] }}
+        appId={sheetInfo.appId}
+      />
     </SettingModelWrap>
   );
 }

@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import styled from 'styled-components';
 import Trigger from 'rc-trigger';
 import cx from 'classnames';
-import { emitter, getProject } from 'src/util';
+import { emitter, getCurrentProject } from 'src/util';
 import { ScrollView, Menu, MenuItem } from 'ming-ui';
 import { VerticalMiddle } from 'worksheet/components/Basics';
 import _ from 'lodash';
@@ -85,12 +85,17 @@ function SwitchProject(props) {
   const createRef = useRef();
   const [currentProject, setCurrentProject] = useState({});
   useEffect(() => {
-    const project = getProject(projectId || localStorage.getItem('currentProjectId'));
-    if (!project || !project.projectId) {
-      return;
+    const project = getCurrentProject(projectId || localStorage.getItem('currentProjectId'));
+    if (_.isEmpty(project)) {
+      if (projects[0] && projects[0].projectId) {
+        setCurrentProject(projects[0]);
+        safeLocalStorageSetItem('currentProjectId', projects[0].projectId);
+      } else {
+        setCurrentProject({ companyName: _l('外部协作'), projectId: 'external' });
+      }
+    } else {
+      setCurrentProject(project);
     }
-    setCurrentProject(project);
-    safeLocalStorageSetItem('currentProjectId', project.projectId);
   }, []);
   const [popupVisible, setPopupVisible] = useState();
   let menuContent = (
@@ -134,12 +139,9 @@ function SwitchProject(props) {
             }}
             popup={
               <Menu className="Relative">
-                <NewMenuItem onClick={() => window.open('/enterpriseRegister.htm?type=add')}>
+                <NewMenuItem onClick={() => window.open('/enterpriseRegister?type=add')}>
                   {_l('加入组织')}
                 </NewMenuItem>
-                {/*<NewMenuItem onClick={() => window.open('/enterpriseRegister.htm?type=create')}>
-                  {_l('创建组织')}
-                </NewMenuItem>*/}
               </Menu>
             }
             getPopupContainer={() => createRef.current}

@@ -36,6 +36,12 @@ Common.MENULEFT = [
     typetag: ['system'],
     component: () => import('./systemSettings'),
   },
+  {
+    title: _l('产品密钥'),
+    icon: 'icon-key1',
+    typetag: ['privatekey'],
+    component: () => import('./privatekey'),
+  },
 ];
 
 Common.PROJECT_STATUS_TYPES_LABLE = {
@@ -106,6 +112,7 @@ Common.settingOptions = {
   isOpenMessageSound: 14,
   isOpenMessageTwinkle: 15,
   allowMultipleDevicesUse: 16,
+  backHomepageWay: 17,
 };
 
 export default Common;

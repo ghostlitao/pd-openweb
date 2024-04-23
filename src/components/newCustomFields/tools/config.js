@@ -1,5 +1,6 @@
 import moment from 'moment';
 import _ from 'lodash';
+import { filterEmptyChildTableRows } from 'worksheet/util';
 export const FORM_ERROR_TYPE = {
   REQUIRED: 'REQUIRED',
   MOBILE_PHONE: 'MOBILE_PHONE',
@@ -20,10 +21,27 @@ export const FORM_ERROR_TYPE = {
   RULE_ERROR: 'RULE_ERROR',
   RULE_REQUIRED: 'RULE_REQUIRED',
   OTHER_REQUIRED: 'OTHER_REQUIRED',
+  CHILD_TABLE_ROWS_LIMIT: 'CHILD_TABLE_ROWS_LIMIT',
 };
 
 export const FORM_ERROR_TYPE_TEXT = {
-  REQUIRED: ({ controlName: label }) => {
+  REQUIRED: ({ controlName: label, advancedSetting, type }) => {
+    if (type === 36) {
+      if (advancedSetting.showtype === '1') {
+        return _l('请开启此项');
+      } else if (advancedSetting.showtype === '2') {
+        const itemNames = safeParse((advancedSetting || {}).itemnames || '[]');
+        return _l(
+          '请选择%0',
+          _.get(
+            _.find(itemNames, i => i.key === '1'),
+            'value',
+          ),
+        );
+      } else {
+        return _l('请勾选此项');
+      }
+    }
     return `${_l('请填写%0', label)}`;
   },
   REQUIRED_SELECT: ({ controlName: label }) => {
@@ -36,19 +54,46 @@ export const FORM_ERROR_TYPE_TEXT = {
   PASSPORT: _l('不是有效的护照号码'),
   HK_PASSPORT: _l('不是有效的港澳通行证号码'),
   TW_PASSPORT: _l('不是有效的台湾通行证号码'),
-  OTHER_REQUIRED: _l('请填写其他'),
-  UNIQUE: ({ controlName: label }) => {
-    return `${_l('%0不允许重复', label)}`;
+  OTHER_REQUIRED: ({ options = [] }) => {
+    const value = _.get(
+      _.find(options, i => i.key === 'other' && !i.isDeleted),
+      'value',
+    );
+    return _l('请填写%0', value || '其他');
+  },
+  CHILD_TABLE_ROWS_LIMIT: ({ value, advancedSetting }) => {
+    const { min, max, enablelimit } = advancedSetting;
+    if (String(enablelimit) === '1') {
+      const rowsLength = Number(
+        (_.get(value, 'rows') && filterEmptyChildTableRows(value.rows).length) || (!_.isObject(value) ? value : 0) || 0,
+      );
+      if (_.isNumber(rowsLength) && !_.isNaN(rowsLength)) {
+        if (_.isNumber(Number(min)) && !_.isNaN(Number(min)) && rowsLength < Number(min)) {
+          return `${_l('请至少输入%0条记录', min)}`;
+        } else if (_.isNumber(Number(max)) && !_.isNaN(Number(max)) && rowsLength > Number(max)) {
+          return `${_l('最多输入%0条记录', max)}`;
+        }
+      }
+    }
+  },
+  UNIQUE: ({ uniqueInRecord } = {}, isSubList) => {
+    if (!isSubList) {
+      return _l('不允许重复');
+    }
+    return uniqueInRecord ? _l('本记录内不允许重复') : _l('全局不允许重复');
   },
   NUMBER_RANGE: ({ value, advancedSetting }) => {
-    const { min, max } = advancedSetting;
+    const { min, max, numshow } = advancedSetting;
+    // 百分比提示时，数值异化
+    const showMin = numshow === '1' ? `${Number(min || 0) * 100}%` : min;
+    const showMax = numshow === '1' ? `${Number(max || 0) * 100}%` : max;
 
-    if (max === min) return _l('请输入%0', min);
+    if (max === min) return _l('请输入%0', showMin);
     if (max && min) {
-      if (+value > +max || +value < +min) return _l('请输入%0到%1之间的数值', min, max);
+      if (+value > +max || +value < +min) return _l('请输入%0到%1之间的数值', showMin, showMax);
     }
-    if (min && +value < +min) return _l('请输入大于等于%0的数', min);
-    if (max && +value > +max) return _l('请输入小于等于%0的数', max);
+    if (min && +value < +min) return _l('请输入大于等于%0的数', showMin);
+    if (max && +value > +max) return _l('请输入小于等于%0的数', showMax);
   },
   MULTI_SELECT_RANGE: ({ value, advancedSetting }) => {
     const { min, max } = advancedSetting;
@@ -125,11 +170,12 @@ export const FROM = {
   SHARE: 1,
   NEWRECORD: 2,
   RECORDINFO: 3,
-  PUBLIC: 4, // 公开表单
+  PUBLIC_ADD: 4, // 公开表单新增
   H5_ADD: 5,
   H5_EDIT: 6,
   WORKFLOW: 7, // 工作流
   CUSTOM_BUTTON: 8, // 自定义动作
+  PUBLIC_EDIT: 9, // 公开表单编辑
   DRAFT: 21,
 };
 

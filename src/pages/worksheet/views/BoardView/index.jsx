@@ -67,6 +67,7 @@ function BoardView(props) {
     addRecord,
     updateMultiSelectBoard,
     refreshSheet,
+    navGroupFilters,
     ...rest
   } = props;
 
@@ -88,6 +89,7 @@ function BoardView(props) {
     },
   });
 
+  const cache = useRef({});
   const $listWrapRef = useRef(null);
   const flagRef = useRef({ preScrollLeft: 0, pending: false });
 
@@ -156,16 +158,31 @@ function BoardView(props) {
   }, []);
 
   useEffect(() => {
-    initBoardViewData();
+    if (
+      cache.current.prevColorId &&
+      view.advancedSetting.colorid &&
+      view.advancedSetting.colorid !== cache.current.prevColorId
+    ) {
+      // 修改颜色字段时晚一点取, 不然返回的数据还是不包括新改的字段的值
+      setTimeout(() => {
+        initBoardViewData();
+      }, 200);
+    } else {
+      initBoardViewData();
+    }
+    cache.current.prevColorId = view.advancedSetting.colorid;
   }, [
     viewId,
     view.viewControl,
     view.advancedSetting.navshow,
-    view.advancedSetting.navfilters,
+    JSON.stringify(view.advancedSetting.navfilters),
     view.advancedSetting.freezenav,
     view.advancedSetting.navempty,
-    view.advancedSetting.navshow,
-    props.navGroupFilters,
+    JSON.stringify(view.moreSort),
+    view.advancedSetting.colorid,
+    JSON.stringify(navGroupFilters),
+    view.advancedSetting.navsorts,
+    view.advancedSetting.customitems,
   ]);
 
   const handleSelectField = obj => {
@@ -245,8 +262,12 @@ function BoardView(props) {
     }
 
     const renderBoard = (fixFirst = false) => {
-      // 显示指定项 不做空数据的判断
-      if (every(viewData, item => isEmpty(item.rows)) && view.advancedSetting.navshow !== '2' && !fixFirst) {
+      // 显示指定项、显示全部 不做空数据的判断
+      if (
+        every(viewData, item => isEmpty(item.rows)) &&
+        !_.includes(['0', '2'], view.advancedSetting.navshow) &&
+        !fixFirst
+      ) {
         return <ViewEmpty filters={filters} viewFilter={view.filters || []} />;
       }
 
@@ -278,6 +299,7 @@ function BoardView(props) {
                 'updateBoardViewData',
                 'isCharge',
                 'sheetSwitchPermit',
+                'fieldShowCount',
               ])}
               {...rest}
             />
@@ -287,7 +309,9 @@ function BoardView(props) {
 
     return (
       <Fragment>
-        {!boardViewLoading && freezenav === '1' && <div className="boardFixedWrap">{renderBoard(true)}</div>}
+        {!boardViewLoading && freezenav === '1' && !browserIsMobile() && (
+          <div className="boardFixedWrap">{renderBoard(true)}</div>
+        )}
 
         <div
           className={cx('boardListWrap', { pLeft0: browserIsMobile() })}
@@ -317,6 +341,7 @@ const ConnectedBoardView = connect(
       'sheetSwitchPermit',
       'sheetButtons',
       'navGroupFilters',
+      'fieldShowCount',
     ]),
   dispatch => bindActionCreators({ ...boardActions, ...baseAction }, dispatch),
 )(BoardView);

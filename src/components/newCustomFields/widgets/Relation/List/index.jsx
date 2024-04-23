@@ -36,7 +36,14 @@ export default class List extends Component {
     const { type } = item;
 
     // 分享禁止点击
-    if (from === FROM.SHARE || from === FROM.WORKFLOW) {
+    if (
+      from === FROM.SHARE ||
+      from === FROM.WORKFLOW ||
+      _.get(window, 'shareState.isPublicForm') ||
+      _.get(window, 'shareState.isPublicWorkflowRecord') ||
+      _.get(window, 'shareState.isPublicQuery') ||
+      _.get(window, 'shareState.isPublicRecord')
+    ) {
       e.preventDefault();
       return;
     }
@@ -114,7 +121,10 @@ export default class List extends Component {
 
         <a
           className="ThemeHoverColor3"
-          onClick={e => this.handleLinkClick(item, e)}
+          onClick={e => {
+            if (window.shareState.shareId) return;
+            this.handleLinkClick(item, e);
+          }}
           href={item.link}
           target="_blank"
           rel="noopener noreferrer"

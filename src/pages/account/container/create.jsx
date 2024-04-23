@@ -1,14 +1,13 @@
 import React from 'react';
-import { Dropdown } from 'ming-ui';
+import { Dropdown, RadioGroup } from 'ming-ui';
 import filterXSS from 'xss';
 import '../components/message.less';
 import cx from 'classnames';
 import RegisterController from 'src/api/register';
 import Config from '../config';
-import { getRequest } from 'src/util';
-import { inputFocusFn, inputBlurFn, setWarnningData } from '../util';
+import { getRequest, mdAppResponse } from 'src/util';
+import { inputFocusFn, inputBlurFn, setWarnningData, getDataByFilterXSS } from '../util';
 import { setPssId } from 'src/util/pssId';
-import { getDataByFilterXSS } from '../util';
 import styled from 'styled-components';
 import fixedDataAjax from 'src/api/fixedData.js';
 import _ from 'lodash';
@@ -47,7 +46,27 @@ const WrapCon = styled.div`
 const scaleList = ['20人以下', '21-99人', '100-499人', '500-999人', '1000-9999人', '10000人以上'];
 const depList = ['总经办', '技术/IT/研发', '产品/设计', '销售/市场/运营', '人事/财务/行政', '资源/仓储/采购', '其他'];
 const rankList = ['总裁/总经理/CEO', '副总裁/副总经理/VP', '总监/主管/经理', '员工/专员/执行', '其他'];
-
+const isInterestedList = [
+  {
+    text: _l('我是用户'),
+    value: 0,
+  },
+  {
+    text: (
+      <div
+        className="itemText"
+        dangerouslySetInnerHTML={{
+          __html: _l(
+            '我是用户，并对HAP %0伙伴政策%1 感兴趣',
+            `<a class='Bold pLeft5 pRight5 Hand' target="_blank" href="https://www.mingdao.com/partners" >`,
+            `</a>`,
+          ),
+        }}
+      ></div>
+    ),
+    value: 1,
+  },
+];
 export default class Create extends React.Component {
   constructor(props) {
     super(props);
@@ -59,6 +78,7 @@ export default class Create extends React.Component {
       companyList: [],
       show: false,
       tpCompanyId: -1,
+      isInterested: null,
     };
   }
 
@@ -71,7 +91,7 @@ export default class Create extends React.Component {
     }, 300);
     fixedDataAjax.loadIndustry({}).then(res => {
       this.setState({
-        industryList: res.industries || [],
+        industryList: (res.industries || []).filter(o => o.isEnable === 1),
       });
     });
   }
@@ -97,7 +117,6 @@ export default class Create extends React.Component {
       const { registerData } = this.props;
       let { company = {}, TPParams, email = '', emailOrTel = '' } = registerData;
       email = emailOrTel && RegExp.isEmail(emailOrTel) ? emailOrTel : email;
-
       const {
         companyName,
         tpCompanyId,
@@ -109,7 +128,11 @@ export default class Create extends React.Component {
         industryId,
         industry = '',
       } = company;
-
+      const { isInterested } = this.state;
+      let param = {};
+      if (!md.global.Config.IsLocal) {
+        param = { isInterested };
+      }
       RegisterController.createCompany({
         companyName: filterXSS(companyName),
         tpCompanyId: tpCompanyId,
@@ -126,6 +149,7 @@ export default class Create extends React.Component {
         tpType: TPParams.tpType,
         regFrom: window.localStorage.getItem('RegFrom'),
         referrer: window.localStorage.getItem('Referrer'),
+        ...param,
       })
         .then(data => {
           window.localStorage.removeItem('RegFrom');
@@ -163,6 +187,16 @@ export default class Create extends React.Component {
     } else {
       location.href = '/app';
     }
+    const { registerData } = this.props;
+    let { dialCode, password = '', emailOrTel = '' } = registerData;
+    const isMingdao = navigator.userAgent.toLowerCase().indexOf('mingdao application') >= 0;
+    if (isMingdao) {
+      mdAppResponse({
+        sessionId: 'register',
+        type: 'native',
+        settings: { action: 'enterpriseRegister.createSuccess', account: dialCode + emailOrTel, password },
+      });
+    }
   };
 
   inputOnFocus = e => {
@@ -187,12 +221,17 @@ export default class Create extends React.Component {
       warnningText: '',
       tipDom: null,
     });
+    const { isInterested } = this.state;
     const { registerData } = this.props;
     const { company = {} } = registerData;
     const { companyName, jobType, departmentType, scaleId, industryId } = company;
     // 企业网络名称
     let isRight = true;
     let warnningData = [];
+    if (!companyName) {
+      warnningData.push({ tipDom: this.companyName, warnningText: _l('请填写组织名称') });
+      isRight = false;
+    }
     if (!!companyName) {
       await fixedDataAjax.checkSensitive({ content: companyName }).then(res => {
         if (res) {
@@ -221,15 +260,15 @@ export default class Create extends React.Component {
       warnningData.push({ tipDom: this.department, warnningText: _l('请选择您的部门') });
       isRight = false;
     }
+    if (![0, 1].includes(isInterested) && !md.global.Config.IsLocal) {
+      warnningData.push({ tipDom: this.isInterested, warnningText: _l('请选择') });
+      isRight = false;
+    }
     this.setState({
       warnningData,
     });
     if (warnningData.length > 0) {
       $(warnningData[0].tipDom).focus();
-    }
-    if (!companyName) {
-      warnningData.push({ tipDom: this.companyName, warnningText: _l('请填写组织名称') });
-      isRight = false;
     }
     return isRight;
   };
@@ -317,7 +356,7 @@ export default class Create extends React.Component {
   renderCon = () => {
     const { registerData, onChangeData } = this.props;
     const { company = {} } = registerData;
-    const { warnningData, focusDiv, companyList, show, tpCompanyI, industryList = [] } = this.state;
+    const { warnningData, focusDiv, companyList, show, tpCompanyI, industryList = [], isInterested } = this.state;
     const { companyName, jobType, industryId, scaleId, departmentType } = company;
 
     return (
@@ -588,6 +627,43 @@ export default class Create extends React.Component {
               </div>
             )}
           </div>
+          {!md.global.Config.IsLocal && (
+            <div
+              className={cx('mesDiv current', {
+                ...setWarnningData(warnningData, [this.isInterested], focusDiv, jobType),
+              })}
+            >
+              <Dropdown
+                showItemTitle
+                ref={c => (this.isInterested = c)}
+                value={isInterested}
+                onChange={isInterested => {
+                  this.setState({
+                    warnningData: _.filter(warnningData, it => it.tipDom !== this.isInterested),
+                    isInterested,
+                  });
+                }}
+                onBlur={this.inputOnBlur}
+                onFocus={this.inputOnFocus}
+                data={isInterestedList}
+                renderTitle={() => {
+                  return isInterestedList.find(o => o.value === isInterested).text;
+                }}
+              />
+              <div className="title">{_l('用户类型')}</div>
+              {_.find(warnningData, it => it.tipDom === this.isInterested) && (
+                <div
+                  className={cx('warnningTip', {
+                    Hidden:
+                      (!!warnningData[0] && !_.includes([this.isInterested], warnningData[0].tipDom)) ||
+                      warnningData[0].tipDom !== focusDiv,
+                  })}
+                >
+                  {_.find(warnningData, it => it.tipDom === this.isInterested).warnningText}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </React.Fragment>
     );
@@ -599,7 +675,7 @@ export default class Create extends React.Component {
       <React.Fragment>
         {this.state.loading && <div className="loadingLine"></div>}
         <div className="titleHeader">
-          {location.href.indexOf('/enterpriseRegister.htm?type=create') < 0 && (
+          {!location.href.match(/enterpriseRegister(\.htm)?\?type=create/i) && (
             <span
               className="mTop40 Font15 InlineBlock Hand backspaceT"
               onClick={() => {

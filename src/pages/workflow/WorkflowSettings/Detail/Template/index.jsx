@@ -1,7 +1,6 @@
 import React, { Component, Fragment } from 'react';
 import { ScrollView, LoadDiv, Dropdown, Radio } from 'ming-ui';
 import _ from 'lodash';
-import { NODE_TYPE } from '../../enum';
 import flowNode from '../../../api/flowNode';
 import {
   DetailHeader,
@@ -163,7 +162,13 @@ export default class Template extends Component {
             <i className="Font16 icon-info" />
           </span>
         </div>
-        <Member accounts={data.accounts} removeOrganization={true} updateSource={this.updateSource} />
+        <Member
+          companyId={this.props.companyId}
+          accounts={data.accounts}
+          appId={this.props.relationType === 2 ? this.props.relationId : ''}
+          removeOrganization={true}
+          updateSource={this.updateSource}
+        />
         <div
           className="flexRow mTop15 ThemeColor3 workflowDetailAddBtn"
           onClick={() => this.setState({ showSelectUserDialog: true })}
@@ -237,45 +242,27 @@ export default class Template extends Component {
 
             {data.fields.map((item, i) => {
               const singleObj = _.find(data.controls, obj => obj.controlId === item.fieldId);
+
+              if (_.includes(['first', 'reason'], item.fieldId) && !item.fieldValue) return null;
+
               return (
                 <div key={i} className="relative">
                   <div className="mTop15 ellipsis Font13">
                     {singleObj.controlName || (i === 0 ? _l('顶部自定义') : _l('备注'))}
                   </div>
-                  <div className="flexRow">
-                    <div className="flex">
-                      <SingleControlValue
-                        key={cacheKey + i}
-                        companyId={this.props.companyId}
-                        processId={this.props.processId}
-                        selectNodeId={this.props.selectNodeId}
-                        controls={data.controls}
-                        formulaMap={data.formulaMap}
-                        fields={data.fields}
-                        updateSource={this.updateSource}
-                        item={item}
-                        i={i}
-                      />
-                    </div>
-                    {i !== 0 && (
-                      <div className="workflowDetailColorBtn mTop8 ThemeHoverColor3">
-                        <input
-                          type="color"
-                          value={item.color || '#333333'}
-                          onChange={event => {
-                            let fields = [].concat(data.fields);
-
-                            fields[i].color = event.target.value;
-                            this.updateSource({ fields });
-                          }}
-                        />
-                        <div className="flexColumn">
-                          <span>Ａ</span>
-                          <span className="workflowDetailColor" style={{ backgroundColor: item.color || '#333333' }} />
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <SingleControlValue
+                    key={cacheKey + i}
+                    companyId={this.props.companyId}
+                    processId={this.props.processId}
+                    relationId={this.props.relationId}
+                    selectNodeId={this.props.selectNodeId}
+                    controls={data.controls}
+                    formulaMap={data.formulaMap}
+                    fields={data.fields}
+                    updateSource={this.updateSource}
+                    item={item}
+                    i={i}
+                  />
                 </div>
               );
             })}
@@ -300,7 +287,9 @@ export default class Template extends Component {
                 <div className="mTop15">{_l('H5页面路径')}</div>
                 <div className="mTop10">
                   <CustomTextarea
+                    projectId={this.props.companyId}
                     processId={this.props.processId}
+                    relationId={this.props.relationId}
                     selectNodeId={this.props.selectNodeId}
                     type={2}
                     height={0}
@@ -319,7 +308,9 @@ export default class Template extends Component {
                 <div className="mTop15">{_l('小程序ID（AppID）')}</div>
                 <div className="mTop10">
                   <CustomTextarea
+                    projectId={this.props.companyId}
                     processId={this.props.processId}
+                    relationId={this.props.relationId}
                     selectNodeId={this.props.selectNodeId}
                     type={2}
                     height={0}
@@ -334,7 +325,9 @@ export default class Template extends Component {
                 <div className="mTop15">{_l('小程序页面路径')}</div>
                 <div className="mTop10">
                   <CustomTextarea
+                    projectId={this.props.companyId}
                     processId={this.props.processId}
+                    relationId={this.props.relationId}
                     selectNodeId={this.props.selectNodeId}
                     type={2}
                     height={0}
@@ -370,7 +363,7 @@ export default class Template extends Component {
           bg="BGBlue"
           updateSource={this.updateSource}
         />
-        <div className="flex mTop20">
+        <div className="flex">
           <ScrollView>
             <div className="workflowDetailBox">
               {this.renderDesc()}

@@ -2,10 +2,12 @@ import React, { useState, Fragment, useEffect } from 'react';
 import styled from 'styled-components';
 import { useSetState } from 'react-use';
 import { Dialog, Dropdown, Button, RadioGroup, Checkbox } from 'ming-ui';
-import Icon from 'src/components/Icon';
+import Components from '../../../components';
 import { Input, Tooltip } from 'antd';
 import { parseInt, isString } from 'lodash';
 import { SettingItem } from '../../../styled';
+
+const Icon = Components.Icon;
 
 const NumberConfigWrap = styled.div`
   .settingItem {
@@ -60,8 +62,8 @@ const NumberConfigWrap = styled.div`
 `;
 
 const NUMBER_TYPE = [
-  { value: 'nature', text: _l('自然数编号') },
-  { value: 'assign', text: _l('指定位数编号') },
+  { value: 'nature', text: _l('自然数编号%04018') },
+  { value: 'assign', text: _l('指定位数编号%04019') },
 ];
 const RESET_TYPE = [
   {
@@ -100,7 +102,7 @@ export default function AutoNumberConfig(props) {
   // data.length 为0 代表自然数编号
   const type = data.length ? 'assign' : 'nature';
 
-  const handleValueChange = ({ value, min = 2, max = 6 }) => {
+  const handleValueChange = ({ value, min = 2, max = 8 }) => {
     if (value === '') return value;
     const parsedValue = parseInt(value).toFixed(0);
     if (isNaN(parsedValue)) return '';
@@ -108,16 +110,22 @@ export default function AutoNumberConfig(props) {
   };
 
   return (
-    <Dialog style={{ width: '480px' }} visible title={_l('编号设置')} footer={null} onCancel={onClose}>
+    <Dialog style={{ width: '560px' }} visible title={_l('编号设置')} footer={null} onCancel={onClose}>
       <NumberConfigWrap>
         <SettingItem className="settingItem">
-          <div className="title">{_l('编号方式')}</div>
+          <div className="title">{_l('编号方式%04017')}</div>
           <div className="content">
             <RadioGroup
               size="middle"
               checkedValue={type}
               data={NUMBER_TYPE}
-              onChange={value => setData({ length: value === 'nature' ? 0 : 4, start: 1, repeatType: 0 })}
+              onChange={value =>
+                setData({
+                  length: value === 'nature' ? 0 : data.length || 4,
+                  start: data.start || 1,
+                  repeatType: data.repeatType || 0,
+                })
+              }
             />
           </div>
         </SettingItem>
@@ -151,18 +159,21 @@ export default function AutoNumberConfig(props) {
                 trigger={['hover']}
                 title={_l(
                   '取消勾选后，则编号不允许超出指定的位数，到达最大后将从0开始重新计数。如果位数设置不足会导致编号重复',
-                )}>
+                )}
+              >
                 <Checkbox
                   size="small"
                   checked={data.format === 'auto'}
                   onClick={value => {
                     setData({ format: value ? '' : 'auto' });
-                  }}>
+                  }}
+                >
                   <Fragment>
                     <span>{_l('编号超出位数后继续递增')}</span>
                     <Tooltip
                       trigger={['hover']}
-                      title={_l('勾选时，超出位数继续递增； 取消勾选时，超出位数后从0开始编号')}>
+                      title={_l('勾选时，超出位数继续递增； 取消勾选时，超出位数后从0开始编号')}
+                    >
                       <Icon style={{ marginLeft: '6px' }} icon="help" />
                     </Tooltip>
                   </Fragment>
@@ -201,7 +212,8 @@ export default function AutoNumberConfig(props) {
                   setData({ start: rule.start });
                 }
                 setEditable(!editable);
-              }}>
+              }}
+            >
               {editable ? _l('取消修改') : _l('修改')}
             </span>
           )}
@@ -228,10 +240,12 @@ export default function AutoNumberConfig(props) {
             onClick={() => {
               if (!data.start) {
                 onOk({ ...data, start: '1' });
+              } else {
+                onOk(data);
               }
-              onOk(data);
               onClose();
-            }}>
+            }}
+          >
             {_l('确定')}
           </Button>
         </div>

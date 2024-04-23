@@ -6,18 +6,38 @@ import { enumWidgetType, getAdvanceSetting, getIconByType, supportDisplayRow } f
 import displayTypes from './displayTypes';
 import { CommonDisplay, TitleContentWrap } from '../styled';
 import Components from './components';
-import { getVerifyInfo } from '../util/setting';
+import { getTitleStyle, getVerifyInfo } from '../util/setting';
+import { TabHeaderItem } from './displayTabs/tabHeader';
+import { TITLE_SIZE_OPTIONS } from '../config/setting';
 
 export default function WidgetDisplay(props) {
-  const { data = {}, activeWidget, allControls, actualControls, styleInfo: { info = {} } = {} } = props;
-  const { type, sourceControlType, required, hint, unit, desc, strDefault } = data;
-  const { prefix, suffix, hidetitle } = getAdvanceSetting(data);
+  const {
+    data = {},
+    activeWidget,
+    allControls = [],
+    actualControls,
+    styleInfo: { info = {} } = {},
+    fromType,
+    commonWidgets = [],
+  } = props;
+  const { type, sourceControlType, required, hint, unit, desc, strDefault, controlId, fieldPermission = '111' } = data;
+  const readOnly = fieldPermission[1] === '0';
+  const {
+    prefix,
+    suffix,
+    hidetitle,
+    titlesize = '0',
+    titlestyle = '0000',
+    titlecolor = '#757575',
+  } = getAdvanceSetting(data);
+  const titleSize = TITLE_SIZE_OPTIONS[titlesize];
+  const titleStyle = getTitleStyle(titlestyle);
   const { titlelayout_pc = '1', titlewidth_pc = '100', align_pc = '1' } = info;
 
   // 分割线字段
   const isSplitLine = type === 22;
   const isSpecialControl = includes([22, 10010], type);
-  const isActive = data.controlId === (activeWidget || {}).controlId;
+  const isActive = controlId === (activeWidget || {}).controlId;
 
   // 他表字段
   const showIcon = type === 30 && (strDefault || '')[0] !== '1';
@@ -33,12 +53,21 @@ export default function WidgetDisplay(props) {
   const displayRow = titlelayout_pc === '2' && supportDisplayRow(data);
 
   const getTitleContent = () => {
-    const controlNameCon = showTitle ? (
-      <div className={cx('controlName', { isSplitLine, flex: displayRow, overflow_ellipsis: !displayRow })}>
+    const controlNameCon = (
+      <div
+        className={cx('controlName', {
+          isSplitLine,
+          flex: displayRow,
+          breakAll: displayRow,
+          overflow_ellipsis: !displayRow,
+          hideTitle: !showTitle,
+        })}
+      >
         {controlName}
         {showIcon && <span className="icon-refresh Gray_9e mLeft6"></span>}
       </div>
-    ) : null;
+    );
+
     if (displayRow) {
       return (
         <div className="titleContent">
@@ -55,18 +84,47 @@ export default function WidgetDisplay(props) {
     );
   };
 
+  // 分割线单独走展示
+  if (type === 22) {
+    return (
+      <TitleContentWrap readOnly={readOnly}>
+        <Component {...props} splitWidgets={commonWidgets} />
+      </TitleContentWrap>
+    );
+  }
+
+  // 标签页，关联多条列表单独展示(前期标签页单独展示)
+  if (type === 52) {
+    return (
+      <TitleContentWrap>
+        <div className="tabHeaderTileWrap">
+          <TabHeaderItem {...props} />
+        </div>
+        <Component {...props} />
+      </TitleContentWrap>
+    );
+  }
+
   return (
-    <TitleContentWrap displayRow={displayRow} titleWidth={titlewidth_pc} textAlign={align_pc}>
+    <TitleContentWrap
+      displayRow={displayRow}
+      titleWidth={titlewidth_pc}
+      textAlign={align_pc}
+      titleStyle={titleStyle}
+      titleSize={titleSize}
+      titleColor={titlecolor}
+      readOnly={readOnly}
+    >
       <div className={cx('nameAndStatus', { minHeight18: !isSpecialControl && hidetitle === '1' })}>
         {required && <div className={cx({ required })}>*</div>}
-        <i className={cx(`typeIcon icon-${getIconByType(type)}`, { Visibility: !(showTitle && !isSplitLine) })}></i>
+        <i className={cx(`typeIcon icon-${getIconByType(type)}`)}></i>
 
         {getTitleContent()}
       </div>
 
       <div className="flex overflow_ellipsis">
         {includes(NEED_SPECIAL_DISPLAY_CONTROLS, type) ? (
-          <Component data={data} controls={actualControls} displayRow={displayRow} />
+          <Component data={data} controls={actualControls} displayRow={displayRow} fromType={fromType} />
         ) : (
           <CommonDisplay>
             {prefix && <div className="unit prefix">{prefix}</div>}

@@ -6,7 +6,7 @@ import { WORKSHEET_ROLE_TYPE, SUB_PERMISSION_NAME, ROW_HEIGHT, VIEW_DISPLAY_TYPE
 import _ from 'lodash';
 
 // 进入配置控件页面参数处理
-export const getCustomWidgetUri = function ({ sourceName, templateId, sourceId, projectId, appconfig = {} }) {
+export const getCustomWidgetUri = function({ sourceName, templateId, sourceId, projectId, appconfig = {} }) {
   const fromURL = sId => {
     if (location.href.indexOf('application') > -1) {
       return encodeURIComponent(location.href);
@@ -33,7 +33,7 @@ export const getCustomWidgetUri = function ({ sourceName, templateId, sourceId, 
 };
 
 // 控件处理后的value值转化为给接口的值
-export const getCellValue = function (cellItem, type) {
+export const getCellValue = function(cellItem, type) {
   switch (type) {
     // case 9:
     // case 11:
@@ -125,13 +125,13 @@ export const getCellValue = function (cellItem, type) {
     case 29:
       return cellItem.value
         ? JSON.stringify(
-          cellItem.value.map(relateRecordItem => {
-            return {
-              ...relateRecordItem,
-              sourcevalue: {},
-            };
-          }),
-        )
+            cellItem.value.map(relateRecordItem => {
+              return {
+                ...relateRecordItem,
+                sourcevalue: {},
+              };
+            }),
+          )
         : '';
     default:
       return cellItem.value ? (typeof cellItem.value === 'string' ? cellItem.value : cellItem.value.toString()) : '';
@@ -139,7 +139,7 @@ export const getCellValue = function (cellItem, type) {
 };
 
 // 接口的值转化为控件的value值
-export const getControlValue = function (controlItem) {
+export const getControlValue = function(controlItem) {
   switch (controlItem.type) {
     // case 9:
     // case 11:
@@ -174,14 +174,14 @@ export const getControlValue = function (controlItem) {
         try {
           return JSON.parse(controlItem.value).filter(item => item).length > 0
             ? JSON.parse(controlItem.value).map(item => {
-              return item ? moment(item).format('x') : '';
-            })
+                return item ? moment(item).format('x') : '';
+              })
             : '';
         } catch (error) {
           return controlItem.value.split(',').filter(item => item).length > 0
             ? controlItem.value.split(',').map(item => {
-              return item || '';
-            })
+                return item || '';
+              })
             : '';
         }
       }
@@ -209,7 +209,7 @@ export function getUserRoleDesc(permissionIds) {
       const typeId = Math.floor(pId / 1000);
       switch (typeId) {
         case 301:
-          return _l('可查看%0', pId === 301100 ? _l('全部') : SUB_PERMISSION_NAME[pId - 301000]);
+          return pId === 301100 ? _l('可查看全部') : _l('可查看%0', SUB_PERMISSION_NAME[pId - 301000]);
         case 302:
           return _l('可编辑%0', SUB_PERMISSION_NAME[pId - 302000]);
         case 303:
@@ -244,6 +244,16 @@ export const isGalleryOrBoard = type => {
   return [VIEW_DISPLAY_TYPE.gallery, VIEW_DISPLAY_TYPE.board].includes(String(type));
 };
 
+// 是否看板视图、画廊视图、层级视图、详情视图
+export const isGalleryOrBoardOrStructureOrDetail = type => {
+  return [
+    VIEW_DISPLAY_TYPE.gallery,
+    VIEW_DISPLAY_TYPE.board,
+    VIEW_DISPLAY_TYPE.structure,
+    VIEW_DISPLAY_TYPE.detail,
+  ].includes(String(type));
+};
+
 // 根据视图类型，设置封面位置和显示方式的默认值
 export const getDefaultViewSet = data => {
   let { viewType, advancedSetting = {}, coverType = 0 } = data;
@@ -264,8 +274,16 @@ export const getDefaultViewSet = data => {
   } else {
     //看板视图、表视图、层级视图封面设置项 默认右
     let { coverposition = '0' } = advancedSetting;
+    let childTypeObj = {};
     if (coverposition === '2') {
       coverposition = '0';
+    }
+    //表视图 新建默认不启用业务规则
+    if (VIEW_DISPLAY_TYPE.sheet === String(viewType)) {
+      advancedSetting = { ...advancedSetting, enablerules: '1' };
+    }
+    if (VIEW_DISPLAY_TYPE.detail === String(viewType)) {
+      childTypeObj = { childType: 2 };
     }
     return {
       ...data,
@@ -274,6 +292,7 @@ export const getDefaultViewSet = data => {
         ...advancedSetting,
         coverposition,
       },
+      ...childTypeObj,
     };
   }
 };

@@ -3,6 +3,8 @@ import { string, func, bool } from 'prop-types';
 import Editor from './EditorDiaLogContent';
 import { compareProps } from '../../util';
 import _ from 'lodash';
+import './index.less';
+
 export default class AppIntro extends Component {
   static propTypes = {
     isEditing: bool,
@@ -38,7 +40,7 @@ export default class AppIntro extends Component {
 
   handleSave = val => {
     this.props.onSave(val);
-    this.setState({ isEditing: false });
+    // this.setState({ isEditing: false });
   };
 
   render() {
@@ -51,26 +53,30 @@ export default class AppIntro extends Component {
       changeEditState = _.noop,
       minHeight,
       maxHeight,
+      data,
     } = this.props;
     const { isEditing } = this.state;
     return (
       <Editor
-        className="appIntroDescriptionEditor "
+        data={data}
+        className="appIntroDescriptionEditor"
         summary={summary}
         isEditing={isEditing}
         permissionType={permissionType}
         changeEditState={isEditing => {
+          if (cacheKey === 'appMultilingual') return;
           this.setState({ isEditing });
           changeEditState(isEditing);
         }}
         onSave={this.handleSave}
         changeSetting={changeSetting}
         onCancel={() => {
-          this.setState({ isEditing: false });
+          // this.setState({ isEditing: false });
           onCancel && onCancel();
         }}
         cacheKey={cacheKey}
         title={this.props.title}
+        renderLeftContent={this.props.renderLeftContent}
         minHeight={minHeight}
         maxHeight={maxHeight}
       />

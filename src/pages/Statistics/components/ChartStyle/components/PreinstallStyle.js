@@ -1,14 +1,17 @@
 import React, { Fragment } from 'react';
 import styled from 'styled-components';
+import { Icon } from 'ming-ui';
+import { Checkbox, Select, Tooltip } from 'antd';
+import cx from 'classnames';
 import { defaultPivotTableStyle } from './TitleStyle';
+import store from 'redux/configureStore';
+import { isLightColor } from 'src/pages/customPage/util';
 
-const Wrap = styled.div`
-  .colorBlock {
-    width: 14px;
-    height: 14px;
-    border-radius: 2px;
-    margin-right: 5px;
-  }
+const ColorBlock = styled.div`
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  margin-right: 5px;
 `;
 
 const styles = [{
@@ -19,7 +22,7 @@ const styles = [{
     columnTextColor: '#757575',
     columnBgColor: '#fafafa',
     lineTextColor: '#333',
-    lineBgColor: '#fff'
+    lineBgColor: '#fff',
   }
 }, {
   value: 2,
@@ -29,7 +32,7 @@ const styles = [{
     columnTextColor: '#fff',
     columnBgColor: '#2196F3',
     lineTextColor: '#fff',
-    lineBgColor: '#2196F3'
+    lineBgColor: '#2196F3',
   }
 }, {
   value: 3,
@@ -39,38 +42,166 @@ const styles = [{
     columnTextColor: '#fff',
     columnBgColor: '#3E4662',
     lineTextColor: '#fff',
-    lineBgColor: '#3E4662'
+    lineBgColor: '#3E4662',
   }
 }];
 
-const PreinstallStyle = props => {
-  const { style, onChangeStyle } = props;
-  const { pivotTableStyle = defaultPivotTableStyle } = style;
+const widthModels = [{
+  value: 1,
+  name: _l('自动')
+}, {
+  value: 2,
+  name: _l('固定')
+}, {
+  value: 3,
+  name: _l('百分比')
+}];
 
-  const handleChangePivotTableStyle = (data) => {
+const PreinstallStyle = props => {
+  const { style, onChangeStyle, customPageConfig } = props;
+  const { pivotTableStyle = defaultPivotTableStyle, paginationVisible, paginationSize = 20, pcWidthModel = 1, mobileWidthModel = 1 } = style;
+  const iconColor = _.get(store.getState().appPkg, 'iconColor');
+  const { pivoTableColor, pivoTableColorIndex = 1 } = customPageConfig;
+
+  const handleChangePivotTableStyle = (data, isRequest) => {
+    const config = {
+      ...pivotTableStyle,
+      ...data
+    }
+    if (pivoTableColor) {
+      config.pivoTableColorIndex = pivoTableColorIndex + 1;
+    }
     onChangeStyle({
-      pivotTableStyle: {
-        ...pivotTableStyle,
-        ...data,
-      }
-    });
+      pivotTableStyle: config
+    }, isRequest);
   }
 
   return (
-    <Wrap className="chartTypeSelect flexRow valignWrapper mBottom16">
-      {styles.map(item => (
+    <div className="mBottom16">
+      <div className="mBottom10">{_l('预设样式')}</div>
+      <div className="chartTypeSelect flexRow valignWrapper">
         <div
-          key={item.value}
           className="flex centerAlign pointer Gray_75"
           onClick={() => {
-            handleChangePivotTableStyle(item.config);
+            const isLight = isLightColor(iconColor);
+            handleChangePivotTableStyle({
+              columnTextColor: isLight ? '#757575' : '#fff',
+              columnBgColor: 'themeColor',
+              lineTextColor: isLight ? '#333' : '#fff',
+              lineBgColor: 'themeColor',
+            });
           }}
         >
-          <div className="colorBlock" style={{ backgroundColor: item.color }}></div>
-          {item.name}
+          <ColorBlock style={{ backgroundColor: iconColor }}></ColorBlock>
+          {_l('主题')}
         </div>
-      ))}
-    </Wrap>
+        {styles.map(item => (
+          <div
+            key={item.value}
+            className="flex centerAlign pointer Gray_75"
+            onClick={() => {
+              handleChangePivotTableStyle(item.config);
+            }}
+          >
+            <ColorBlock style={{ backgroundColor: item.color }}></ColorBlock>
+            {item.name}
+          </div>
+        ))}
+      </div>
+      <div className="mBottom10 mTop16 flexRow valignWrapper">
+        {_l('列宽模式')}
+        <Tooltip
+          title={(
+            <div className="pTop5 pBottom5">
+              <div className="mBottom2">{_l('自动')}</div>
+              <div>{_l('根据内容长度自动设置列宽')}</div>
+              <div className="mBottom2 mTop10">{_l('固定')}</div>
+              <div>{_l('列宽按固定宽度，当列数较多时横向滚动查看')}</div>
+              <div className="mBottom2 mTop10">{_l('百分比')}</div>
+              <div>{_l('列宽按百分比，在所有尺寸下始终完整显示所有列，适合列数较少的情况')}</div>
+            </div>
+          )}
+          overlayInnerStyle={{
+            width: 300
+          }}
+          placement="bottomRight"
+          arrowPointAtCenter
+          >
+          <Icon className="mLeft10 Gray_9e Font16 pointer" icon="knowledge-message" />
+        </Tooltip>
+      </div>
+      <div className="mBottom5">{_l('PC')}</div>
+      <div className="chartTypeSelect flexRow valignWrapper">
+        {widthModels.map(item => (
+          <div
+            key={item.value}
+            className={cx('flex centerAlign pointer Gray_75', { active: pcWidthModel === item.value })}
+            onClick={() => {
+              onChangeStyle({ pcWidthModel: item.value }, true);
+            }}
+          >
+            {item.name}
+          </div>
+        ))}
+      </div>
+      <div className="mBottom5 mTop10">{_l('移动')}</div>
+      <div className="chartTypeSelect flexRow valignWrapper">
+        {widthModels.map(item => (
+          <div
+            key={item.value}
+            className={cx('flex centerAlign pointer Gray_75', { active: mobileWidthModel === item.value })}
+            onClick={() => {
+              onChangeStyle({ mobileWidthModel: item.value });
+            }}
+          >
+            {item.name}
+          </div>
+        ))}
+      </div>
+      <div className="flexRow valignWrapper mTop16">
+        <Checkbox
+          className="mLeft0"
+          checked={paginationVisible}
+          onChange={(e) => {
+            onChangeStyle({ paginationVisible: e.target.checked });
+          }}
+        >
+          {_l('显示分页')}
+        </Checkbox>
+      </div>
+      {paginationVisible && (
+        <div className="mTop10 flexRow valignWrapper">
+          <div className="mRight10">{_l('默认')}</div>
+          <Select
+            style={{ width: 100 }}
+            className="chartSelect"
+            value={paginationSize}
+            suffixIcon={<Icon icon="expand_more" className="Gray_9e Font20" />}
+            onChange={value => {
+              onChangeStyle({ paginationSize: value });
+            }}
+          >
+            {[20, 25, 30, 50, 100].map(page => (
+              <Select.Option className="selectOptionWrapper" key={page} value={page}>
+                {page}
+              </Select.Option>
+            ))}
+          </Select>
+          <div className="mLeft10">{_l('条/页')}</div>
+        </div>
+      )}
+      <div className="flexRow valignWrapper mTop16">
+        <Checkbox
+          className="mLeft0"
+          checked={style.pivotTableUnilineShow}
+          onChange={(e) => {
+            onChangeStyle({ pivotTableUnilineShow: e.target.checked });
+          }}
+        >
+          {_l('单行显示')}
+        </Checkbox>
+      </div>
+    </div>
   );
 }
 

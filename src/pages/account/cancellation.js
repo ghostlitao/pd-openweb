@@ -1,8 +1,7 @@
 import React, { Component, Fragment } from 'react';
 import ReactDom from 'react-dom';
 import preall from 'src/common/preall';
-import { Input } from 'antd';
-import { LoadDiv, Button, Checkbox, RichText } from 'ming-ui';
+import { LoadDiv, Button, Checkbox, RichText, VerifyPasswordInput } from 'ming-ui';
 import { browserIsMobile, mdAppResponse, verifyPassword } from 'src/util';
 import cx from 'classnames';
 import './cancellation.less';
@@ -80,32 +79,21 @@ export default class Cancellation extends Component {
   };
   confirmPassword = () => {
     const { password = '' } = this.state;
-    if (!password.trim()) {
-      alert(_l('请输入登录密码'), 3);
-      return;
-    }
     const _this = this;
-    verifyPassword(password.trim(), () => {
-      _this.setState({ step: 2 });
-      _this.getCountDown();
+
+    verifyPassword({
+      password: password.trim(),
+      success: () => {
+        _this.setState({ step: 2 });
+        _this.getCountDown();
+      },
     });
   };
   renderInputPassword = () => {
     return (
       <Fragment>
         <div className="Font13 Bold  mBottom16 w300 TxtLeft">{_l('请输入登录密码确认注销操作')}</div>
-        <Input.Password
-          className={cx('password w300', { passwordError: this.state.passwordError })}
-          value={this.state.password}
-          placeholder={''}
-          autoComplete="new-password"
-          onChange={e => {
-            let value = e.target.value;
-            this.setState({
-              password: value,
-            });
-          }}
-        />
+        <VerifyPasswordInput onChange={({ password }) => this.setState({ password })} />
         <Button
           className="primary nextStep "
           onClick={() => {
@@ -144,7 +132,7 @@ export default class Cancellation extends Component {
           </div>
         </div>
         <div className="protocol TxtLeft flexRow alignItemsCenter mTop24">
-          <Checkbox checked={checkedAgree} onClick={checked => this.setState({ checkedAgree: !checked })}></Checkbox>
+          <Checkbox checked={checkedAgree} onClick={checked => this.setState({ checkedAgree: !checked })} />
           <div>
             <spam className="Font20">{_l('同意（注销后15天内可撤销操作）')}</spam>
           </div>
@@ -158,7 +146,7 @@ export default class Cancellation extends Component {
               const isMingdao = navigator.userAgent.toLowerCase().indexOf('mingdao application') >= 0;
               alert(actionMsg[res], type);
               if (res === 1) {
-                window.location.href = '/login.htm';
+                window.location.href = '/login';
               }
               if (isMingdao) {
                 mdAppResponse({
@@ -187,7 +175,7 @@ export default class Cancellation extends Component {
         alert(actionMsg[data], type);
         if (data === 1) {
           // 撤销申请跳转至登录页
-          window.location.href = '/login.htm';
+          window.location.href = '/login';
         }
       },
     });

@@ -5,7 +5,8 @@ import DraggableItem from './draggableItem';
 import { WIDGET_GROUP_TYPE } from '../config/widget';
 import ListItemLayer from './ListItemLayer';
 import { getFeatureStatus } from 'src/util';
-import { handleAddWidget } from 'src/pages/widgetConfig/util/data';
+import { relateOrSectionTab } from '../util';
+import { handleAddWidgets } from 'src/pages/widgetConfig/util/data';
 
 const WidgetList = styled.div`
   width: 300px;
@@ -15,11 +16,11 @@ const WidgetList = styled.div`
   overflow: auto;
   background-color: #ffffff;
   .groupList {
-    padding: 0 20px;
+    padding: 0 16px;
     padding-bottom: 40px;
   }
   .group {
-    margin-top: 16px;
+    margin-top: 20px;
     .title {
       font-weight: 700;
     }
@@ -36,7 +37,8 @@ const WidgetList = styled.div`
     min-height: 36px;
     box-sizing: border-box;
     margin-bottom: 12px;
-    padding-left: 12px;
+    padding-left: 10px;
+    padding-right: 4px;
     list-style: none;
     position: relative;
     background-color: #fff;
@@ -59,8 +61,7 @@ const WidgetList = styled.div`
       span {
         line-height: 12px;
         flex-grow: 0;
-        padding-right: 12px;
-        word-break: break-all;
+        word-break: break-word;
       }
       i {
         flex-shrink: 0;
@@ -74,10 +75,28 @@ const WidgetList = styled.div`
 `;
 
 export default function List(props) {
-  const { globalSheetInfo = {} } = props;
+  const { globalSheetInfo = {}, activeWidget = {} } = props;
+  const { hideWorksheetControl = '' } = md.global.SysSettings;
 
-  const handleAdd = (data, para) => {
-    handleAddWidget(data, para, props);
+  const handleAdd = (data, para = {}) => {
+    let sectionId = '';
+    if (para.type === 'click') {
+      sectionId = activeWidget.type === 52 ? activeWidget.controlId : activeWidget.sectionId;
+    } else {
+      sectionId = para.sectionId || '';
+    }
+
+    // 子表、标签页、关联多条列表等不能嵌套
+    if (relateOrSectionTab(data) || data.type === 34) {
+      sectionId = '';
+    }
+
+    let newData = {
+      ...data,
+      sectionId: sectionId,
+    };
+
+    handleAddWidgets([newData], para, props);
   };
 
   return (
@@ -87,11 +106,15 @@ export default function List(props) {
         <div className="groupList">
           {_.keys(WIDGET_GROUP_TYPE).map(group => {
             const { widgets, title } = WIDGET_GROUP_TYPE[group];
+            const list = _.keys(widgets).filter(key => !hideWorksheetControl.includes(key)).filter(key => !(key === 'SEARCH_BTN' && md.global.SysSettings.hideIntegration));
+            if (!list.length) {
+              return undefined;
+            }
             return (
               <div key={group} className="group">
                 <div className="title">{title}</div>
                 <ul>
-                  {_.keys(widgets).filter(key => !(key === 'SEARCH_BTN' && md.global.SysSettings.hideIntegration)).map(key => {
+                  {list.map(key => {
                     const featureType = getFeatureStatus(globalSheetInfo.projectId, widgets[key]['featureId']);
                     if (_.includes(['SEARCH_BTN', 'SEARCH'], key) && !featureType) return;
 

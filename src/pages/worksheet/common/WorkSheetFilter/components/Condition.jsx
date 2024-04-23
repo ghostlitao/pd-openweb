@@ -59,15 +59,17 @@ export default class Condition extends Component {
   }
 
   setIsDynamicsourceFn = () => {
-    const { condition = [] } = this.props;
-    let { dynamicSource = [], isDynamicsource } = condition;
-    if (dynamicSource.length > 0) {
+    const { condition = [], from } = this.props;
+    let { dynamicSource, isDynamicsource } = condition;
+    if (dynamicSource && dynamicSource.length > 0) {
       if (isDynamicsource === undefined) {
         isDynamicsource = true;
       }
     } else {
       if (isDynamicsource === undefined) {
-        isDynamicsource = false;
+        // 关联查询、工作表查询等默认值为动态值
+        isDynamicsource =
+          _.includes(['relateSheet'], from) && _.isUndefined(dynamicSource) && this.getIsDynamicValue() ? true : false;
       }
     }
     return isDynamicsource;
@@ -83,6 +85,15 @@ export default class Condition extends Component {
       from === 'relateSheet' &&
       !(!_.includes([27], condition.controlType) && _.includes(listType, type)) &&
       !_.includes(listControlType, controlType)
+    );
+  };
+
+  getIsDynamicValue = () => {
+    const { condition, control } = this.props;
+    return (
+      !(!_.includes([27], condition.controlType) && _.includes(listType, condition.type)) &&
+      !_.includes(listControlType, condition.controlType) &&
+      !isCustomOptions(control)
     );
   };
 
@@ -126,7 +137,7 @@ export default class Condition extends Component {
             isAppendToBody
             menuStyle={{ width: 'auto' }}
             data={[
-              { text: _l('且'), value: FILTER_RELATION_TYPE.AND },
+              { text: _l('且%25000'), value: FILTER_RELATION_TYPE.AND },
               { text: _l('或'), value: FILTER_RELATION_TYPE.OR },
             ]}
             onChange={value => {
@@ -134,7 +145,7 @@ export default class Condition extends Component {
             }}
           />
         ) : (
-          <span className="relationType">{[_l('且'), _l('或')][relationType - 1]}</span>
+          <span className="relationType">{[_l('且%25000'), _l('或')][relationType - 1]}</span>
         )}
       </React.Fragment>
     );
@@ -201,10 +212,7 @@ export default class Condition extends Component {
       );
     }
     const isDynamicStyle = from === 'relateSheet'; // 动态值选择的特定样式
-    const isDynamicValue =
-      !(!_.includes([27], condition.controlType) && _.includes(listType, condition.type)) &&
-      !_.includes(listControlType, condition.controlType) &&
-      !isCustomOptions(control);
+    const isDynamicValue = this.getIsDynamicValue();
     return (
       <div
         className={cx('conditionItem', {
@@ -281,7 +289,7 @@ export default class Condition extends Component {
                   () => {
                     onChange({
                       isDynamicsource: value === 1 ? false : true,
-                      ...(value === 1 ? { dynamicSource: [] } : {}), // 切换固定值时清空字段值
+                      ...(value === 1 ? { dynamicSource: [] } : { values: undefined, value: undefined }), // 切换固定值时清空字段值
                     });
                   },
                 );

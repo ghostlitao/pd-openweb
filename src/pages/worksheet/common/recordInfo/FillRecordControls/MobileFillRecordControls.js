@@ -99,6 +99,8 @@ class FillRecordControls extends React.Component {
             if (_.isUndefined(c.dataSource)) {
               return undefined;
             }
+            // 自定义动作异化：标签页不能配置，所以默认都显示
+            if (c.type === 52) return { ...c, controlPermissions: '111', fieldPermission: '111' };
             if (!writeControl) {
               return {
                 ...c,
@@ -143,12 +145,12 @@ class FillRecordControls extends React.Component {
     this.setState({ submitLoading: true });
     this.customwidget.current.submitFormData();
   };
-  onSave = (error, { data, updateControlIds }) => {
+  onSave = async (error, { data, updateControlIds }) => {
     if (error) {
       this.setState({ submitLoading: false });
       return;
     }
-    const { onSubmit, writeControls } = this.props;
+    const { onSubmit, writeControls, customButtonConfirm } = this.props;
     let hasError;
     const newData = data.filter(item =>
       _.find(writeControls, writeControl => writeControl.controlId === item.controlId),
@@ -167,7 +169,7 @@ class FillRecordControls extends React.Component {
                 ...control.value,
                 rules: _.get(this.cellObjs || {}, `${control.controlId}.cell.props.rules`),
               },
-              _.get(this.cellObjs || {}, `${control.controlId}.cell.controls`) || control.relationControls,
+              _.get(this.cellObjs || {}, `${control.controlId}.cell.state.controls`) || control.relationControls,
               control.showControls,
               3,
             ),
@@ -205,7 +207,20 @@ class FillRecordControls extends React.Component {
       this.setState({ submitLoading: false });
       return;
     }
-    this.setState({ submitLoading: false });
+    if (customButtonConfirm) {
+      try {
+        await customButtonConfirm();
+        this.setState({
+          submitLoading: false,
+        });
+      } catch (err) {
+        this.setState({
+          submitLoading: false,
+        });
+        return;
+      }
+    }
+    this.setState({ isSubmitting: true, submitLoading: false });
     updateControlIds = _.uniq(updateControlIds.concat(writeControls.filter(c => c.defsource).map(c => c.controlId)));
     onSubmit(
       newData.filter(c => _.find(updateControlIds, controlId => controlId === c.controlId)).map(formatControlToServer),
@@ -213,11 +228,16 @@ class FillRecordControls extends React.Component {
         ..._.pick(this.props, ['appId', 'projectId', 'worksheetId', 'viewId', 'recordId']),
       },
       this.customwidget.current,
+      err => {
+        if (err) {
+          this.setState({ isSubmitting: false, submitLoading: false });
+        }
+      },
     );
   };
   render() {
     const { appId, recordId, worksheetId, projectId, hideDialog, title } = this.props;
-    const { submitLoading, formData, showError } = this.state;
+    const { submitLoading, isSubmitting, formData, showError } = this.state;
     return (
       <Con>
         <div className="flex customFieldsWrapper">
@@ -259,7 +279,12 @@ class FillRecordControls extends React.Component {
             </Button>
           </WingBlank>
           <WingBlank className="flex" size="sm">
-            <Button className="Font15 bold" type="primary" onClick={this.handleSave}>
+            <Button
+              disabled={submitLoading || isSubmitting}
+              className="Font15 bold"
+              type="primary"
+              onClick={this.handleSave}
+            >
               {_l('确定')}
             </Button>
           </WingBlank>

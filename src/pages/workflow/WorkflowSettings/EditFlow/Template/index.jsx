@@ -29,13 +29,13 @@ export default class Template extends Component {
     return (
       <div className="pLeft8 pRight8 pTop5 pBottom5">
         <span className="Gray_75">{_l('发送给：')}</span>
-        <MembersName accounts={item.accounts} />
+        <MembersName {...this.props} accounts={item.accounts} />
       </div>
     );
   }
 
   render() {
-    const { processId, item, disabled, selectNodeId, openDetail } = this.props;
+    const { processId, item, disabled, selectNodeId, openDetail, isSimple } = this.props;
 
     return (
       <div className="flexColumn">
@@ -53,7 +53,9 @@ export default class Template extends Component {
               <i className={cx('workflowAvatar icon-wechat', item.accounts.length ? 'BGBlue' : 'BGGray')} />
             </div>
             <NodeOperate nodeClassName="BGBlue" {...this.props} />
-            <div className="workflowContent Font13">{this.renderContent()}</div>
+            <div className="workflowContent Font13">
+              {isSimple ? <span className="pLeft8 pRight8 Gray_9e">{_l('加载中...')}</span> : this.renderContent()}
+            </div>
           </div>
           <CreateNode {...this.props} />
         </section>

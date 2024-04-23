@@ -10,7 +10,6 @@ import {
   getChartColors,
   getAuxiliaryLineConfig
 } from './common';
-import { BidirectionalBar } from '@antv/g2plot';
 import { formatChartData as formatBarChartData, formatDataCount } from './BarChart';
 import { formatSummaryName, isFormatNumber } from 'statistics/common';
 import { Dropdown, Menu } from 'antd';
@@ -45,14 +44,19 @@ export default class extends Component {
     this.BidirectionalBarChart = null;
   }
   componentDidMount() {
-    this.renderBidirectionalBarChart(this.props);
+    import('@antv/g2plot').then(data => {
+      this.g2plotComponent = data;
+      this.renderBidirectionalBarChart(this.props);
+    });
   }
    componentWillUnmount() {
     this.BidirectionalBarChart && this.BidirectionalBarChart.destroy();
   }
   componentWillReceiveProps(nextProps) {
-    const { map, displaySetup, rightY } = nextProps.reportData;
-    const { displaySetup: oldDisplaySetup, rightY: oldRightY } = this.props.reportData;
+    const { map, displaySetup, rightY, style } = nextProps.reportData;
+    const { displaySetup: oldDisplaySetup, rightY: oldRightY, style: oldStyle } = this.props.reportData;
+    const chartColor = _.get(nextProps, 'customPageConfig.chartColor');
+    const oldChartColor = _.get(this.props, 'customPageConfig.chartColor');
 
     if (_.isEmpty(rightY)) {
       return;
@@ -72,7 +76,11 @@ export default class extends Component {
       !_.isEqual(displaySetup.xdisplay, oldDisplaySetup.xdisplay) ||
       !_.isEqual(displaySetup.ydisplay, oldDisplaySetup.ydisplay) ||
       !_.isEqual(displaySetup.auxiliaryLines, oldDisplaySetup.auxiliaryLines) ||
-      !_.isEqual(rightYDisplay, oldRightYDisplay)
+      !_.isEqual(rightYDisplay, oldRightYDisplay) ||
+      style.showLabelPercent !== oldStyle.showLabelPercent ||
+      style.tooltipValueType !== oldStyle.tooltipValueType ||
+      !_.isEqual(chartColor, oldChartColor) ||
+      nextProps.themeColor !== this.props.themeColor
     ) {
       const config = this.getComponentConfig(nextProps);
       this.BidirectionalBarChart.update(config);
@@ -82,6 +90,7 @@ export default class extends Component {
     const { reportData, isViewOriginalData } = props;
     const { displaySetup } = reportData;
     const config = this.getComponentConfig(props);
+    const { BidirectionalBar } = this.g2plotComponent;
     this.BidirectionalBarChart = new BidirectionalBar(this.chartEl, config);
     if (displaySetup.showRowList && isViewOriginalData) {
       this.BidirectionalBarChart.on('element:click', this.handleClick);
@@ -89,22 +98,27 @@ export default class extends Component {
     this.BidirectionalBarChart.render();
   }
   getComponentConfig(props) {
-    const { map, contrastMap, displaySetup, yaxisList, rightY, yreportType, xaxes, split, sorts, style } = props.reportData;
+    const { themeColor, projectId, customPageConfig = {}, reportData } = props;
+    const { chartColor, chartColorIndex = 1 } = customPageConfig;
+    const { map, contrastMap, displaySetup, yaxisList, summary, rightY, yreportType, xaxes, split, sorts } = reportData;
     const { xdisplay, ydisplay, showPileTotal, isPile, legendType, auxiliaryLines, showLegend, showChartType } = displaySetup;
+    const styleConfig = reportData.style || {};
+    const style = chartColor && chartColorIndex >= (styleConfig.chartColorIndex || 0) ? { ...styleConfig, ...chartColor } : styleConfig;
     const rightYDisplay = rightY.display.ydisplay;
     const splitId = split.controlId;
+    const xaxesId = xaxes.controlId;
     const rightSplitId = _.get(rightY, 'split.controlId');
     const { position } = getLegendType(legendType);
     const isVertical = showChartType === 1;
     const sortsKey = sorts.map(n => _.findKey(n));
     const leftSorts = yaxisList.filter(item => sortsKey.includes(item.controlId));
     const rightSorts = rightY.yaxisList.filter(item => sortsKey.includes(item.controlId));
-    const data = formatBarChartData(map, yaxisList, splitId);
-    const contrastData = formatBarChartData(contrastMap, rightY.yaxisList, rightSplitId);
+    const data = formatBarChartData(map, yaxisList, splitId, xaxesId);
+    const contrastData = formatBarChartData(contrastMap, rightY.yaxisList, rightSplitId, xaxesId);
     const mergeData = rightSorts.length ? mergeChartData(contrastData, data) : mergeChartData(data, contrastData);
     const control = yaxisList[0] || {};
     const contrastControl = rightY.yaxisList[0] || {};
-    const colors = getChartColors();
+    const colors = getChartColors(style, themeColor, projectId);
 
     const lineConfig = {
       style: {
@@ -137,16 +151,26 @@ export default class extends Component {
       label: displaySetup.showNumber ? {
         position: isVertical ? 'top' : 'right',
         layout: [
-          displaySetup.hideOverlapText ? { type: 'interval-hide-overlap' } : null,
+          displaySetup.hideOverlapText ? { type: 'hide-overlap' } : null,
           { type: 'adjust-color' }
         ],
         offset: 0,
         content: (data) => {
           if (data['series-field-key'] === control.controlId) {
-            return formatrChartValue(data[control.controlId], false, yaxisList);
+            const value = data[control.controlId] || 0;
+            const labelValue = formatrChartValue(value, false, yaxisList);
+            if (style.showLabelPercent && summary.showTotal && summary.sum) {
+              return `${labelValue} (${(value / summary.sum * 100).toFixed(2)}%)`;
+            }
+            return labelValue;
           }
           if (data['series-field-key'] === contrastControl.controlId) {
-            return formatrChartValue(data[contrastControl.controlId], false, rightY.yaxisList);
+            const value = data[contrastControl.controlId] || 0;
+            const labelValue = formatrChartValue(value, false, rightY.yaxisList);
+            if (style.showLabelPercent && _.get(rightY, 'summary.showTotal') && _.get(rightY, 'summary.sum')) {
+              return `${labelValue} (${(value / _.get(rightY, 'summary.sum') * 100).toFixed(2)}%)`;
+            }
+            return labelValue;
           }
         }
       } : null,
@@ -178,7 +202,7 @@ export default class extends Component {
           minLimit: _.isNumber(rightYDisplay.minValue) ? rightYDisplay.minValue : null,
           maxLimit: _.isNumber(rightYDisplay.maxValue) ? rightYDisplay.maxValue : null,
           // title: rightYDisplay.showTitle && rightYDisplay.title ? { text: rightYDisplay.title } : null,
-          label: rightYDisplay.showDial ? {
+          label: ydisplay.showDial ? {
             formatter: (value) => {
               return value ? formatrChartAxisValue(Number(value), false, rightY.yaxisList) : null;
             }
@@ -200,6 +224,38 @@ export default class extends Component {
       tooltip: {
         shared: true,
         showMarkers: false,
+        formatter: (data) => {
+          if (data['series-field-key'] === control.controlId) {
+            const value = data[control.controlId] || 0;
+            const labelValue = formatrChartValue(value, false, yaxisList);
+            if (style.showLabelPercent && summary.showTotal && summary.sum) {
+              const item = _.find(mergeData, { originalId: data.originalId });
+              return {
+                name: item.name || item.originalId,
+                value: `${style.tooltipValueType ? labelValue : value} (${(value / summary.sum * 100).toFixed(2)}%)`
+              }
+            }
+            return {
+              name: control.rename || control.controlName,
+              value: style.tooltipValueType ? labelValue : value
+            };
+          }
+          if (data['series-field-key'] === contrastControl.controlId) {
+            const value = data[contrastControl.controlId] || 0;
+            const labelValue = formatrChartValue(value, false, rightY.yaxisList);
+            if (style.showLabelPercent && _.get(rightY, 'summary.showTotal') && _.get(rightY, 'summary.sum')) {
+              const item = _.find(mergeData, { originalId: data.originalId });
+              return {
+                name: item.name || item.originalId,
+                value: `${style.tooltipValueType ? labelValue : value} (${(value / _.get(rightY, 'summary.sum') * 100).toFixed(2)}%)`
+              };
+            }
+            return {
+              name: contrastControl.rename || contrastControl.controlName,
+              value: style.tooltipValueType ? labelValue : value
+            };
+          }
+        }
       }
     }
 
@@ -211,10 +267,11 @@ export default class extends Component {
     const { xaxes } = this.props.reportData;
     const currentData = event.data.data;
     const gEvent = event.gEvent;
-    const isNumber = isFormatNumber(xaxes.controlType);
     const param = {};
     if (xaxes.cid) {
-      param[xaxes.cid] = isNumber ? Number(currentData.originalId) : currentData.originalId;
+      const isNumber = isFormatNumber(xaxes.controlType);
+      const value = currentData.originalId;
+      param[xaxes.cid] = isNumber && value ? Number(value) : value;
     }
     this.setState({
       dropdownVisible: true,

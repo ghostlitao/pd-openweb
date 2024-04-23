@@ -34,6 +34,8 @@ export const OPERATION_LOG_ACTION = {
   4: _l('通过申请'),
   5: _l('否决申请'),
   8: _l('转审'),
+  9: _l('添加审批人'),
+  10: _l('被移除'),
   16: _l('审批前加签'),
   17: _l('通过申请并加签'),
   18: _l('修改申请内容'),
@@ -47,6 +49,7 @@ export const MAX_FONT_SIZE = 18;
 export const PRINT_TYPE = {
   SYS_PRINT: 0, // 系统打印
   WORD_PRINT: 2, // word模版打印
+  EXCEL_PRINT: 5, // excel打印
   QR_CODE_PRINT: 3, // 二维码打印
   BAR_CODE_PRINT: 4, // 条码打印
 };
@@ -61,7 +64,7 @@ export const SYSTOPRINT = {
 
 export const SYSTOPRINTTXT = {
   ownerAccount: _l('拥有者：'),
-  createAccount: _l('创建者：'),
+  createAccount: _l('创建人：'),
   createTime: _l('创建时间：'),
   updateTime: _l('最近修改时间：'),
   updateAccount: _l('最近修改人：')
@@ -112,3 +115,29 @@ export const APPROVAL_SYS = [
     key: 'signature',
   },
 ]
+
+export const PRINT_TYPE_STYLE = {
+  [PRINT_TYPE.WORD_PRINT]: {
+    icon: 'new_word',
+    background: '#2196f3 0% 0% no-repeat padding-box',
+    text: _l('Word 模板'),
+    fileIcon: 'fileIcon-word',
+  }, // word模版打印
+  [PRINT_TYPE.EXCEL_PRINT]: {
+    icon:'new_excel',
+    background: '#4CAF50',
+    text: _l('Excel 模板'),
+    fileIcon: 'fileIcon-excel',
+  }, // excel打印
+};
+
+export const APPROVAL_POSITION_OPTION = [
+  {
+    value: 0,
+    text:  _l('在明细内显示'),
+  },
+  {
+    value: 1,
+    text: _l('在明细表下方显示')
+  }
+];

@@ -9,6 +9,8 @@ import WithoutFidldItem from './WithoutFidldItem';
 import { WIDGETS_TO_API_TYPE_ENUM } from 'src/pages/widgetConfig/config/widget';
 import {
   normTypes,
+  timeFormats,
+  textNormTypes,
   timeParticleSizeDropdownData,
   areaParticleSizeDropdownData,
   timeDataParticle,
@@ -19,7 +21,8 @@ import {
   isTimeControl,
   isAreaControl,
   filterDisableParticleSizeTypes,
-  emptyShowTypes
+  emptyShowTypes,
+  xaxisEmptyShowTypes
 } from 'statistics/common';
 import { connect } from 'react-redux';
 import _ from 'lodash';
@@ -46,14 +49,14 @@ const renderOverlay = ({
   axis,
   type,
   normType,
+  showFormat,
   particleSizeType,
   disableParticleSizeTypes,
   xaxisEmpty,
+  xaxisEmptyType,
   emptyShowType,
-  onNormType,
+  onChangeData,
   onUpdateParticleSizeType,
-  onUpdateXaxisEmpty,
-  onUpdateEmptyShowType,
   onSelectReNameId,
   onShowControl,
   verifyNumber
@@ -77,47 +80,77 @@ const renderOverlay = ({
         {_l('重命名')}
       </Menu.Item>
       {type ? (
-        <Menu.Item
-          className="flexRow valignWrapper"
-          onClick={() => {
-            onUpdateXaxisEmpty(axis.controlId, !xaxisEmpty);
-          }}
-        >
-          <div className="flex">{_l('统计空值')}</div>
-          {xaxisEmpty && <Icon icon="done" className="Font17"/>}
-        </Menu.Item>
-      ) : (
-        <Menu.SubMenu
-          popupClassName="chartMenu"
-          title={(
-            <div className="flexRow valignWrapper w100">
-              <div className="flex">{_l('空值显示')}</div>
-              <div className="Font12 Gray_75 emptyTypeName">{_.find(emptyShowTypes, { value: emptyShowType }).text}</div>
-            </div>
-          )}
-          popupOffset={[0, -15]}
-        >
-          {emptyShowTypes.map(item => (
+        <Fragment>
+          <Menu.SubMenu
+            popupClassName="chartMenu"
+            title={(
+              <div className="flexRow valignWrapper w100">
+                <div className="flex">{_l('统计空值')}</div>
+                <div className="Font12 Gray_75 emptyTypeName">
+                  {xaxisEmpty ? _.find(xaxisEmptyShowTypes, { value: xaxisEmptyType }).text : _l('不显示')}
+                </div>
+              </div>
+            )}
+            popupOffset={[0, -15]}
+          >
             <Menu.Item
-              style={{ width: 120, color: item.value === emptyShowType ? '#1e88e5' : null }}
-              key={item.value}
+              style={{ width: 120, color: !xaxisEmpty ? '#1e88e5' : null }}
               onClick={() => {
-                onUpdateEmptyShowType(axis.controlId, item.value);
+                onChangeData(axis.controlId, { xaxisEmpty: false });
               }}
             >
-              {item.text}
+              {_l('不显示')}
             </Menu.Item>
-          ))}
-        </Menu.SubMenu>
+            {xaxisEmptyShowTypes.map(item => (
+              <Menu.Item
+                style={{ width: 120, color: xaxisEmpty && item.value === xaxisEmptyType ? '#1e88e5' : null }}
+                key={item.value}
+                onClick={() => {
+                  onChangeData(axis.controlId, {
+                    xaxisEmpty: true,
+                    xaxisEmptyType: item.value
+                  });
+                }}
+              >
+                {item.text}
+              </Menu.Item>
+            ))}
+          </Menu.SubMenu>
+        </Fragment>
+      ) : (
+        (isNumber || [10000000, 10000001].includes(axis.type)) && (
+          <Menu.SubMenu
+            popupClassName="chartMenu"
+            title={(
+              <div className="flexRow valignWrapper w100">
+                <div className="flex">{_l('空值显示')}</div>
+                <div className="Font12 Gray_75 emptyTypeName">{_.find(emptyShowTypes, { value: emptyShowType }).text}</div>
+              </div>
+            )}
+            popupOffset={[0, -15]}
+          >
+            {emptyShowTypes.map(item => (
+              <Menu.Item
+                style={{ width: 120, color: item.value === emptyShowType ? '#1e88e5' : null }}
+                key={item.value}
+                onClick={() => {
+                  onChangeData(axis.controlId, { emptyShowType: item.value });
+                }}
+              >
+                {item.text}
+              </Menu.Item>
+            ))}
+          </Menu.SubMenu>
+        )
       )}
       {isNumber && verifyNumber && (
         <Menu.SubMenu popupClassName="chartMenu" title={_l('计算')} popupOffset={[0, -15]}>
-          {normTypes.map(item => (
+          {normTypes.filter(n => n.value !== 5).map(item => (
             <Menu.Item
               style={{ width: 120, color: item.value === normType ? '#1e88e5' : null }}
               key={item.value}
               onClick={() => {
-                onNormType(axis.controlId, item.value);
+                onChangeData(axis.controlId, { normType: item.value });
               }}
             >
               {item.text}
@@ -127,76 +160,89 @@ const renderOverlay = ({
       )}
       {!isNumberControl(axis.type) && verifyNumber && (
         <Menu.SubMenu popupClassName="chartMenu" title={_l('计算')} popupOffset={[0, -15]}>
-          {[
-            {
-              text: _l('计数'),
-              value: 5,
-            },
-            {
-              text: _l('去重计数'),
-              value: 6,
-            }
-          ].map(item => (
+          {textNormTypes.map(item => (
             <Menu.Item
+              className="valignWrapper"
               style={{ width: 120, color: item.value === normType ? '#1e88e5' : null }}
               key={item.value}
               onClick={() => {
-                onNormType(axis.controlId, item.value);
+                onChangeData(axis.controlId, { normType: item.value });
               }}
             >
-              {item.text}
+              <div className="flex">{item.text}</div>
+              {item.value === 7 && (
+                <Tooltip title={_l('仅显示一个')}>
+                  <Icon icon="info" className="Font16 pointer Gray_9e" />
+                </Tooltip>
+              )}
             </Menu.Item>
           ))}
         </Menu.SubMenu>
       )}
-      {isTime && (
-        <Menu.SubMenu popupClassName="chartMenu" title={_l('归组')} popupOffset={[0, -15]}>
-          <Menu.ItemGroup title={_l('时间')}>
-            {timeDataList.map(item => (
+      {type && isTime && (
+        <Fragment>
+          <Menu.SubMenu popupClassName="chartMenu" title={_l('归组')} popupOffset={[0, -15]}>
+            <Menu.ItemGroup title={_l('时间')}>
+              {timeDataList.map(item => (
+                <Menu.Item
+                  className="valignWrapper"
+                  disabled={item.value === particleSizeType ? true : newDisableParticleSizeTypes.includes(item.value)}
+                  style={{
+                    width: 200,
+                    color: item.value === particleSizeType ? '#1e88e5' : null,
+                  }}
+                  key={item.value}
+                  onClick={() => {
+                    onUpdateParticleSizeType(axis.controlId, particleSizeType, item.value);
+                  }}
+                >
+                  <div className="flex">{item.text}</div>
+                  <div className="Gray_75 Font12">{item.getTime()}</div>
+                </Menu.Item>
+              ))}
+            </Menu.ItemGroup>
+            {!!timeGatherParticleList.length && (
+              <Fragment>
+                <Menu.Divider />
+                <Menu.ItemGroup title={_l('集合')}>
+                  {timeGatherParticleList.map(item => (
+                    <Menu.Item
+                      className="valignWrapper"
+                      disabled={item.value === particleSizeType ? true : newDisableParticleSizeTypes.includes(item.value)}
+                      style={{
+                        width: 200,
+                        color: item.value === particleSizeType ? '#1e88e5' : null,
+                      }}
+                      key={item.value}
+                      onClick={() => {
+                        onUpdateParticleSizeType(axis.controlId, particleSizeType, item.value);
+                      }}
+                    >
+                      <div className="flex">{item.text}</div>
+                      <div className="Gray_75 Font12">{item.getTime()}</div>
+                    </Menu.Item>
+                  ))}
+                </Menu.ItemGroup>
+              </Fragment>
+            )}
+          </Menu.SubMenu>
+          <Menu.SubMenu popupClassName="chartMenu" title={_l('日期格式')} popupOffset={[0, -15]}>
+            {timeFormats.map(item => (
               <Menu.Item
                 className="valignWrapper"
-                disabled={item.value === particleSizeType ? true : newDisableParticleSizeTypes.includes(item.value)}
-                style={{
-                  width: 200,
-                  color: item.value === particleSizeType ? '#1e88e5' : null,
-                }}
+                style={{ width: 200, color: item.value === showFormat ? '#1e88e5' : null }}
                 key={item.value}
                 onClick={() => {
-                  onUpdateParticleSizeType(axis.controlId, particleSizeType, item.value);
+                  onChangeData(axis.controlId, { showFormat: item.value });
                 }}
               >
-                <div className="flex">{item.text}</div>
-                <div className="Gray_75 Font12">{item.getTime()}</div>
+                <div className="flex">{item.getTime()}</div>
               </Menu.Item>
             ))}
-          </Menu.ItemGroup>
-          {!!timeGatherParticleList.length && (
-            <Fragment>
-              <Menu.Divider />
-              <Menu.ItemGroup title={_l('集合')}>
-                {timeGatherParticleList.map(item => (
-                  <Menu.Item
-                    className="valignWrapper"
-                    disabled={item.value === particleSizeType ? true : newDisableParticleSizeTypes.includes(item.value)}
-                    style={{
-                      width: 200,
-                      color: item.value === particleSizeType ? '#1e88e5' : null,
-                    }}
-                    key={item.value}
-                    onClick={() => {
-                      onUpdateParticleSizeType(axis.controlId, particleSizeType, item.value);
-                    }}
-                  >
-                    <div className="flex">{item.text}</div>
-                    <div className="Gray_75 Font12">{item.getTime()}</div>
-                  </Menu.Item>
-                ))}
-              </Menu.ItemGroup>
-            </Fragment>
-          )}
-        </Menu.SubMenu>
+          </Menu.SubMenu>
+        </Fragment>
       )}
-      {isArea && (
+      {type && isArea && (
         <Menu.SubMenu popupClassName="chartMenu" title={_l('归组')} popupOffset={[0, -15]}>
           {areaParticleSizeDropdownData.map(item => (
             <Menu.Item
@@ -226,10 +272,9 @@ const renderOverlay = ({
 };
 
 const SortableItem = SortableElement(props => {
-  const { type, item, axisControls, allControls, onClear, onNormType, verifyNumber, disableParticleSizeTypes, onUpdateParticleSizeType, onUpdateXaxisEmpty, onUpdateEmptyShowType, onShowControl, onSelectReNameId } = props;
+  const { type, item, axisControls, allControls, onClear, verifyNumber, disableParticleSizeTypes, onUpdateParticleSizeType, onChangeData, onShowControl, onSelectReNameId } = props;
   const axis = _.find(axisControls, { controlId: item.controlId }) || {};
   const control = _.find(allControls, { controlId: item.controlId }) || {};
-  const isNumber = isNumberControl(axis.type, false);
   const isTime = isTimeControl(axis.type);
   const isArea = isAreaControl(axis.type);
   const overlayProps = {
@@ -239,11 +284,11 @@ const SortableItem = SortableElement(props => {
     particleSizeType: item.particleSizeType,
     xaxisEmpty: item.xaxisEmpty,
     emptyShowType: item.emptyShowType,
-    onNormType,
+    xaxisEmptyType: item.xaxisEmptyType,
+    showFormat: item.showFormat,
     disableParticleSizeTypes,
     onUpdateParticleSizeType,
-    onUpdateXaxisEmpty,
-    onUpdateEmptyShowType,
+    onChangeData,
     onShowControl,
     onSelectReNameId,
     verifyNumber
@@ -256,10 +301,14 @@ const SortableItem = SortableElement(props => {
         {axis.controlId ? (
           <Tooltip title={tip}>
             <span className="Gray flex ellipsis">
-              {(isNumber && verifyNumber) && `${_.find(normTypes, { value: item.normType }).text}: `}
+              {(verifyNumber && ![10000000, 10000001].includes(axis.type)) && `${_.find(normTypes.concat(textNormTypes), { value: item.normType }).text}: `}
               {item.rename || axis.controlName}
-              {isTime && ` (${_.find(timeParticleSizeDropdownData, { value: item.particleSizeType || 1 }).text})`}
-              {isArea && ` (${_.find(areaParticleSizeDropdownData, { value: item.particleSizeType || 1 }).text})`}
+              {!verifyNumber && (
+                <Fragment>
+                  {isTime && ` (${_.find(timeParticleSizeDropdownData, { value: item.particleSizeType || 1 }).text})`}
+                  {isArea && ` (${_.find(areaParticleSizeDropdownData, { value: item.particleSizeType || 1 }).text})`}
+                </Fragment>
+              )}
             </span>
           </Tooltip>
         ) : (
@@ -371,16 +420,6 @@ export default class PivotTableAxis extends Component {
     });
     this.props.onUpdateList(newList);
   }
-  handleNormType = (controlId, value) => {
-    const { list } = this.props;
-    const newList = list.map(item => {
-      if (item.controlId === controlId) {
-        item.normType = value;
-      }
-      return item;
-    });
-    this.props.onUpdateList(newList);
-  }
   handleUpdateParticleSizeType = (controlId, particleSizeType, value) => {
     const { list } = this.props;
     const id = particleSizeType ? `${controlId}-${particleSizeType}` : controlId;
@@ -392,31 +431,14 @@ export default class PivotTableAxis extends Component {
     });
     this.props.onUpdateList(newList, id);
   }
-  handleUpdateXaxisEmpty = (controlId, value) => {
+  handleChangeData = (controlId, data) => {
     const { list } = this.props;
     const newList = list.map(item => {
       if (item.controlId === controlId) {
-        item.xaxisEmpty = value;
-      }
-      return item;
-    });
-    this.props.onUpdateList(newList);
-  }
-  handleEmptyShowType = (controlId, value) => {
-    const { list } = this.props;
-    const newList = list.map(item => {
-      if (item.controlId === controlId) {
-        item.emptyShowType = value;
-      }
-      return item;
-    });
-    this.props.onUpdateList(newList);
-  }
-  handleUpdateXaxisFields = (controlId, value) => {
-    const { list } = this.props;
-    const newList = list.map(item => {
-      if (item.controlId === controlId) {
-        item.fields = value;
+        return {
+          ...item,
+          ...data
+        }
       }
       return item;
     });
@@ -446,8 +468,8 @@ export default class PivotTableAxis extends Component {
           dialogVisible={showControlVisible}
           relationControls={currentControl.relationControls || []}
           fields={currentControl.fields || []}
-          onUpdateXaxisFields={(fields) => {
-            this.handleUpdateXaxisFields(currentControl.controlId, fields);
+          onUpdateXaxisFields={fields => {
+            this.handleChangeData(currentControl.controlId, { fields });
           }}
           onHideDialogVisible={() => {
             this.setState({
@@ -473,10 +495,8 @@ export default class PivotTableAxis extends Component {
           verifyNumber={verifyNumber}
           disableParticleSizeTypes={disableParticleSizeTypes}
           onClear={this.props.onRemove}
-          onNormType={this.handleNormType}
+          onChangeData={this.handleChangeData}
           onUpdateParticleSizeType={this.handleUpdateParticleSizeType}
-          onUpdateXaxisEmpty={this.handleUpdateXaxisEmpty}
-          onUpdateEmptyShowType={this.handleEmptyShowType}
           onSelectReNameId={this.handleSelectReNameId}
           onShowControl={this.handleShowControl}
           shouldCancelStart={({ target }) => !target.classList.contains('icon-drag_indicator')}

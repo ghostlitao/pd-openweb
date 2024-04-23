@@ -1,7 +1,7 @@
 import update from 'immutability-helper';
 import _, { isString, includes, get, isEmpty, isArray, head, find } from 'lodash';
 import { Parser } from 'hot-formula-parser';
-import { DISPLAY_TYPE, DATE_SHOW_TYPES } from '../config/setting';
+import { DISPLAY_TYPE, DATE_SHOW_TYPES, TITLE_STYLE_OPTIONS } from '../config/setting';
 import { v4 as uuidv4 } from 'uuid';
 import { isFullLineControl, getRowById } from './widgets';
 import { getControlByControlId } from '.';
@@ -209,7 +209,7 @@ export const isAutoNumberSelectableControl = item => {
  */
 export const isExceedMaxControlLimit = (controls = [], addCount = 0) => {
   const existedControls = controls.filter(item => !NO_CONTENT_CONTROL.includes(item.type)) || [];
-  if (existedControls.length + addCount >= MAX_CONTROLS_COUNT) {
+  if (existedControls.length + addCount > MAX_CONTROLS_COUNT) {
     alert(_l('表单中添加字段数量已达上限（%0个)', MAX_CONTROLS_COUNT), 3);
     return true;
   }
@@ -221,7 +221,10 @@ export const getOptions = data => (data.options || []).filter(item => !item.isDe
 
 export const getShowControls = (controls = [], showControls = []) => {
   // 删除掉showControls 中已经被删掉的控件
-  const allControlId = controls.concat(SYSTEM_CONTROLS).map(item => item.controlId);
+  const allControlId = controls
+    .filter(i => !_.includes([51], i.type))
+    .concat(SYSTEM_CONTROLS)
+    .map(item => item.controlId);
   return showControls
     .map(id => {
       if (!allControlId.includes(id)) return '';
@@ -265,7 +268,7 @@ export const getSortControls = (data, controls) => {
   return sorts.map(id => find(controls, item => item.controlId === id));
 };
 
-export const getDatePickerConfigs = data => {
+export const getDatePickerConfigs = (data = {}) => {
   const showType = getAdvanceSetting(data, 'showtype');
 
   switch (showType) {
@@ -331,16 +334,73 @@ export const getDatePickerConfigs = data => {
 export const getShowFormat = data => {
   const { formatMode, mode } = getDatePickerConfigs(data);
   const { advancedSetting: { showformat = '0' } = {} } = data;
-  const showType = _.get(
-    _.find(DATE_SHOW_TYPES, i => i.value === showformat),
-    'format',
-  );
+  const showType = _.isNaN(Number(showformat))
+    ? showformat
+    : _.get(
+        _.find(DATE_SHOW_TYPES, i => i.value === showformat),
+        'format',
+      );
   if (mode === 'year') {
     return showformat === '1' ? _l('YYYY年') : formatMode;
   }
   // 年月需要特殊处理
   if (mode === 'month') {
-    return showformat === '1' ? _l('YYYY年M月') : _.includes(['2', '3'], showformat) ? 'M/YYYY' : formatMode;
+    if (showformat === '1') return _l('YYYY年M月');
+    if (_.includes(['2', '3'], showformat)) return 'M/YYYY';
+    if (showformat === '4') return 'YYYY/M';
+    return formatMode;
   }
   return formatMode.replace('YYYY-MM-DD', showType);
+};
+
+// 计算矩阵选项均分多少份
+export const getItemOptionWidth = (data, fromType) => {
+  let itemWidth = 100;
+  const options = getOptions(data);
+  const displayWidth =
+    fromType === 'public'
+      ? (document.querySelector('.publicWorksheetForm .rowsWrap') || {}).clientWidth
+      : (document.querySelector('#widgetDisplayWrap .rowsWrap') || {}).clientWidth;
+  const widthSize = data.size / 12;
+  const { direction = '2', width = '200' } = getAdvanceSetting(data);
+  if (displayWidth && direction === '0') {
+    // padding: 8
+    const boxWidth = (displayWidth - 8 * 2) * widthSize;
+    // padding: 12, border: 2
+    const optionsWidth = boxWidth - 14 * 2;
+    const num = Math.floor(optionsWidth / Number(width)) || 1;
+    itemWidth = 100 / (num > options.length ? options.length : num);
+  }
+  return itemWidth;
+};
+
+// 标题样式
+export const getTitleStyle = (titleStyle = '0000') => {
+  const [isBold, isItalic, isUnderline, isLineThrough] = titleStyle.split('');
+  let styleText = '';
+  if (Number(isBold)) {
+    styleText = styleText + 'font-weight: bold !important;';
+  }
+  if (Number(isItalic)) {
+    styleText = styleText + 'font-style: italic;padding-right:3px;';
+  }
+  if (Number(isUnderline)) {
+    styleText = styleText + 'text-decoration: underline;';
+  }
+  if (Number(isLineThrough)) {
+    styleText = styleText + 'text-decoration: line-through;';
+  }
+  if (Number(isUnderline) && Number(isLineThrough)) {
+    styleText = styleText + 'text-decoration: underline line-through;';
+  }
+  return styleText;
+};
+
+// 不允许重复的控件
+export const canAsUniqueWidget = item => {
+  return (
+    _.includes([2, 3, 4, 5, 7], item.type) ||
+    (item.type === 29 && item.enumDefault === 1) ||
+    (item.type === 26 && item.enumDefault === 0)
+  );
 };

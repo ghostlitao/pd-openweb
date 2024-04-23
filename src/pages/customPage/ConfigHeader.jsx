@@ -5,7 +5,8 @@ import appManagementAjax from 'src/api/appManagement';
 import { updateSheetListAppItem } from 'worksheet/redux/actions/sheetList';
 import { getAppSectionRef } from 'src/pages/PageHeader/AppPkgHeader/LeftAppGroup';
 import store from 'redux/configureStore';
-import { Button, Dialog } from 'ming-ui';
+import ConfigSideWrap from 'src/pages/customPage/components/ConfigSideWrap';
+import { Button, Dialog, Icon } from 'ming-ui';
 import cx from 'classnames';
 import { FlexCenter } from './util';
 import _ from 'lodash';
@@ -99,6 +100,7 @@ export default (props) => {
     pageId,
     pageName,
     displayType,
+    currentSheet,
     saveLoading = false,
     cancelModified = _.noop,
     modified,
@@ -109,27 +111,28 @@ export default (props) => {
   } = props;
   const [isEdit, setEdit] = useState(false);
   const [name, setName] = useState(pageName);
+  const [configVisible, setConfigVisible] = useState(false);
   const { current: originName } = useRef(pageName);
   const save = () => {
     onSave();
-    if (originName !== name) {
-      appManagementAjax.editWorkSheetInfoForApp({ appId, appSectionId: groupId, workSheetId: pageId, workSheetName: name }).then(res => {
+    const newName = name.trim();
+    if (originName !== newName) {
+      appManagementAjax.editWorkSheetInfoForApp({ appId, appSectionId: currentSheet.parentGroupId || groupId, workSheetId: pageId, workSheetName: newName }).then(res => {
         if (res) {
-          updatePageInfo({ pageName: name });
+          updatePageInfo({ pageName: newName });
           const { currentPcNaviStyle } = store.getState().appPkg;
           if (currentPcNaviStyle === 1) {
             const singleRef = getAppSectionRef(groupId);
             singleRef.dispatch(updateSheetListAppItem(pageId, {
-              workSheetName: name,
+              workSheetName: newName,
             }));
           } else {
-            props.updateSheetListAppItem(pageId, { workSheetName: name });
+            props.updateSheetListAppItem(pageId, { workSheetName: newName });
           }
         }
       });
     }
   };
-
   const handleClose = () => {
     if (!modified) {
       onBack();
@@ -158,8 +161,9 @@ export default (props) => {
             autoFocus
             value={name}
             onChange={e => {
-              const newName = e.target.value.trim();
+              const newName = e.target.value;
               setName(newName);
+              updatePageInfo({ modified: true });
             }}
             onBlur={() => {
               if (!name) {
@@ -187,10 +191,20 @@ export default (props) => {
         ))}
       </ul>
       <div className="flex"></div>
+      <div className="flexRow alignItemsCenter pointer mRight20" onClick={() => setConfigVisible(true)}>
+        <Icon className="Gray_9e Font20" icon="tune" />
+        <div className="mLeft5 Font13">{_l('页面配置')}</div>
+      </div>
       <Button type="link" className="close" onClick={handleClose}>
         {_l('关闭')}
       </Button>
       <Button onClick={save} loading={saveLoading}>{_l('保存')}</Button>
+      {configVisible && (
+        <ConfigSideWrap
+          {...props}
+          onClose={() => setConfigVisible(false)}
+        />
+      )}
     </ConfigHeader>
   );
 };

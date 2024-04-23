@@ -1,16 +1,5 @@
 export default {
   /**
-  * 获取我加入的网络
-  * @param {Object} args 请求参数
-  * @param {Object} options 配置参数
-  * @param {Boolean} options.silent 是否禁止错误弹层
-  * @returns {Promise<Boolean, ErrorModel>}
-  **/
-   getMyProjects: function (args, options = {}) {
-     
-     return $.api('Project', 'GetMyProjects', args, options);
-   },
-  /**
   * 获取网络基本信息
   * @param {Object} args 请求参数
   * @param {string} args.projectId 网络id
@@ -23,7 +12,8 @@ export default {
      return $.api('Project', 'GetProjectInfo', args, options);
    },
   /**
-  * 获取网络授权信息
+  * 获取组织与授权相关信息，只返回授权/登录账户是否管理员/是否开启水印
+登录之后才返回信息
   * @param {Object} args 请求参数
   * @param {string} args.projectId 网络id
   * @param {Object} options 配置参数
@@ -77,19 +67,6 @@ export default {
      return $.api('Project', 'GetProjectSubDomainInfo', args, options);
    },
   /**
-  * 联想企业域名的邮箱
-  * @param {Object} args 请求参数
-  * @param {string} args.keywords 关键词
-  * @param {string} args.projectId 网络id
-  * @param {Object} options 配置参数
-  * @param {Boolean} options.silent 是否禁止错误弹层
-  * @returns {Promise<Boolean, ErrorModel>}
-  **/
-   getProjectDomainEmail: function (args, options = {}) {
-     
-     return $.api('Project', 'GetProjectDomainEmail', args, options);
-   },
-  /**
   * 获取网络财务信息
   * @param {Object} args 请求参数
   * @param {string} args.projectId 网络id
@@ -114,7 +91,7 @@ export default {
   * @param {string} args.emailRecipientName Email收件人
   * @param {string} args.fax 传真
   * @param {string} args.taxNumber 税务登记号
-  * @param {} args.invoiceType 发票类型 1：普票 2：增票
+  * @param {} args.invoiceType
   * @param {string} args.taxBank 开户行
   * @param {string} args.taxBankNumber 账号
   * @param {string} args.taxRegAddress 注册地址
@@ -131,6 +108,8 @@ export default {
   * 获取网络授权辅助信息
   * @param {Object} args 请求参数
   * @param {string} args.projectId 网络id
+  * @param {boolean} args.onlyNormal 是否只需要基本信息
+  * @param {boolean} args.onlyUsage 是否只需要用量信息
   * @param {Object} options 配置参数
   * @param {Boolean} options.silent 是否禁止错误弹层
   * @returns {Promise<Boolean, ErrorModel>}
@@ -215,18 +194,6 @@ export default {
      return $.api('Project', 'GetInvitedUsersJoinProjectLog', args, options);
    },
   /**
-  * 检测网络是不是免费网络 true:非免费
-  * @param {Object} args 请求参数
-  * @param {string} args.projectId 网络id
-  * @param {Object} options 配置参数
-  * @param {Boolean} options.silent 是否禁止错误弹层
-  * @returns {Promise<Boolean, ErrorModel>}
-  **/
-   checkProjectIsNotFree: function (args, options = {}) {
-     
-     return $.api('Project', 'CheckProjectIsNotFree', args, options);
-   },
-  /**
   * 获取网络集成类型
 0 代表尚未集成，1代表钉钉自建应用集成，2代表企业微信（第三方），3代表企业微信自建应用，4代表Welink自建应用集成
   * @param {Object} args 请求参数
@@ -264,23 +231,11 @@ export default {
      return $.api('Project', 'GetProjectUnauditedUserCount', args, options);
    },
   /**
-  * 获取企业账户首页引导状态
-  * @param {Object} args 请求参数
-  * @param {string} args.projectId 网络id
-  * @param {Object} options 配置参数
-  * @param {Boolean} options.silent 是否禁止错误弹层
-  * @returns {Promise<Boolean, ErrorModel>}
-  **/
-   getProjectGuidSetting: function (args, options = {}) {
-     
-     return $.api('Project', 'GetProjectGuidSetting', args, options);
-   },
-  /**
   * 给用户发送安装手机App或企业客户端通知
   * @param {Object} args 请求参数
   * @param {string} args.projectId 网络Id
   * @param {array} args.accountIds 账号Id 数组：[accountId1,accountId2]
-  * @param {} args.clientType 通知类型 0：客户端 1：移动端
+  * @param {} args.clientType
   * @param {Object} options 配置参数
   * @param {Boolean} options.silent 是否禁止错误弹层
   * @returns {Promise<Boolean, ErrorModel>}
@@ -288,30 +243,6 @@ export default {
    pushInstallClientMsg: function (args, options = {}) {
      
      return $.api('Project', 'PushInstallClientMsg', args, options);
-   },
-  /**
-  * 获取部门数量
-  * @param {Object} args 请求参数
-  * @param {string} args.projectId 网络id
-  * @param {Object} options 配置参数
-  * @param {Boolean} options.silent 是否禁止错误弹层
-  * @returns {Promise<Boolean, ErrorModel>}
-  **/
-   getProjectDepartmentCount: function (args, options = {}) {
-     
-     return $.api('Project', 'GetProjectDepartmentCount', args, options);
-   },
-  /**
-  * 获取工作地点数量
-  * @param {Object} args 请求参数
-  * @param {string} args.projectId 网络id
-  * @param {Object} options 配置参数
-  * @param {Boolean} options.silent 是否禁止错误弹层
-  * @returns {Promise<Boolean, ErrorModel>}
-  **/
-   getProjectWorkSitesCount: function (args, options = {}) {
-     
-     return $.api('Project', 'GetProjectWorkSitesCount', args, options);
    },
   /**
   * 绑定微信公众号
@@ -377,5 +308,61 @@ export default {
    addTpAuthorizerInfo: function (args, options = {}) {
      
      return $.api('Project', 'AddTpAuthorizerInfo', args, options);
+   },
+  /**
+  * 获取所有专属算力实例
+  * @param {Object} args 请求参数
+  * @param {string} args.projectId 组织id
+  * @param {array} args.resourceIds 资源id
+  * @param {Object} options 配置参数
+  * @param {Boolean} options.silent 是否禁止错误弹层
+  * @returns {Promise<Boolean, ErrorModel>}
+  **/
+   getComputingInstances: function (args, options = {}) {
+     
+     return $.api('Project', 'GetComputingInstances', args, options);
+   },
+  /**
+  * 获取专属算力实例详情
+  * @param {Object} args 请求参数
+  * @param {string} args.projectId 组织id
+  * @param {string} args.id 组织id
+  * @param {Object} options 配置参数
+  * @param {Boolean} options.silent 是否禁止错误弹层
+  * @returns {Promise<Boolean, ErrorModel>}
+  **/
+   getComputingInstanceDetail: function (args, options = {}) {
+     
+     return $.api('Project', 'GetComputingInstanceDetail', args, options);
+   },
+  /**
+  * 更新专属算力实例名称
+删除专属算力
+  * @param {Object} args 请求参数
+  * @param {string} args.projectId 组织id
+  * @param {string} args.instanceId 专属算力实例id
+  * @param {string} args.name 专属算力实例name
+  * @param {boolean} args.isDelete 是否删除  true表示删除，默认为false
+  * @param {Object} options 配置参数
+  * @param {Boolean} options.silent 是否禁止错误弹层
+  * @returns {Promise<Boolean, ErrorModel>}
+  **/
+   updateComputingInstance: function (args, options = {}) {
+     
+     return $.api('Project', 'UpdateComputingInstance', args, options);
+   },
+  /**
+  * 重试创建专属算力实例
+  * @param {Object} args 请求参数
+  * @param {string} args.projectId
+  * @param {string} args.id id
+  * @param {string} args.resourceId 资源id
+  * @param {Object} options 配置参数
+  * @param {Boolean} options.silent 是否禁止错误弹层
+  * @returns {Promise<Boolean, ErrorModel>}
+  **/
+   retryComputingInstance: function (args, options = {}) {
+     
+     return $.api('Project', 'RetryComputingInstance', args, options);
    },
 };

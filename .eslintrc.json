@@ -28,12 +28,10 @@
     "md": false,
     "moxie": false,
     "plupload": false,
-    "seajs": false,
     "setCookie": false,
     "stringToolMethod": false,
     "wx": false,
     "System": true,
-    "getNavigatorLang": true,
     "safeParse": true,
     "safeParseArray": true,
     "vm": true,
@@ -82,7 +80,6 @@
           "$.Deferred",
           "ActiveXObject",
           "GetThumbHtml",
-          "MDSelect",
           "SelectGroup",
           "__api_server__"
         ]

@@ -3,9 +3,13 @@
   .dropdownTrigger {
     .ming.Menu {
       width: 100%;
+      .icon-info {
+        color: #9d9d9d;
+      }
       li:hover {
         .Item-content:not(.disabled) {
-          span {
+          span,
+          .icon-info {
             color: #fff !important;
           }
           .flowDropdownGray {
@@ -47,8 +51,7 @@
     right: 0;
     bottom: 0;
     background: #fff;
-    box-shadow: 0 10px 23px 2px rgba(0, 0, 0, 0.2),
-      0 3px 6px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 10px 23px 2px rgba(0, 0, 0, 0.2), 0 3px 6px rgba(0, 0, 0, 0.15);
     ::-webkit-input-placeholder {
       color: #bdbdbd;
     }
@@ -130,7 +133,10 @@
         background: #01ca83;
       }
       &.BGDarkBlue {
-        background: #4158DB;
+        background: #4158db;
+      }
+      &.BGRed {
+        background: #F15B75;
       }
       input {
         height: 34px;
@@ -143,6 +149,7 @@
         color: #fff;
         margin-left: 5px;
         font-size: 17px;
+        font-weight: bold;
         &:hover {
           background: rgba(255, 255, 255, 0.12);
         }
@@ -160,6 +167,7 @@
       align-items: center;
       justify-content: center;
       color: #fff;
+      margin-bottom: -20px;
       &.BGYellow {
         background: #ffa340;
       }
@@ -167,13 +175,13 @@
         background: #2196f3;
       }
       &.BGBlueAsh {
-        background: #4C7D9E;
+        background: #4c7d9e;
       }
       &.BGGreen {
         background: #01ca83;
       }
       &.BGDarkBlue {
-        background: #4158DB;
+        background: #4158db;
       }
       .flowDetailStartIcon {
         width: 68px;
@@ -190,7 +198,7 @@
             color: #ffa340;
           }
           &.gray {
-            color: #4C7D9E;
+            color: #4c7d9e;
           }
           &.green {
             color: #01ca83;
@@ -202,7 +210,7 @@
       }
     }
     .workflowDetailBox {
-      padding: 0 24px;
+      padding: 20px 24px 32px;
       .red {
         color: #f44336;
       }
@@ -287,7 +295,6 @@
               margin-right: 5px;
               color: #8f8f8f;
             }
-
           }
         }
         .dropdown-btn {
@@ -323,9 +330,9 @@
             background-color: #f5f5f5;
             border: 1px solid #ddd;
             &.error {
-              background-color: #FEF3F2;
-              border-color: #E8DBD9;
-              color: #B53026;
+              background-color: #fef3f2;
+              border-color: #e8dbd9;
+              color: #b53026;
             }
             .tag {
               margin-right: 5px;
@@ -402,18 +409,6 @@
           }
         }
       }
-      .workflowDetailStartBtn {
-        height: 36px;
-        line-height: 36px;
-        box-sizing: border-box;
-        font-size: 13px;
-        border-radius: 18px;
-        border-style: solid;
-        border-width: 1px;
-        display: inline-block;
-        padding: 0 18px;
-        cursor: pointer;
-      }
       .actionItem {
         padding-right: 14px;
         &:hover {
@@ -445,7 +440,6 @@
           cursor: pointer;
           margin-right: 10px;
           box-sizing: border-box;
-          color: #757575;
           &:not(:hover) {
             border-color: #ddd !important;
           }
@@ -473,7 +467,6 @@
       padding: 0 24px;
       align-items: center;
       height: 60px;
-      margin-top: 32px;
       &.workflowDetailFooterWhile {
         background: #fff;
       }
@@ -541,6 +534,18 @@
       }
       &.actionClearBorder {
         border-color: #f5f5f5 !important;
+      }
+      &.actionControlBoxClear {
+        position: relative;
+        &:hover {
+          .icon-cancel1 {
+            display: block;
+          }
+        }
+        .icon-cancel1 {
+          display: none;
+          cursor: pointer;
+        }
       }
       .CityPicker-wrapper {
         .CityPicker-input-container {
@@ -701,7 +706,7 @@
       }
     }
     .flowBackBox {
-      background: #F4F4F4;
+      background: #f4f4f4;
       padding: 8px 26px 8px 12px;
       border-radius: 4px;
       position: relative;
@@ -711,18 +716,13 @@
         right: 6px;
       }
     }
-    .codeTextarea {
-      font-family: inherit !important;
-      border-radius: 4px;
-      border: 1px solid #ccc !important;
-      padding: 10px 20px 10px 10px !important;
-      &:hover,
-      &:focus {
-        border-color: #2196f3 !important;
-      }
-      & ~ pre {
-        padding: 10px 20px 10px 10px !important;
-        font-family: inherit !important;
+    .workflowCodeMirrorBox {
+      .tagInputareaIuput {
+        min-height: 250px !important;
+        .CodeMirror,
+        .CodeMirror-scroll {
+          min-height: 248px;
+        }
       }
     }
     .codeEditorFull {
@@ -947,8 +947,8 @@
     .flowTplContent {
       .tagInputareaIuput {
         border: none !important;
-        .CodeMirror-line  {
-          padding: 0 !important
+        .CodeMirror-line {
+          padding: 0 !important;
         }
       }
     }
@@ -1015,7 +1015,12 @@
     border: 1px solid #ddd;
     background: #f4f4f4;
     color: #757575;
-    &:hover {
+    &.disabled {
+      color: #bdbdbd;
+      background: #f5f5f5;
+      cursor: not-allowed;
+    }
+    &:not(.disabled):hover {
       background: #2196f3;
       color: #fff;
       border-color: #2196f3;
@@ -1027,7 +1032,7 @@
     box-sizing: border-box;
     overflow: hidden;
     .webhookHeader {
-      background: #F2F2F2;
+      background: #f2f2f2;
       height: 40px;
       line-height: 40px;
       padding: 0 16px;
@@ -1051,7 +1056,7 @@
         padding: 0 16px;
         border-top: 1px solid #ddd;
         &:hover {
-          background: #FAFAFA;
+          background: #fafafa;
         }
         div {
           word-break: break-all;
@@ -1219,12 +1224,6 @@
     padding-bottom: 0 !important;
     margin-bottom: 22px;
   }
-  .codeTextarea {
-    font-family: inherit !important;
-    & ~ pre {
-      font-family: inherit !important;
-    }
-  }
   .codeEditorSmall {
     font-size: 22px;
     color: #bdbdbd;
@@ -1232,6 +1231,10 @@
     &:hover {
       color: #9e9e9e;
     }
+  }
+  .workflowCodeMirrorBox,
+  .tagInputareaIuput {
+    height: 100%;
   }
 }
 

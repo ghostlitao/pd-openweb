@@ -4,7 +4,7 @@ import * as actions from '../redux/actions';
 import { Icon } from 'ming-ui';
 import cx from 'classnames';
 import SvgIcon from 'src/components/SvgIcon';
-import { getProject } from 'src/util';
+import { getCurrentProject } from 'src/util';
 import Back from '../../components/Back';
 
 import './index.less';
@@ -21,7 +21,10 @@ class AppGroupList extends Component {
     this.state = {};
   }
   componentDidMount() {
-    const currentProject = getProject(localStorage.getItem('currentProjectId'));
+    const projectObj = getCurrentProject(
+      localStorage.getItem('currentProjectId') || (md.global.Account.projects[0] || {}).projectId,
+    );
+    const currentProject = !_.isEmpty(projectObj) ? projectObj : { projectId: 'external', companyName: _l('外部协作') };
     this.setState({ projectId: currentProject.projectId });
     this.props.dispatch(actions.getMyApp(currentProject.projectId));
   }
@@ -82,9 +85,9 @@ class AppGroupList extends Component {
         {!_.isEmpty(personalGroups) && this.renderlist(personalGroups, 'personalGroups')}
         {!_.isEmpty(projectGroups) && this.renderlist(projectGroups, 'projectGroups')}
         <Back
-          style={{ bottom: '20px' }}
+          icon="home"
           onClick={() => {
-            window.mobileNavigateTo('/mobile/appHome');
+            window.mobileNavigateTo('/mobile/dashboard');
           }}
         />
       </div>

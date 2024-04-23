@@ -1,4 +1,6 @@
 import _ from 'lodash';
+import { WIDGETS_TO_API_TYPE_ENUM } from 'src/pages/widgetConfig/config/widget.js';
+
 export const APP_ROLE_TYPE = {
   CUSTOM_ROLE: 0, // 自定义角色
   DEVELOPERS_ROLE: 1, // 开发者
@@ -164,15 +166,23 @@ export const VIEW_DISPLAY_TYPE = enumType({
   3: 'gallery',
   2: 'structure',
   5: 'gunter',
+  6: 'detail',
+  7: 'resource',
+  21: 'customize',
+  8: 'map',
 });
 
 export const VIEW_TYPE_ICON = [
-  { icon: 'view', color: '#ffa515', text: _l('表格%05017'), id: 'sheet' },
-  { icon: 'kanban', color: '#4CAF50', text: _l('看板%05016'), id: 'board' },
-  { icon: 'event', color: '#F64082', text: _l('日历%05015'), id: 'calendar' },
-  { icon: 'gallery_view', color: '#3949ab', text: _l('画廊%05014'), id: 'gallery' },
-  { icon: 'hierarchy', color: '#9C27AF', text: _l('层级%05013'), id: 'structure' },
-  { icon: 'gantt', color: '#01BCD5', text: _l('甘特图%05012'), id: 'gunter' },
+  { icon: 'table', color: '#3793FF', text: _l('表格%05017'), id: 'sheet' },
+  { icon: 'kanban', color: '#00BCD4', text: _l('看板%05016'), id: 'board' },
+  { icon: 'event', color: '#00C345', text: _l('日历%05015'), id: 'calendar' },
+  { icon: 'gallery_view', color: '#F5BF00', text: _l('画廊%05014'), id: 'gallery' },
+  { icon: 'reader', color: '#FF9300', text: _l('详情'), id: 'detail' },
+  { icon: 'hierarchy', color: '#FF3D3D', text: _l('层级%05013'), id: 'structure' },
+  { icon: 'location_map', color: '#EB2F96', text: _l('地图'), id: 'map' },
+  { icon: 'gantt', color: '#8A2AEB', text: _l('甘特图%05012'), id: 'gunter' },
+  { icon: 'person_three', color: '#2F4EEB', text: _l('资源'), id: 'resource' },
+  { icon: 'puzzle', color: '#757575', text: _l('插件'), id: 'customize' },
 ];
 
 export const WORKSHEET_VIEW_PAGE_SIZE = {
@@ -207,6 +217,13 @@ export const RELATE_RECORD_SHOW_TYPE = {
   DROPDOWN: 3,
 };
 
+/** 关联记录显示类型 */
+export const RELATION_SEARCH_SHOW_TYPE = {
+  CARD: 1,
+  LIST: 2,
+  TEXT: 3,
+};
+
 /** 工作表表格位置 */
 export const WORKSHEETTABLE_FROM_MODULE = {
   APP: 1,
@@ -225,7 +242,7 @@ export const SYSTEM_CONTROLS = [
   },
   {
     controlId: 'caid',
-    controlName: _l('创建者'),
+    controlName: _l('创建人'),
     controlPermissions: '100',
     type: 26,
     display: true,
@@ -246,7 +263,9 @@ export const SYSTEM_CONTROLS = [
   },
 ];
 
-export const CONTROL_EDITABLE_BLACKLIST = [22, 25, 30, 31, 32, 33, 34, 37, 42, 45, 47];
+export const CONTROL_EDITABLE_WHITELIST = [
+  2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 14, 15, 16, 19, 23, 24, 26, 27, 28, 29, 35, 36, 40, 41, 46, 48,
+];
 
 export const SHEET_VIEW_HIDDEN_TYPES = [
   10010, // REMARK 备注
@@ -254,4 +273,49 @@ export const SHEET_VIEW_HIDDEN_TYPES = [
   43, // OCR
   45, // EMBED 嵌入
   49, // SEARCH_BTN 查询按钮
+  51, // RELATION_SEARCH 查询记录
+  51, // RELATION_SEARCH 查询记录
+  WIDGETS_TO_API_TYPE_ENUM.SECTION, // 标签页
 ];
+
+// 子表excel导入支持的字段
+export const CHILD_TABLE_ALLOW_IMPORT_CONTROL_TYPES = [
+  WIDGETS_TO_API_TYPE_ENUM.TEXT,
+  WIDGETS_TO_API_TYPE_ENUM.NUMBER,
+  WIDGETS_TO_API_TYPE_ENUM.MONEY,
+  WIDGETS_TO_API_TYPE_ENUM.EMAIL,
+  WIDGETS_TO_API_TYPE_ENUM.DATE,
+  WIDGETS_TO_API_TYPE_ENUM.DATE_TIME,
+  WIDGETS_TO_API_TYPE_ENUM.TIME,
+  WIDGETS_TO_API_TYPE_ENUM.MOBILE_PHONE,
+  WIDGETS_TO_API_TYPE_ENUM.TELEPHONE,
+  WIDGETS_TO_API_TYPE_ENUM.AREA_PROVINCE,
+  WIDGETS_TO_API_TYPE_ENUM.AREA_CITY,
+  WIDGETS_TO_API_TYPE_ENUM.AREA_COUNTY,
+  WIDGETS_TO_API_TYPE_ENUM.DROP_DOWN,
+  WIDGETS_TO_API_TYPE_ENUM.FLAT_MENU,
+  WIDGETS_TO_API_TYPE_ENUM.MULTI_SELECT,
+  WIDGETS_TO_API_TYPE_ENUM.USER_PICKER,
+  WIDGETS_TO_API_TYPE_ENUM.DEPARTMENT,
+  WIDGETS_TO_API_TYPE_ENUM.ORG_ROLE,
+  WIDGETS_TO_API_TYPE_ENUM.SWITCH,
+  WIDGETS_TO_API_TYPE_ENUM.SCORE,
+  WIDGETS_TO_API_TYPE_ENUM.RICH_TEXT,
+  WIDGETS_TO_API_TYPE_ENUM.CRED,
+  WIDGETS_TO_API_TYPE_ENUM.RELATE_SHEET,
+];
+
+// 记录点击行为
+export const VIEW_CONFIG_RECORD_CLICK_ACTION = {
+  OPEN_RECORD: '0',
+  OPEN_LINK: '1',
+  NONE: '2',
+};
+
+// 记录点击行为
+export const RECORD_COLOR_SHOW_TYPE = {
+  LINE: '0',
+  LINE_BG: '1',
+  BG: '2',
+  // DARK_BG: '3',
+};

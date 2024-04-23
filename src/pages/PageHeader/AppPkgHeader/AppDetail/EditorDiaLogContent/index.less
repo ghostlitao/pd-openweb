@@ -8,6 +8,14 @@
       color: #ccc;
     }
 
+    .leftContent {
+      border-top: 1px solid #eaeaea;
+      border-right: 1px solid #eaeaea;
+      .editorNull {
+        border: none;
+      }
+    }
+
     .editorContent {
       overflow: hidden !important;
       .ck-content {
@@ -104,6 +112,37 @@
         height: 32px;
         line-height: 32px;
         padding: 0 22px;
+      }
+    }
+  }
+  .appDescriptionHeader {
+    .managersWrap:hover {
+      .managersLabel {
+        display: none;
+      }
+    }
+    .managersList:hover {
+      .manager {
+        margin-left: 5px;
+      }
+    }
+    .manager {
+      margin-left: -10px;
+      /*transition: margin 0.2s;*/
+      img {
+        border: 2px solid #fff;
+      }
+    }
+    .clearCache {
+      position: absolute;
+      right: 20px;
+      top: 20px;
+      &:hover {
+        color: #2196f3 !important;
+      }
+      &.isLoading .icon {
+        display: inline-block;
+        animation: rotate 0.6s infinite linear;
       }
     }
   }

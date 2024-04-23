@@ -34,12 +34,14 @@ const initialState = {
   pageName: '',
   apk: {},
   components: [],
-  filtersGroup: {}
+  filtersGroup: {},
+  filterComponents: [],
+  loadFilterComponentCount: 0
 };
 
 function updateLayout(state, payload) {
   // 更新移动布局的layout时可能是部分更新，所以要将显示的component传过来
-  const { layoutType, layouts, components } = payload;
+  const { layoutType, layouts, components, adjustScreen } = payload;
   if (!layouts) return state;
   if (_.includes(['web', 'mobile'], layoutType)) {
     return update(state, {
@@ -48,8 +50,13 @@ function updateLayout(state, payload) {
           return items.map(item => {
             const index = _.findIndex(components, v => (v.id || v.uuid) === (item.id || item.uuid));
             if (index >= 0) {
+              const data = layouts[index];
+              const maxH = 40;
+              if (adjustScreen && data.h >= maxH) {
+                data.h = maxH;
+              }
               return update(item, {
-                [layoutType]: { layout: { $set: _.pick(layouts[index], ['x', 'y', 'w', 'h', 'minW', 'minH']) } },
+                [layoutType]: { layout: { $set: _.pick(data, ['x', 'y', 'w', 'h', 'minW', 'minH']) } },
               });
             } else {
               return item;
@@ -167,13 +174,14 @@ export default function customPage(state = initialState, action) {
     case UPDATE_MODIFIED:
       return update(state, { modified: { $set: payload } });
     case ADD_WIDGET:
-      return update(state, {
+      const uuid = uuidv4();
+      const addData = {
         modified: { $set: true },
         components: {
           $push: [
             {
               ...payload,
-              uuid: uuidv4(),
+              uuid,
               web: {
                 title: '',
                 titleVisible: false,
@@ -189,21 +197,45 @@ export default function customPage(state = initialState, action) {
             },
           ],
         },
-      });
+      };
+      if (payload.type === 'filter') {
+        const { loadFilterComponentCount } = state;
+        const { filter } = payload;
+        addData.loadFilterComponentCount = {
+          $set: loadFilterComponentCount + 1
+        }
+        addData.filterComponents = {
+          $push: [
+            {
+              value: uuid,
+              advancedSetting: filter.advancedSetting || {},
+              filters: _.flatten(filter.filters.map(item => item.objectControls)),
+            }
+          ]
+        }
+      }
+      return update(state, addData);
     case COPY_WIDGET:
       return copyWidget(state, payload);
     case UPDATE_WIDGET_VISIBLE:
       return updateWidgetVisible(state, payload);
     case DEL_WIDGET:
-      return update(state, {
+      const delData = update(state, {
         components: { $splice: [[getIndexById({ component: payload, components: state.components }), 1]] },
         modified: { $set: true },
       });
+      if (payload.type === enumWidgetType.filter || payload.type === 'filter') {
+        const { loadFilterComponentCount } = state;
+        delData.loadFilterComponentCount = loadFilterComponentCount - 1;
+        delData.filterComponents = delData.filterComponents.filter(item => item.value !== (payload.value || payload.uuid));
+      }
+      return delData;
     case UPDATE_WIDGET:
       const { widget, layoutType, ...rest } = payload;
+      let result = {};
       // 更新对应布局里的标题或者统一的value
       if (layoutType) {
-        return update(state, {
+        result = update(state, {
           components: {
             [getIndexById({ component: widget, components: state.components })]: {
               [payload.layoutType]: { $apply: item => ({ ...item, ...rest }) },
@@ -212,7 +244,7 @@ export default function customPage(state = initialState, action) {
           modified: { $set: true },
         });
       } else {
-        return update(state, {
+        result = update(state, {
           components: {
             [getIndexById({ component: widget, components: state.components })]: {
               $apply: item => ({ ...item, ...rest }),
@@ -221,6 +253,20 @@ export default function customPage(state = initialState, action) {
           modified: { $set: true },
         });
       }
+      if (result.filterComponents.length) {
+        result.filterComponents = result.filterComponents.map(item => {
+          if (item.value === (widget.value || widget.uuid)) {
+            const { advancedSetting } = payload.filter || {};
+            return {
+              ...item,
+              advancedSetting,
+            };
+          } else {
+            return item;
+          }
+        })
+      }
+      return result;
     case UPDATE_LAYOUT:
       return updateLayout(state, payload);
     case UPDATE_COMPONENTS:

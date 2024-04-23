@@ -51,6 +51,7 @@ export function formatControlValue(cell) {
     if (!cell) {
       return;
     }
+    let newPos = [];
     let { type, value } = cell;
     let parsedData, selectedOptions;
     if (type === 37) {
@@ -79,7 +80,18 @@ export function formatControlValue(cell) {
         return JSON.parse(value);
       case 40: // LOCATION 定位
         parsedData = JSON.parse(value) || {};
-        return _.isObject(parsedData) ? parsedData : undefined;
+        if (!_.isObject(parsedData)) {
+          return undefined;
+        }
+        if ((parsedData.coordinate || '').toLowerCase() === 'wgs84') {
+          newPos = wgs84togcj02(parsedData.x, parsedData.y);
+          return {
+            ...parsedData,
+            x: newPos[0],
+            y: newPos[1],
+          };
+        }
+        return parsedData;
       // 组件
       case 9: // OPTIONS 单选 平铺
       case 10: // MULTI_SELECT 多选
@@ -128,7 +140,7 @@ export function formatControlValue(cell) {
         }
         return cell.enumDefault === 1 ? parsedData.slice(0, 1) : parsedData;
       case 34: // SUBLIST 子表
-        return _.isObject(value) ? _.get(value, 'rows') : [...new Array(value++)];
+        return _.isObject(value) ? _.get(value, 'rows') : [...new Array(value ? Number(value) : 0)];
       case 30: // SHEETFIELD 他表字段
         return formatControlValue(
           _.assign({}, cell, {
@@ -138,7 +150,7 @@ export function formatControlValue(cell) {
         );
       case 46: // TIME 时间
         if (_.isEmpty(value)) {
-          value = '';
+          return '';
         }
         return dayjs(value, countChar(value, ':') === 2 ? 'HH:mm:ss' : 'HH:mm').format(
           cell.unit === '6' || cell.unit === '9' ? 'HH:mm:ss' : 'HH:mm',
@@ -162,13 +174,57 @@ export function getSelectedOptions(options, value) {
   let selectedKeys = [];
   try {
     selectedKeys = JSON.parse(value);
-  } catch (err) {}
-  return options.filter(option =>
-    _.find(selectedKeys, s => {
-      if (s.indexOf('other') > -1 || s.indexOf('add_') > -1) {
-        return s.indexOf(option.key) > -1;
-      }
-      return s === option.key;
-    }),
-  );
+    return selectedKeys
+      .map(key =>
+        _.find(options, option => {
+          if (key.indexOf('other') > -1 || key.indexOf('add_') > -1) {
+            return key.indexOf(option.key) > -1;
+          }
+          return key === option.key;
+        }),
+      )
+      .filter(_.identity);
+  } catch (err) {
+    console.log(err);
+    return [];
+  }
+}
+
+function transformLat(lng, lat) {
+  var pi = 3.14159265358979324;
+  var a = 6378245.0;
+  var ee = 0.00669342162296594323;
+  var dLat = -100.0 + 2.0 * lng + 3.0 * lat + 0.2 * lat * lat + 0.1 * lng * lat + 0.2 * Math.sqrt(Math.abs(lng));
+  dLat += ((20.0 * Math.sin(6.0 * lng * pi) + 20.0 * Math.sin(2.0 * lng * pi)) * 2.0) / 3.0;
+  dLat += ((20.0 * Math.sin(lat * pi) + 40.0 * Math.sin((lat / 3.0) * pi)) * 2.0) / 3.0;
+  dLat += ((160.0 * Math.sin((lat / 12.0) * pi) + 320 * Math.sin((lat * pi) / 30.0)) * 2.0) / 3.0;
+  return dLat;
+}
+
+function transformLng(lng, lat) {
+  var pi = 3.14159265358979324;
+  var a = 6378245.0;
+  var ee = 0.00669342162296594323;
+  var dLng = 300.0 + lng + 2.0 * lat + 0.1 * lng * lng + 0.1 * lng * lat + 0.1 * Math.sqrt(Math.abs(lng));
+  dLng += ((20.0 * Math.sin(6.0 * lng * pi) + 20.0 * Math.sin(2.0 * lng * pi)) * 2.0) / 3.0;
+  dLng += ((20.0 * Math.sin(lng * pi) + 40.0 * Math.sin((lng / 3.0) * pi)) * 2.0) / 3.0;
+  dLng += ((150.0 * Math.sin((lng / 12.0) * pi) + 300.0 * Math.sin((lng / 30.0) * pi)) * 2.0) / 3.0;
+  return dLng;
+}
+
+export function wgs84togcj02(lng, lat) {
+  var a = 6378245.0;
+  var ee = 0.00669342162296594323;
+  var pi = 3.14159265358979324;
+  var dLat = transformLat(lng - 105.0, lat - 35.0);
+  var dLng = transformLng(lng - 105.0, lat - 35.0);
+  var radLat = (lat / 180.0) * pi;
+  var magic = Math.sin(radLat);
+  magic = 1 - ee * magic * magic;
+  var sqrtMagic = Math.sqrt(magic);
+  dLat = (dLat * 180.0) / (((a * (1 - ee)) / (magic * sqrtMagic)) * pi);
+  dLng = (dLng * 180.0) / ((a / sqrtMagic) * Math.cos(radLat) * pi);
+  var mgLat = lat + dLat;
+  var mgLng = lng + dLng;
+  return [mgLng, mgLat];
 }

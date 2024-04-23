@@ -74,7 +74,7 @@ class ResetPassword extends React.Component {
   };
 
   isPasswordRule = str => {
-    return RegExp.isPasswordRule(str, this.state.passwordRegex);
+    return RegExp.isPasswordValid(str, this.state.passwordRegex);
   };
 
   // 验证密码
@@ -276,4 +276,4 @@ class ResetPassword extends React.Component {
 }
 
 const WrappedComp = md.global.Config.IsLocal ? preall(ResetPassword, { allownotlogin: true }) : ResetPassword;
-ReactDOM.render(<WrappedComp />, document.querySelector('#app'));
+ReactDOM.render(<WrappedComp />, document.querySelector('#contractWrap'));

@@ -7,7 +7,7 @@ import cx from 'classnames';
 import { Icon } from 'ming-ui';
 import { FROM } from '../../tools/config';
 import { browserIsMobile } from 'src/util';
-import { dealMaskValue } from 'src/pages/widgetConfig/widgetSetting/components/ControlMask/util';
+import { dealMaskValue } from 'src/pages/widgetConfig/widgetSetting/components/WidgetSecurity/util';
 import _ from 'lodash';
 import styled from 'styled-components';
 import withClickAway from 'ming-ui/decorators/withClickAway';
@@ -22,7 +22,10 @@ const PhoneWrap = styled.div`
   .cellMobileInput {
     line-height: 30px;
   }
-  ${props => (props.showCountry && !props.isEditing && props.itiWidth ? `width: ${props.itiWidth};` : '')};
+  ${props =>
+    props.showCountry && !props.isEditing && props.itiWidth
+      ? `width: ${props.isMobile && !props.disabled ? 'unset' : props.itiWidth};`
+      : ''};
   input {
     padding-right: ${props => (props.showCountry && !props.isEditing && props.itiWidth ? '0px !important' : '12px')};
   }
@@ -139,7 +142,11 @@ export default class Widgets extends Component {
 
   getShowValue = () => {
     const value = this.input ? $(this.input).val().replace(/ /g, '') : this.props.value || '';
-    return this.state.maskStatus ? dealMaskValue({ ...this.props, value }) : value;
+    if (value) {
+      return this.state.maskStatus ? dealMaskValue({ ...this.props, value }) : value;
+    } else {
+      return this.props.hint;
+    }
   };
 
   render() {
@@ -189,7 +196,14 @@ export default class Widgets extends Component {
           </span>
         </MobilePhoneBox>
 
-        <PhoneWrap isEditing={isEditing} showCountry={!hiddenCountry} itiWidth={itiWidth} isCell={isCell}>
+        <PhoneWrap
+          isEditing={isEditing}
+          showCountry={!hiddenCountry}
+          itiWidth={itiWidth}
+          isCell={isCell}
+          isMobile={browserIsMobile()}
+          disabled={disabled}
+        >
           <ClickAwayable onClickAway={() => this.setState({ isEditing: false })}>
             <input
               type="tel"
@@ -208,11 +222,12 @@ export default class Widgets extends Component {
           </ClickAwayable>
         </PhoneWrap>
 
-        {!isMask && (_.includes([FROM.H5_ADD, FROM.H5_EDIT], from) || (browserIsMobile() && disabled)) && !!value && (
-          <a href={`tel:${value}`} className="Absolute customFormControlTelBtn" style={{ right: 0, top: 10 }}>
-            <Icon icon="phone22" className="Font16 ThemeColor3" />
-          </a>
-        )}
+        {(_.get(this.props, 'advancedSetting.datamask') === '1' ? maskPermissions && value : !!value) &&
+          (_.includes([FROM.H5_ADD, FROM.H5_EDIT], from) || (browserIsMobile() && disabled)) && (
+            <a href={`tel:${value}`} className="Absolute customFormControlTelBtn" style={{ right: 0, top: 10 }}>
+              <Icon icon="phone22" className="Font16 ThemeColor3" />
+            </a>
+          )}
       </div>
     );
   }

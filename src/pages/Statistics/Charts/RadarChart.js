@@ -12,8 +12,8 @@ import { Dropdown, Menu } from 'antd';
 import { formatSummaryName, isFormatNumber } from 'statistics/common';
 import _ from 'lodash';
 
-const formatChartData = (data, yaxisList, splitControlId, minValue, maxValue) => {
-  const result = [];
+const formatChartData = (data, yaxisList, splitControlId, xaxesControlId, minValue, maxValue) => {
+  let result = [];
   const { value } = data[0];
   const formatValue = value => {
     if (_.isNumber(minValue) && value < minValue) return minValue;
@@ -34,13 +34,36 @@ const formatChartData = (data, yaxisList, splitControlId, minValue, maxValue) =>
             groupKey: element.originalKey,
             value: formatValue(value),
             originalValue: value,
-            name,
-            originalId: item.originalX || name
+            name: name || (!splitControlId && !xaxesControlId ? element.originalKey : undefined),
+            originalId: item.originalX || name || element.originalKey
         });
         }
       }
     });
   });
+  if (!xaxesControlId && splitControlId && yaxisList.length) {
+    if (yaxisList.length === 1) {
+      result.forEach(data => {
+        data.name = yaxisList[0].controlName;
+        data.originalId = '';
+      });
+    } else {
+      result = [];
+      yaxisList.forEach(yaxis => {
+        data.forEach(data => {
+          const value = data.value[0];
+          result.push({
+            groupName: data.key,
+            groupKey: data.originalKey,
+            value: formatValue(value.m[yaxis.controlId]),
+            originalValue: value.m[yaxis.controlId],
+            name: yaxis.controlName,
+            originalId: yaxis.controlName,
+          });
+        });
+      });
+    }
+  }
   return result;
 };
 
@@ -67,8 +90,10 @@ export default class extends Component {
     this.RadarChart.destroy();
   }
   componentWillReceiveProps(nextProps) {
-    const { displaySetup } = nextProps.reportData;
-    const { displaySetup: oldDisplaySetup } = this.props.reportData;
+    const { displaySetup, style } = nextProps.reportData;
+    const { displaySetup: oldDisplaySetup, style: oldStyle } = this.props.reportData;
+    const chartColor = _.get(nextProps, 'customPageConfig.chartColor');
+    const oldChartColor = _.get(this.props, 'customPageConfig.chartColor');
     // 显示设置
     if (
       displaySetup.showLegend !== oldDisplaySetup.showLegend ||
@@ -76,7 +101,10 @@ export default class extends Component {
       displaySetup.showNumber !== oldDisplaySetup.showNumber ||
       displaySetup.magnitudeUpdateFlag !== oldDisplaySetup.magnitudeUpdateFlag ||
       displaySetup.ydisplay.minValue !== oldDisplaySetup.ydisplay.minValue ||
-      displaySetup.ydisplay.maxValue !== oldDisplaySetup.ydisplay.maxValue
+      displaySetup.ydisplay.maxValue !== oldDisplaySetup.ydisplay.maxValue ||
+      style.tooltipValueType !== oldStyle.tooltipValueType ||
+      !_.isEqual(chartColor, oldChartColor) ||
+      nextProps.themeColor !== this.props.themeColor
     ) {
       const config = this.getComponentConfig(nextProps);
       this.RadarChart.update(config);
@@ -95,14 +123,16 @@ export default class extends Component {
   handleClick = ({ data, gEvent }) => {
     const { xaxes, split } = this.props.reportData;
     const currentData = data.data;
-    const isNumber = isFormatNumber(xaxes.controlType);
     const param = {};
     if (xaxes.cid) {
-      param[xaxes.cid] = isNumber ? Number(currentData.originalId) : currentData.originalId;
+      const isNumber = isFormatNumber(xaxes.controlType);
+      const value = currentData.originalId;
+      param[xaxes.cid] = isNumber && value ? Number(value) : value;
     }
     if (split.controlId) {
       const isNumber = isFormatNumber(split.controlType);
-      param[split.cid] = isNumber ? Number(currentData.groupKey) : currentData.groupKey;
+      const value = currentData.groupKey;
+      param[split.cid] = isNumber && value ? Number(value) : value;
     }
     this.setState({
       dropdownVisible: true,
@@ -129,12 +159,16 @@ export default class extends Component {
     }
   }
   getComponentConfig(props) {
-    const { map, displaySetup, yaxisList, style, split } = props.reportData;
+    const { themeColor, projectId, customPageConfig = {}, reportData } = props;
+    const { chartColor, chartColorIndex = 1 } = customPageConfig;
+    const { map, displaySetup, yaxisList, split, xaxes } = reportData;
+    const styleConfig = reportData.style || {};
+    const style = chartColor && chartColorIndex >= (styleConfig.chartColorIndex || 0) ? { ...styleConfig, ...chartColor } : styleConfig;
     const { position } = getLegendType(displaySetup.legendType);
     const { ydisplay } = displaySetup;
-    const data = formatChartData(map, yaxisList, split.controlId, ydisplay.minValue, ydisplay.maxValue);
+    const data = formatChartData(map, yaxisList, split.controlId, xaxes.controlId, ydisplay.minValue, ydisplay.maxValue);
     const newYaxisList = formatYaxisList(data, yaxisList);
-    const colors = getChartColors(style);
+    const colors = getChartColors(style, themeColor, projectId);
     const baseConfig = {
       data,
       appendPadding: [5, 0, 5, 0],
@@ -190,8 +224,8 @@ export default class extends Component {
             return formatrChartAxisValue(Number(value), false, newYaxisList);
           },
         },
-        min: ydisplay.minValue || null,
-        max: ydisplay.maxValue || null
+        minLimit: ydisplay.minValue || null,
+        maxLimit: ydisplay.maxValue || null
       },
       limitInPlot: true,
       area: {},
@@ -204,9 +238,10 @@ export default class extends Component {
           const { name, id } = formatControlInfo(groupName);
           const { dot } = _.find(yaxisList, { controlId: id }) || {};
           const { originalValue } = _.find(data, { originalId, groupName }) || {};
+          const labelValue = formatrChartValue(originalValue, false, newYaxisList, originalValue ? undefined : id);
           return {
             name,
-            value: _.isNumber(originalValue) ? originalValue.toLocaleString('zh', { minimumFractionDigits: dot }) : '--',
+            value: _.isNumber(originalValue) ? style.tooltipValueType ? labelValue : originalValue.toLocaleString('zh', { minimumFractionDigits: dot }) : '--',
           };
         },
       },
@@ -260,8 +295,9 @@ export default class extends Component {
                 onClick={() => {
                   const { xaxes, split } = this.props.reportData;
                   const isNumber = isFormatNumber(xaxes.controlType);
-                  const param = {
-                    [xaxes.cid]: isNumber ? Number(item.originalId) : item.originalId
+                  const param = {};
+                  if (xaxes.cid) {
+                    param[xaxes.cid] = isNumber ? Number(item.originalId) : item.originalId;
                   }
                   if (split.controlId) {
                     param[split.controlId] = item.groupKey;

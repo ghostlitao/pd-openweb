@@ -21,7 +21,7 @@ class Con extends React.Component {
   }
   componentDidMount() {
     const { portal = {}, canEditUser } = this.props;
-    const { roleList = [], quickTag } = portal;
+    const { roleList = [] } = portal;
     this.setState({
       roleId: portal.roleId
         ? ['all', 'pendingReview', 'apply', 'outsourcing'].includes(portal.roleId)
@@ -32,23 +32,24 @@ class Con extends React.Component {
       defaultRoleId: (roleList.find(o => o.isDefault) || {}).roleId,
       dataList: [
         {
-          text: _l('查看用户'),
+          text: _l('管理角色'),
           key: 10,
         },
         {
-          text: _l('复制角色'),
+          text: _l('复制'),
           key: 0,
         },
         {
-          text: _l('复制角色到常规'),
+          text: _l('复制到常规'),
           key: 1,
         },
         {
-          text: _l('设为默认权限'),
+          text: _l('设为默认'),
           key: 2,
         },
         {
           text: _l('删除'),
+          type: 'err',
           key: 3,
         },
       ].filter(o => (canEditUser ? true : o.key !== 10)),
@@ -104,7 +105,13 @@ class Con extends React.Component {
         appId,
       })
       .then(res => {
-        alert(_l('复制成功'));
+        if (res.resultCode === 1) {
+          alert(_l('复制成功'));
+        } else if (res.resultCode === 2) {
+          alert(_l('角色名称重复，请重新命名'), 3);
+        } else {
+          alert(_l('复制失败'), 2);
+        }
       });
   };
   quickTag = data => {
@@ -136,7 +143,7 @@ class Con extends React.Component {
     }
   };
   render() {
-    const { getPortalRoleList, setPortalRoleList, portal, showRoleSet, appId, projectId } = this.props;
+    const { getPortalRoleList, setPortalRoleList, portal, showRoleSet, appId, projectId, editType } = this.props;
     const { loading } = portal;
     const { roleList = [], dataList = [], roleId, copyData } = this.state;
     if (loading) {
@@ -146,6 +153,7 @@ class Con extends React.Component {
       <React.Fragment>
         {!!copyData && (
           <CopyRoleDialog
+            editType={editType}
             appId={appId}
             copyData={copyData}
             setCopyData={data =>

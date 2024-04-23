@@ -1,13 +1,18 @@
 import sheetAjax from 'src/api/worksheet';
 import { controlState } from 'src/components/newCustomFields/tools/utils';
 import { getIsScanQR } from 'src/components/newCustomFields/components/ScanQRCode';
+import { getFilter } from 'src/pages/worksheet/common/WorkSheetFilter/util';
+import worksheetAjax from 'src/api/worksheet';
 import _ from 'lodash';
 
 const getPermissionInfo = (activeRelateSheetControl, rowInfo, worksheet) => {
   const { allowAdd } = worksheet;
-  const { receiveControls, allowEdit } = rowInfo;
+  const { allowEdit } = rowInfo;
   const activeSheetIndex = 0;
-  const controlPermission = controlState(activeRelateSheetControl, 3);
+  const controlPermission = {
+    visible: controlState(activeRelateSheetControl, 3).visible,
+    editable: controlState(activeRelateSheetControl, 3).editable && allowEdit,
+  };
   const { enumDefault2, strDefault, controlPermissions = '111', advancedSetting } = activeRelateSheetControl;
   const [, , onlyRelateByScanCode] = strDefault.split('').map(b => !!+b);
   const isSubList = activeRelateSheetControl.type === 34;
@@ -66,6 +71,7 @@ export const loadRow = (control, getType) => (dispatch, getState) => {
     params.controlId = controlId;
     params.getType = getType || 1;
     params.checkView = true;
+    params.getTemplate = true;
     params.appId = appId;
     params.worksheetId = worksheetId;
     params.viewId = viewId;
@@ -73,17 +79,16 @@ export const loadRow = (control, getType) => (dispatch, getState) => {
   }
 
   if (_.isEmpty(rowInfo)) {
-    sheetAjax.getRowByID(params).then(result => {
+    sheetAjax.getRowDetail(params).then(result => {
       dispatch({ type: 'MOBILE_RELATION_ROW_INFO', data: result });
       dispatch(loadRowRelationRows(control, getType));
     });
   } else {
     dispatch(loadRowRelationRows(control));
   }
-}
+};
 
-export const loadRowRelationRows = (relationControl, getType) => (dispatch, getState) => {
-
+export const loadRowRelationRows = (relationControl, getType) => async (dispatch, getState) => {
   const { base, loadParams, relationRows, rowInfo } = getState().mobile;
   const { pageIndex } = loadParams;
   const { instanceId, rowId, worksheetId, controlId } = base;
@@ -94,6 +99,7 @@ export const loadRowRelationRows = (relationControl, getType) => (dispatch, getS
     worksheetId,
     getType
   };
+  const control = relationControl || _.find(rowInfo.templateControls, { controlId });
 
   dispatch({ type: 'MOBILE_RELATION_LOAD_PARAMS', data: { loading: true } });
 
@@ -103,52 +109,67 @@ export const loadRowRelationRows = (relationControl, getType) => (dispatch, getS
     params.viewId = viewId;
   }
 
-  const shareId = (location.href.match(/\/public\/(record|view|workflow)\/(\w{24})/) || [])[2];
-  if (shareId) {
-    params.shareId = shareId;
+  // 关联查询组件逻辑 begin ->
+  if (control.type === 51) {
+    let relationControls = [];
+    let resWorksheetInfo;
+    resWorksheetInfo = await worksheetAjax.getWorksheetInfo({
+      worksheetId: control.dataSource,
+      getTemplate: true,
+    });
+    relationControls = _.get(resWorksheetInfo, 'template.controls') || [];
+    const filterControls = getFilter({
+      control: { ...control, relationControls, recordId: rowId },
+      formData: control.formData || rowInfo.templateControls,
+      filterKey: 'resultfilters',
+    });
+    params.filterControls = filterControls || [];
   }
+  // <- end 关联查询组件逻辑
 
-  sheetAjax.getRowRelationRows({
-    ...params,
-    pageIndex,
-    pageSize: PAGE_SIZE,
-    getWorksheet: pageIndex === 1,
-  }).then(result => {
-    if (pageIndex === 1) {
-      const { controls } = result.template;
-      const control = relationControl || _.find(rowInfo.receiveControls, { controlId });
-      const titleControl = _.find(controls, { attribute: 1 });
-      const fileControls = controls.filter(item => item.type === 14);
-      dispatch({
-        type: 'MOBILE_RELATION_ROW',
-        data: _.pick(result, ['template', 'worksheet', 'count'])
-      });
-      dispatch({
-        type: 'MOBILE_PERMISSION_INFO',
-        data: getPermissionInfo(control, rowInfo, result.worksheet)
-      });
-      dispatch({
-        type: 'MOBILE_RELATION_ACTION_PARAMS',
-        data: {
-          showControls: control.showControls.filter(item => titleControl.controlId !== item).slice(0, 3),
-          coverCid: control.coverCid || null,
-        }
-      });
-    }
-    dispatch({
-      type: 'MOBILE_RELATION_ROWS',
-      data: relationRows.concat(result.data)
-    });
-    dispatch({
-      type: 'MOBILE_RELATION_LOAD_PARAMS',
-      data: {
-        pageIndex,
-        loading: false,
-        isMore: result.data.length === PAGE_SIZE
+  sheetAjax
+    .getRowRelationRows({
+      ...params,
+      pageIndex,
+      pageSize: PAGE_SIZE,
+      getWorksheet: pageIndex === 1,
+      getRules: pageIndex === 1,
+    })
+    .then(result => {
+      if (pageIndex === 1) {
+        const { controls } = result.template;
+        const titleControl = _.find(controls, { attribute: 1 });
+        const fileControls = controls.filter(item => item.type === 14);
+        dispatch({
+          type: 'MOBILE_RELATION_ROW',
+          data: _.pick(result, ['template', 'worksheet', 'count']),
+        });
+        dispatch({
+          type: 'MOBILE_PERMISSION_INFO',
+          data: getPermissionInfo(control, rowInfo, result.worksheet),
+        });
+        dispatch({
+          type: 'MOBILE_RELATION_ACTION_PARAMS',
+          data: {
+            showControls: control.showControls.filter(item => titleControl.controlId !== item).slice(0, 3),
+            coverCid: control.coverCid || null,
+          },
+        });
       }
+      dispatch({
+        type: 'MOBILE_RELATION_ROWS',
+        data: relationRows.concat(result.data),
+      });
+      dispatch({
+        type: 'MOBILE_RELATION_LOAD_PARAMS',
+        data: {
+          pageIndex,
+          loading: false,
+          isMore: result.data.length === PAGE_SIZE,
+        },
+      });
     });
-  });
-}
+};
 
 export const updateRelationRows = (data, value) => (dispatch, getState) => {
   const { relationRow } = getState().mobile;

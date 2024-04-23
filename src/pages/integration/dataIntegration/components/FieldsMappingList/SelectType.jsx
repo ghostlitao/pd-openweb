@@ -4,7 +4,7 @@ import Trigger from 'rc-trigger';
 import styled from 'styled-components';
 import { Select } from 'antd';
 import { Input } from 'ming-ui';
-import { enumWidgetType } from 'src/pages/widgetConfig/util';
+import { enumWidgetType, canSetAsTitle } from 'src/pages/widgetConfig/util';
 import Settings from 'src/pages/widgetConfig/widgetSetting/settings';
 import { DEFAULT_DATA } from 'src/pages/widgetConfig/config/widget.js';
 import _ from 'lodash';
@@ -45,8 +45,9 @@ const Wrapper = styled.div`
 `;
 
 export default function SelectType(props) {
-  const { options, itemData, updateFieldsMapping, isDestDbType } = props;
+  const { options, itemData, updateFieldsMapping, isDestDbType, isExistJoinPk } = props;
   const [visible, setVisible] = useState(false);
+  const sourceField = itemData.sourceField || {};
   const destField = itemData.destField || {};
   const [settingComponent, setSettingComponent] = useSetState({ component: null, data: {} });
   const selectRef = useRef();
@@ -58,24 +59,42 @@ export default function SelectType(props) {
     //对应类型的可选配置
     if (destField.mdType) {
       const ENUM_TYPE = enumWidgetType[destField.mdType];
-      const data =
-        ENUM_TYPE === 'DATE_TIME'
-          ? { type: destField.mdType, advancedSetting: { showtype: '6' } }
-          : { type: destField.mdType, ..._.omit(DEFAULT_DATA[ENUM_TYPE], ['controlName']) };
       setSettingComponent({
         component: Settings[ENUM_TYPE],
-        data,
+        data: destField.controlSetting,
       });
-      updateFieldsMapping &&
-        updateFieldsMapping({
-          ...itemData,
-          destField: {
-            ...destField,
-            controlSetting: _.pick(data, ['advancedSetting', 'enumDefault', 'type', 'dot']),
-          },
-        });
     }
   }, [destField.mdType]);
+
+  const onWorkSheetTypeChange = (value, option) => {
+    const ENUM_TYPE = enumWidgetType[value];
+    const data =
+      ENUM_TYPE === 'DATE_TIME'
+        ? { type: value, advancedSetting: { showtype: '6' } }
+        : { type: value, ..._.omit(DEFAULT_DATA[ENUM_TYPE], ['controlName']) };
+    setSettingComponent({
+      component: Settings[ENUM_TYPE],
+      data,
+    });
+    const canSetTitle =
+      canSetAsTitle({ type: value }) &&
+      //如果存在joinPk，joinPk字段不允许设为标题，否则rowid不允许设为标题
+      (isExistJoinPk ? !sourceField.isUniquePk : (sourceField.oid || '').split('_')[1] !== 'rowid');
+
+    updateFieldsMapping &&
+      updateFieldsMapping({
+        ...itemData,
+        destField: {
+          ...destField,
+          dataType: option.typeName,
+          jdbcTypeId: option.dataType,
+          mdType: value,
+          //对应类型的可选配置
+          controlSetting: _.pick(data, ['advancedSetting', 'enumDefault', 'type', 'dot']),
+          isTitle: canSetTitle ? destField.isTitle : false,
+        },
+      });
+  };
 
   const onPopupVisibleChange = visible => {
     setVisible(visible);
@@ -200,18 +219,7 @@ export default function SelectType(props) {
                 getPopupContainer={() => selectOptionListRef.current}
                 value={destField.mdType}
                 options={options}
-                onChange={(value, option) => {
-                  updateFieldsMapping &&
-                    updateFieldsMapping({
-                      ...itemData,
-                      destField: {
-                        ...destField,
-                        dataType: option.typeName,
-                        jdbcTypeId: option.dataType,
-                        mdType: value,
-                      },
-                    });
-                }}
+                onChange={(value, option) => onWorkSheetTypeChange(value, option)}
               />
             </div>
 
@@ -225,6 +233,7 @@ export default function SelectType(props) {
                       ...itemData,
                       destField: {
                         ...destField,
+                        scale: data.dot || 0,
                         controlSetting: {
                           ...destField.controlSetting,
                           ..._.pick(data, ['advancedSetting', 'enumDefault', 'type', 'dot']),

@@ -4,41 +4,32 @@ import styled from 'styled-components';
 import { connect } from 'react-redux';
 import { bindActionCreators } from 'redux';
 import * as actions from 'src/pages/Role/AppRoleCon/redux/actions';
-import { Icon, Dropdown, Menu, MenuItem, Tooltip, Dialog } from 'ming-ui';
+import { Icon, Dropdown, Menu, MenuItem, Tooltip, Dialog, Checkbox } from 'ming-ui';
 import Trigger from 'rc-trigger';
 import Table from 'src/pages/Role/component/Table';
 import cx from 'classnames';
 import DropOption from 'src/pages/Role/PortalCon/components/DropOption';
 import SearchInput from 'src/pages/AppHomepage/AppCenter/components/SearchInput';
 import _ from 'lodash';
-import { getCurrentProject } from 'src/util';
-import UserHead from 'src/pages/feed/components/userHead';
+import departmentController from 'src/api/department';
+import UserHead from 'src/components/userHead';
 import { getIcon, getColor, getTxtColor, pageSize } from 'src/pages/Role/AppRoleCon/UserCon/config';
 import moment from 'moment';
 import { sysRoleType } from 'src/pages/Role/config.js';
-import { userStatusList, initData } from 'src/pages/Role/AppRoleCon/UserCon/config.js';
+import { userStatusList } from 'src/pages/Role/AppRoleCon/UserCon/config.js';
 import AppManagement from 'src/api/appManagement.js';
 import { APP_ROLE_TYPE } from 'src/pages/worksheet/constants/enum.js';
+import { getCurrentProject } from 'src/util';
 
 const Wrap = styled.div`
   padding: 20px 10px 20px 10px;
+  &.conExternal {
+    padding: 20px 0;
+  }
   .toRole {
-    color: #9e9e9e;
+    color: #5a5a5a;
     &:hover {
       color: #2196f3;
-    }
-  }
-  .bar {
-    padding: 0 44px;
-    .toOthers,
-    .del {
-      font-weight: 400;
-      color: #2196f3;
-      line-height: 37px;
-      height: 37px;
-      background: #f3faff;
-      padding: 0 20px;
-      border-radius: 3px;
     }
   }
   .wrapTr:not(.checkBoxTr):not(.optionWrapTr) {
@@ -83,8 +74,19 @@ const Wrap = styled.div`
   }
 `;
 const WrapBar = styled.div`
+  .toRole {
+    border-radius: 3px 3px 3px 3px;
+    padding: 0 12px;
+    border: 1px solid #dddddd;
+    line-height: 34px;
+    display: inline-block;
+    &:hover {
+      border: 1px solid #2196f3;
+      color: #2196f3;
+    }
+  }
   .addUser {
-    line-height: 37px;
+    line-height: 36px;
     background: #2196f3;
     border-radius: 3px;
     color: #fff;
@@ -154,9 +156,15 @@ function User(props) {
     changeUserRole,
     isAdmin,
     canEditUser,
+    canEditApp,
     appDetail = {},
+    setQuickTag,
+    isExternal,
+    transferApp,
+    changeExternalManager,
+    isOwner,
   } = props;
-  const { selectedIds = [] } = appRole;
+  const { selectedIds = [], roleInfos = [] } = appRole;
   const [
     {
       keyWords,
@@ -170,6 +178,7 @@ function User(props) {
       selectedAll,
       popupVisible,
       countTxt,
+      fullDepartmentInfo,
     },
     setState,
   ] = useSetState({
@@ -185,6 +194,7 @@ function User(props) {
     selectedAll: false,
     popupVisible: false,
     countTxt: getNumTxt(_.get(props, ['appRole', 'user']) || {}),
+    fullDepartmentInfo: [],
   });
   useEffect(() => {
     setState({
@@ -203,7 +213,10 @@ function User(props) {
     (_.get(props, ['appRole', 'roleInfos']) || []).find(o => o.roleId === _.get(props, ['appRole', 'roleId'])) || {}
   ).canSetMembers; //是否当前角色的负责人或者有权管理改角色
   const isRunner = appDetail.permissionType === APP_ROLE_TYPE.RUNNER_ROLE; //运营者
-  const canEdit = (isRoleCharger || isAdmin) && !(isRunner && ['all', 'apply', 'outsourcing'].includes(roleId)); //运营者不可编辑全部|审批|外协
+  const canEdit =
+    !window.isPublicApp && //非分享状态
+    (isRoleCharger || isAdmin) &&
+    !(isRunner && ['all', 'apply', 'outsourcing'].includes(roleId)); //运营者不可编辑全部|审批|外协
   useEffect(() => {
     setState({
       roleId: _.get(props, ['roleId']),
@@ -215,6 +228,34 @@ function User(props) {
     }
     getUserList({ appId }, true);
   }, [props.roleId]);
+  //获取部门全路径
+  const getDepartmentFullName = (departmentData = []) => {
+    const departmentIds = departmentData.filter(it => !fullDepartmentInfo[it]);
+    const isExternal = _.isEmpty(getCurrentProject(projectId)); // 是否为外协人员
+    if (_.isEmpty(departmentIds) || isExternal) {
+      return;
+    }
+    departmentController
+      .getDepartmentFullNameByIds({
+        projectId,
+        departmentIds,
+      })
+      .then(res => {
+        res.forEach(it => {
+          fullDepartmentInfo[it.id] = it.name;
+        });
+        setState({ fullDepartmentInfo });
+      });
+  };
+  useEffect(() => {
+    getDepartmentFullName(
+      _.get(props, 'appRole.userList')
+        .filter(o => [1, 2].includes(o.memberType))
+        .map(o => o.id),
+    );
+  }, [_.get(props, 'appRole.userList')]);
+  const roleData = props.roleList.find(o => o.roleId === roleId) || {};
+
   const columns = [
     {
       id: 'name',
@@ -235,9 +276,8 @@ function User(props) {
             {data.memberType === 5 ? (
               <UserHead
                 key={data.accountId}
-                projectId={_.isEmpty(getCurrentProject(projectId)) ? '' : projectId}
+                projectId={projectId}
                 size={32}
-                lazy="false"
                 user={{
                   ...data,
                   accountId: data.id,
@@ -256,9 +296,12 @@ function User(props) {
               </div>
             )}
             <div className={'memberInfo flex pLeft8 flexRow alignItemsCenter'}>
-              <span className={'memberName overflow_ellipsis Block TxtLeft breakAll'} title={data.name}>
-                {data.name}
-              </span>
+              <Tooltip
+                text={<span>{fullDepartmentInfo[data.id] ? fullDepartmentInfo[data.id] : data.name}</span>}
+                popupPlacement="top"
+              >
+                <span className={'memberName overflow_ellipsis Block TxtLeft breakAll'}>{data.name}</span>
+              </Tooltip>
               {isHead && (
                 <Tooltip text={<span>{_l('角色负责人')} </span>} popupPlacement="top">
                   <i className="icon-people_5 Font14 mLeft7" style={{ color: '#FBBB44' }} />
@@ -350,10 +393,6 @@ function User(props) {
       className: 'optionWrapTr',
       name: '',
       render: (text, data, index) => {
-        if (data.isOwner) {
-          return;
-        }
-        const roleData = props.roleList.find(o => o.roleId === roleId) || {};
         const isHead = data.isRoleCharger; // 角色负责人
         let dataList = [
           {
@@ -362,7 +401,14 @@ function User(props) {
           },
           {
             value: 0,
-            text: roleId !== 'all' ? _l('移到其他角色') : _l('修改角色'),
+            text:
+              roleId !== 'all'
+                ? _l('移到其他角色')
+                : !isExternal
+                ? _l('修改角色')
+                : data.isManager
+                ? _l('取消管理员')
+                : _l('设为管理员'),
           },
           {
             value: 1,
@@ -377,6 +423,16 @@ function User(props) {
           //排除角色负责人操作
           dataList = dataList.filter(o => o.value !== -1);
         }
+        if (data.isOwner) {
+          dataList = isOwner
+            ? [
+                {
+                  value: 2,
+                  text: _l('移交应用'),
+                },
+              ]
+            : [];
+        }
         return (
           <DropOption
             dataList={dataList}
@@ -385,32 +441,48 @@ function User(props) {
               setState({
                 selectedAll: false,
               });
-              if (o.value === 1) {
-                delUserRole([itemId]);
-              } else if (o.value === -1) {
-                let memberCategory = (userStatusList.find(o => data.memberType === o.value) || {}).key;
-                if (isHead) {
-                  //取消负责人
-                  changeIsRoleManager({ memberCategory, appId, roleId, memberId: data.id }, false, () => {
-                    alert(_l('取消成功'));
-                  });
-                } else {
-                  // 设为负责人
-                  return Dialog.confirm({
-                    className: '',
-                    title: <span className="Bold Font17">{_l('确认设置为角色负责人？')}</span>,
-                    description: (
-                      <div className="Gray_75 Font15 mBottom6 WordBreak">
-                        {_l('角色负责人可添加、移出当前角色下的成员')}
-                      </div>
-                    ),
-                    onOk: () => {
-                      changeIsRoleManager({ memberCategory, appId, roleId, memberId: data.id }, true);
-                    },
-                  });
-                }
-              } else {
-                changeUserRole([itemId]);
+              switch (o.value) {
+                case 2:
+                  transferApp();
+                  break;
+                case 1:
+                  delUserRole([itemId]);
+                  break;
+                case -1:
+                  let memberCategory = (userStatusList.find(o => data.memberType === o.value) || {}).key;
+                  if (isHead) {
+                    //取消负责人
+                    changeIsRoleManager({ memberCategory, appId, roleId, memberId: data.id }, false, () => {
+                      alert(_l('取消成功'));
+                    });
+                  } else {
+                    // 设为负责人
+                    return Dialog.confirm({
+                      className: '',
+                      title: <span className="Bold Font17">{_l('确认设置为角色负责人？')}</span>,
+                      description: (
+                        <div className="Gray_75 Font15 mBottom6 WordBreak">
+                          {_l('角色负责人可添加、移出当前角色下的成员')}
+                        </div>
+                      ),
+                      onOk: () => {
+                        changeIsRoleManager({ memberCategory, appId, roleId, memberId: data.id }, true);
+                      },
+                    });
+                  }
+                  break;
+                default:
+                  if (isExternal) {
+                    //取消|设置成为管理员角色=>仅支持外部链接应用
+                    const managerId = (roleInfos.filter(o => sysRoleType.includes(o.roleType))[0] || {}).roleId; //管理员角色id
+                    const normalId = (roleInfos.filter(o => !sysRoleType.includes(o.roleType))[0] || {}).roleId; //成员角色id
+                    changeExternalManager([!data.isManager ? managerId : normalId], [itemId], false, () => {
+                      alert(data.isManager ? _l('取消成功') : _l('设置成功'));
+                    });
+                  } else {
+                    changeUserRole([itemId]);
+                  }
+                  break;
               }
             }}
             popupAlign={{
@@ -486,7 +558,7 @@ function User(props) {
     },
   };
   const triggerProps = {
-    popupClassName: 'ming Tooltip-white',
+    popupClassName: 'ming Tooltip-white Normal',
     prefixCls: 'Tooltip',
     action: ['click'],
     popup: renderPopup(),
@@ -509,19 +581,29 @@ function User(props) {
       return document.body;
     },
   };
+  const handleSearch = keyWords => {
+    setState({ keyWords });
+    SetAppRolePagingModel({
+      ...appRolePagingModel,
+      pageIndex: 1,
+      keywords: keyWords,
+    });
+    getUserList({ appId }, true);
+  };
+  const onSearch = _.debounce(keywords => handleSearch(keywords), 500);
 
   return (
-    <Wrap className={cx('flex flexColumn overflowHidden', { isAllType: roleId !== 'all' })}>
-      <div className="bar flexRow alignItemsCenter">
-        <div className="title flex flexRow alignItemsCenter LineHeight26">
-          <span className="Font17 Bold LineHeight26">{props.title}</span>
-          <span className="Gray_9e mLeft15 LineHeight26 TxtMiddle mRight8 overflow_ellipsis breakAll" title={countTxt}>
+    <Wrap className={cx('flex flexColumn overflowHidden', { isAllType: roleId !== 'all', conExternal: isExternal })}>
+      <div className="bar flexRow alignItemsCenter barActionCon">
+        <div className="title flex flexRow alignItemsCenter">
+          <span className="Font17 Bold">{props.title}</span>
+          <span className="Gray_9e mLeft15 TxtMiddle mRight8 overflow_ellipsis breakAll" title={countTxt}>
             {countTxt}
           </span>
         </div>
         {selectedIds.length > 0 && (
           <div>
-            {canEdit && (
+            {canEdit && !isExternal && (
               <span
                 className={cx('toOthers InlineBlock Hand mLeft10')}
                 onClick={() => {
@@ -543,23 +625,47 @@ function User(props) {
         )}
         {selectedIds.length <= 0 && (
           <WrapBar>
+            {isExternal && (
+              <Tooltip
+                text={
+                  <span>
+                    {_l('开启时，当用户被添加、移除、变更角色时会收到系统通知，关闭时，以上操作不通知用户。')}
+                  </span>
+                }
+                popupPlacement={'top'}
+              >
+                <span className="InlineBlock mRight20 LineHeight36 TxtTop">
+                  <Checkbox
+                    className=""
+                    size="small"
+                    checked={props.notify}
+                    onClick={() => {
+                      props.updateAppRoleNotify();
+                    }}
+                    text={_l('发送通知')}
+                  />
+                </span>
+              </Tooltip>
+            )}
             <div className="search InlineBlock">
               <SearchInput
                 className="roleSearch"
                 placeholder={props.placeholder || _l('搜索')}
                 value={keyWords}
-                onChange={keyWords => {
-                  setState({ keyWords });
-                  SetAppRolePagingModel({
-                    ...appRolePagingModel,
-                    pageIndex: 1,
-                    keywords: keyWords,
-                  });
-                  getUserList({ appId }, true);
-                }}
+                onChange={onSearch}
               />
             </div>
-            {roleId !== 'all' && canEdit && (
+            {roleId !== 'all' && canEditApp && !isExternal && (
+              <div
+                className="toRole Hand mLeft20 TxtTop Bold"
+                onClick={() => {
+                  setQuickTag({ roleId: roleId, tab: 'roleSet' });
+                }}
+              >
+                {sysRoleType.includes(roleData.roleType) ? _l('查看角色') : _l('编辑角色')}
+              </div>
+            )}
+            {(roleId !== 'all' || isExternal) && canEdit && (
               <Trigger {...triggerProps}>
                 <div className="addUser Hand mLeft20 TxtTop Bold">
                   <Icon type="add" />

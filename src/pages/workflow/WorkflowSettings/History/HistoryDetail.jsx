@@ -18,11 +18,11 @@ import instanceVersion from '../../api/instanceVersion';
 import process from '../../api/process';
 import _ from 'lodash';
 import moment from 'moment';
+import { OPERATION_TYPE } from '../enum';
 
 export default class HistoryDetail extends Component {
   static propTypes = {
     id: string,
-    disabled: bool,
     onClick: func,
   };
 
@@ -61,12 +61,27 @@ export default class HistoryDetail extends Component {
     });
   };
 
-  renderOperationInfo = item => {
-    const { cause, causeMsg } = this.state.data.instanceLog;
-    const { flowNode, workItems, countersign, countersignType, status, log = {}, sourceId, scheduleActions } = item;
+  renderOperationInfo = (item, isLast) => {
+    const { cause, causeMsg, causeAccount } = this.state.data.instanceLog;
+    const {
+      flowNode,
+      workItems,
+      countersign,
+      countersignType,
+      status,
+      log = {},
+      sourceId,
+      scheduleActions,
+      updateLogs,
+      updateWorks,
+    } = item;
 
     if (!sourceId && log.executeType === 2) {
       return <div className="Gray_75">{_l('跳过')}</div>;
+    }
+
+    if (cause === 7777 && status === 3 && causeAccount) {
+      return <div className="personDetail flex Gray_75 flexRow">{_l('管理员：%0 中止', causeAccount.fullName)}</div>;
     }
 
     const { type, appType } = flowNode;
@@ -76,18 +91,46 @@ export default class HistoryDetail extends Component {
         return { name: workItemAccount.fullName, action: workItemLog.action, target: workItemLog.actionTargetName };
       }
       if (workItemAccount) {
-        return { name: workItemAccount.fullName };
+        return {
+          name:
+            type === 0 && workItemAccount.accountId === 'user-undefined' ? _l('发起人为空') : workItemAccount.fullName,
+        };
       }
     });
 
     const isApproval = appType === 9 && type === 0;
+    const ERROR_LABELS = {
+      102: _l('发送邮件，'),
+    };
 
     return (
       <Fragment>
+        {updateLogs &&
+          Object.keys(updateLogs).map(key => (
+            <div key={key} className="overrule mBottom12">
+              {ERROR_LABELS[key]}
+              {FLOW_FAIL_REASON[updateLogs[key].cause] || updateLogs[key].causeMsg}
+            </div>
+          ))}
+
+        {!!(updateWorks || {})[OPERATION_TYPE.BEFORE] && (
+          <div className="breakAll mBottom12 Gray_75">{_l('审批前更新了记录')}</div>
+        )}
+
+        {countersign && _.includes([1, 2, 4], countersignType) && (
+          <div className="breakAll mBottom12 Gray_75">
+            <span>{_l('开始审批')}</span>
+            <span>(</span>
+            <span>{_l('会签：')}</span>
+            <span>{COUNTER_TYPE[countersignType]}</span>
+            <span>)</span>
+          </div>
+        )}
+
         <div className="personDetail flex Gray_75 flexRow">
-          {(_.includes([0, 3, 4, 5], type) || isApproval) && (
+          {(_.includes([0, 3, 4, 5, 27], type) || isApproval) && (
             <Fragment>
-              <div className="personInfo">
+              <div className="personInfo inlineFlexRow">
                 <span>
                   {isApproval ? _l('发起人：') : type === 0 ? _l('触发者：') : _l('%0人：', NODE_TYPE[type].text)}
                 </span>
@@ -116,33 +159,41 @@ export default class HistoryDetail extends Component {
                   </div>
                 )}
               </div>
-              {_.includes([4, 5], status) && !countersign && (
-                <div className={NODE_STATUS[status].status}>{FLOW_FAIL_REASON[cause] || causeMsg}</div>
+              {_.includes([4, 5], status) && !countersign && isLast && (
+                <div className={NODE_STATUS[status].status}>
+                  {cause === 7777 && flowNode.name ? _l('过期自动中止') : FLOW_FAIL_REASON[cause] || causeMsg}
+                </div>
               )}
             </Fragment>
           )}
         </div>
-        {countersign && _.includes([1, 2], countersignType) ? (
-          <div className="info">
-            <span>{_l('会签：')}</span>
-            <span>{COUNTER_TYPE[countersignType]}</span>
-            {names.some(item => item && item.action === 5) && <span className="overrule">{_l(', 审批被否决')}</span>}
-          </div>
-        ) : (
-          names.map((item, key) => {
-            if (item) {
-              const { action, target } = item;
-              if (!action) return <div key={key} />;
-              return _.includes([2, 8, 16], action) ? (
-                <div key={key} className="actionDetail flexRow Gray_75">
-                  <div className="actionType">{_l('%0：', ACTION_TYPE[action].text)}</div>
-                  {target && <div className="actionTarget">{target}</div>}
-                </div>
-              ) : (
-                <div key={key} />
-              );
-            }
-          })
+
+        {!countersign ||
+          (!_.includes([1, 2, 4], countersignType) &&
+            names.map((item, key) => {
+              if (item) {
+                const { action, target } = item;
+                if (!action) return <div key={key} />;
+                return _.includes([2, 8, 16], action) ? (
+                  <div key={key} className="actionDetail flexRow Gray_75">
+                    <div className="actionType">{_l('%0：', ACTION_TYPE[action].text)}</div>
+                    {target && <div className="actionTarget">{target}</div>}
+                  </div>
+                ) : (
+                  <div key={key} />
+                );
+              }
+            }))}
+
+        {!!updateWorks && (
+          <Fragment>
+            {!!updateWorks[OPERATION_TYPE.PASS] && <div className="info Gray_75">{_l('通过后更新了记录')}</div>}
+            {!!updateWorks[OPERATION_TYPE.OVERRULE] && <div className="info Gray_75">{_l('否决后更新了记录')}</div>}
+            {!!updateWorks[OPERATION_TYPE.RETURN] && <div className="info Gray_75">{_l('退回后更新了记录')}</div>}
+            {!!updateWorks[OPERATION_TYPE.ADD_OPERATION] && (
+              <div className="info Gray_75">{_l('新增节点操作明细')}</div>
+            )}
+          </Fragment>
         )}
       </Fragment>
     );
@@ -162,14 +213,13 @@ export default class HistoryDetail extends Component {
   }
 
   renderRetryBtn(retryPosition) {
-    const { disabled } = this.props;
     const { data, isRetry } = this.state;
     const { instanceLog, logs } = data;
     const { cause } = instanceLog;
-    const showRetry = (data.status === 3 && _.includes([20001, 20002], cause)) || (status === 4 && cause !== 7777);
+    const showRetry = _.includes([3, 4], data.status) && cause !== 7777;
     const showSuspend = data.status === 1;
 
-    if ((showRetry || showSuspend) && !disabled) {
+    if (showRetry || showSuspend) {
       return (
         <div
           className={cx(
@@ -242,13 +292,18 @@ export default class HistoryDetail extends Component {
             <HistoryStatus statusCode={data.status} size={44} color={color} textSize={18} />
             <div className="title flex mRight15">
               <div className="overflow_ellipsis Font18">
-                {_l('数据：') + (works.length && works[0].flowNode.appType === 17 ? _l('输入参数') : (title || ''))}
+                {_l('数据：') +
+                  (works.length && works[0].flowNode.appType === 17 ? title || _l('输入参数') : title || '')}
               </div>
               <div style={{ color }}>
                 {cause
                   ? cause === 40007
                     ? FLOW_FAIL_REASON[cause]
-                    : `${_l('节点: ')} ${nodeName}, ${FLOW_FAIL_REASON[cause] || causeMsg}`
+                    : !nodeName
+                    ? FLOW_FAIL_REASON[cause] || causeMsg
+                    : `${_l('节点: ')} ${nodeName}, ${
+                        cause === 7777 ? _l('过期自动中止') : FLOW_FAIL_REASON[cause] || causeMsg
+                      }`
                   : ''}
               </div>
             </div>
@@ -276,7 +331,7 @@ export default class HistoryDetail extends Component {
             </div>
             <ul className="logList">
               {works.map((item, index) => {
-                const { flowNode, startDate, endDate, status, logs, multipleLevelType, sort } = item;
+                const { flowNode, startDate, endDate, status, logs, multipleLevelType, sort, app } = item;
                 const { name, alias } = flowNode;
                 const { type } = NODE_TYPE[flowNode.child && flowNode.type === 0 ? 16 : flowNode.type] || {};
 
@@ -299,11 +354,12 @@ export default class HistoryDetail extends Component {
                     <div className="originNode">
                       <NodeIcon type={type} appType={flowNode.appType} actionId={flowNode.actionId} />
                       <div className="nodeName Font15 overflow_ellipsis flexColumn">
-                        <div>
+                        <div title={name}>
                           {name}
                           {multipleLevelType !== 0 && sort && _l('（第%0级）', sort)}
                         </div>
                         {alias && <div className="Gray_75 Font13 ellipsis">{_l('别名：%0', alias)}</div>}
+                        {app && <div className="Gray_75 Font13 ellipsis">{_l('工作表 “%0”', app.name)}</div>}
                       </div>
                     </div>
 
@@ -312,7 +368,7 @@ export default class HistoryDetail extends Component {
                         ? this.renderSubProcess(item)
                         : flowNode.type === 19
                         ? this.renderTemplateInfo(item)
-                        : this.renderOperationInfo(item)}
+                        : this.renderOperationInfo(item, index === works.length - 1)}
                     </div>
 
                     <div className="operationTime Gray_75">

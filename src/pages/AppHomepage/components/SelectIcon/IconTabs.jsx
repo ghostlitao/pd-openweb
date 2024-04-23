@@ -60,13 +60,11 @@ const SYSTEM_TYLE = [
 
 const scrollCurrentIcon = () => {
   let currentEle = document.querySelector('.iconsScrollViewWrap .isCurrentIcon');
-  if (!currentEle) return;
+  let scrollCon = document.querySelector('.iconsScrollViewWrap .nano-content');
+  if (!currentEle || !scrollCon) return;
 
   let _scrollTop = currentEle.offsetTop;
-  document.querySelector('.iconsScrollViewWrap .nano-content').scrollTo({
-    top: _scrollTop,
-    behavior: 'instant',
-  });
+  scrollCon.scrollTop = _scrollTop;
 };
 
 function IconTabs(props) {
@@ -94,10 +92,8 @@ function IconTabs(props) {
   useEffect(() => {
     if (loading) return;
     if (!setting.firstLoad) {
-      setting.tab===0 && document.querySelector('.iconsScrollViewWrap .nano-content').scrollTo({
-        top: setting.changeScrollTop,
-        behavior: 'instant',
-      })
+      setting.tab === 0 &&
+        (document.querySelector('.iconsScrollViewWrap .nano-content').scrollTop = setting.changeScrollTop);
       return;
     }
     setSetting({
@@ -106,7 +102,6 @@ function IconTabs(props) {
     });
     scrollCurrentIcon();
   }, [loading]);
-
 
   const getIcon = () => {
     const { systemIconLine, systemIcon, customIcon } = data;
@@ -148,7 +143,7 @@ function IconTabs(props) {
     });
   };
 
-  const onScroll = _.debounce((e) => {
+  const onScroll = _.debounce(e => {
     const scrollCon = document.querySelector('.iconsScrollViewWrap .nano-content');
 
     if (!SYSTEM_TYLE[0].hasOwnProperty('offsetTop')) {
@@ -180,10 +175,7 @@ function IconTabs(props) {
       currentKey: item.key,
     });
     let scrollTop = document.getElementById(item.key).offsetTop;
-    document.querySelector('.iconsScrollViewWrap .nano-content').scrollTo({
-      top: scrollTop,
-      behavior: 'smooth',
-    });
+    document.querySelector('.iconsScrollViewWrap .nano-content').scrollTop = scrollTop;
   };
 
   const renderSystemIcon = () => {
@@ -200,7 +192,6 @@ function IconTabs(props) {
         <ScrollView className="iconsScrollViewWrap" scrollEvent={onScroll} disableParentScroll>
           <div className="systemIcon">
             {SYSTEM_TYLE.map((item, index) => {
-
               return (
                 <React.Fragment key={`systemIconType-${item.key}`}>
                   {index !== 0 && (
@@ -211,8 +202,8 @@ function IconTabs(props) {
                   <ul className="iconsWrap" id={index === 0 ? SYSTEM_TYLE[0].key : ''}>
                     {listData[item.key].map(({ fileName, iconUrl }) => {
                       let isCurrent = icon.startsWith('sys_')
-                      ? icon === fileName
-                      : fileName.replace('sys_', '').replace('_line', '') === icon;
+                        ? icon === fileName
+                        : fileName.replace('sys_', '').replace('_line', '') === icon;
                       return (
                         <li
                           key={fileName}
@@ -220,9 +211,12 @@ function IconTabs(props) {
                           style={{ backgroundColor: isCurrent ? iconColor : '#fff' }}
                           onClick={() => handleClick({ icon: fileName, iconUrl })}
                         >
-                          <span className={fileName} style={{
-                            color: isCurrent ? '#fff' : '#9e9e9e',
-                          }}></span>
+                          <span
+                            className={fileName}
+                            style={{
+                              color: isCurrent ? '#fff' : '#9e9e9e',
+                            }}
+                          ></span>
                         </li>
                       );
                     })}
@@ -337,9 +331,12 @@ function IconTabs(props) {
                 };
                 setSetting(param);
 
+                if (!icon.startsWith('sys_')) return;
+
                 let _endWiths = value ? '' : '_line';
                 let iconName = icon.replace(/(_line)|(_fill)$/, '') + _endWiths;
-                if (!icon.startsWith('sys_')) iconName = 'sys_'+iconName;
+
+                if (!icon.startsWith('sys_')) iconName = 'sys_' + iconName;
                 handleClick({
                   icon: iconName,
                   iconUrl: `${md.global.FileStoreConfig.pubHost}/customIcon/${iconName}.svg`,

@@ -13,16 +13,6 @@ import './index.less';
 import _ from 'lodash';
 import { formatPortalHref } from 'src/pages/Portal/util';
 
-const isIphonex = () => {
-  if (typeof window !== 'undefined' && window) {
-    return /iphone/gi.test(window.navigator.userAgent) && window.screen.height >= 812;
-  }
-  return false;
-};
-
-const isMiniprogram = window.navigator.userAgent.toLowerCase().includes('miniprogram');
-const isWxWork = window.navigator.userAgent.toLowerCase().includes('wxwork');
-
 @preall
 @withRouter
 @DeclareConfirm
@@ -40,15 +30,10 @@ class App extends Component {
     });
 
     this.genRouteComponent = genRouteComponent();
-    if (isIphonex() && (isMiniprogram || isWxWork)) {
-      document.body.classList.add('iphoneBody');
-    }
   }
   componentDidMount() {
     this.switchPath(this.props.location);
-    if (window.navigator.userAgent.toLowerCase().includes('iphone')) {
-      sessionStorage.setItem('entryUrl', location.href);
-    }
+    sessionStorage.setItem('entryUrl', location.href);
     window.mobileNavigateTo = (url, isReplace) => {
       url = (window.subPath || '') + url;
 
@@ -87,22 +72,23 @@ class App extends Component {
         <Route
           path="*"
           render={({ location }) => {
-            const home = '/mobile/appHome';
+            const home = '/mobile/dashboard';
             const page = '/mobile/recordList/';
             const record = '/mobile/record/';
+            const setHash = url => navigateTo(url + decodeURIComponent(location.hash), true);
             if (location.pathname.includes(record)) {
               const param = location.pathname.replace(record, '').split('/');
               const [appId, worksheetId, viewId, rowId] = param;
               if (!viewId) {
-                return navigateTo(`${record}${appId}/${worksheetId}/null/${rowId}`);
+                return setHash(`${record}${appId}/${worksheetId}/null/${rowId}`);
               } else {
-                return navigateTo(home);
+                return setHash(home);
               }
             } else if (location.pathname.includes(page)) {
               const param = location.pathname.replace(page, '').split('/');
-              return navigateTo(param.length === 1 ? `/mobile/app/${param[0]}` : home);
+              return setHash(param.length === 1 ? `/mobile/app/${param[0]}` : home);
             } else if (!isPortal) {
-              return navigateTo(home);
+              return setHash(home);
             }
           }}
         />

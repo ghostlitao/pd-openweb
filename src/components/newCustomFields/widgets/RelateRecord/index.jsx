@@ -33,19 +33,54 @@ export default class Widgets extends Component {
     this.state = {};
   }
 
+  cardsComp = React.createRef();
+
   get count() {
-    const { value } = this.props;
-    let { count } = this.props;
-    const recordsCount = getRelateRecordCountFromValue(value);
+    const { value, count } = this.props;
+    const recordsCount = getRelateRecordCountFromValue(value, count);
     return _.isUndefined(recordsCount) ? count : recordsCount;
   }
 
+  get isCard() {
+    let { showtype = RELATE_RECORD_SHOW_TYPE.LIST } = this.props.advancedSetting; // 1 卡片 2 列表 3 下拉
+    return parseInt(showtype, 10) === RELATE_RECORD_SHOW_TYPE.CARD;
+  }
+
+  componentWillReceiveProps(nextProps) {
+    if (!this.isCard) {
+      return;
+    }
+    try {
+      if (nextProps.value === 'deleteRowIds: all') {
+        this.cardsComp.current.table.deleteAllRecord();
+        return;
+      }
+      const nextData = this.parseValue(nextProps.value);
+      if (_.get(nextData, '0.isWorksheetQueryFill')) {
+        const newRecords = nextData.map(item => JSON.parse(item.sourcevalue));
+        this.cardsComp.current.table.clearAndAdd(newRecords);
+      }
+    } catch (err) {}
+  }
+
+  shouldComponentUpdate(nextProps) {
+    const nextData = this.parseValue(nextProps.value);
+    return (nextProps.value !== 'deleteRowIds: all' && !_.get(nextData, '0.isWorksheetQueryFill')) || !this.isCard;
+  }
+
   parseValue(value) {
+    let { showtype = RELATE_RECORD_SHOW_TYPE.LIST } = this.props.advancedSetting;
     if (!value) return [];
+    if (showtype == RELATE_RECORD_SHOW_TYPE.DROPDOWN && value.indexOf('deleteRowIds') > -1) {
+      return;
+    }
     let data = [];
     try {
       data = JSON.parse(value);
     } catch (err) {
+      return [];
+    }
+    if (!_.isObject(data)) {
       return [];
     }
     return _.isArray(data) ? data : [data];
@@ -53,6 +88,7 @@ export default class Widgets extends Component {
 
   getRecordsData() {
     const value = this.parseValue(this.props.value);
+    this.isFromDefault = !!_.find(value, { isFromDefault: true });
     let data = [];
     try {
       data = value.map(r => (r.sourcevalue ? JSON.parse(r.sourcevalue) : { rowid: r.sid, titleValue: r.name }));
@@ -66,10 +102,19 @@ export default class Widgets extends Component {
     if (type === 'array') {
       onChange(JSON.stringify(formatRecordToRelateRecord(relationControls, args)));
     } else {
-      const { count, records, deletedIds, addedIds } = args;
+      const { count, records, deletedIds, addedIds, searchByChange } = args;
       if (records.length) {
         onChange(
-          JSON.stringify(formatRecordToRelateRecord(relationControls, records, { addedIds, deletedIds, count })),
+          JSON.stringify(
+            formatRecordToRelateRecord(relationControls, records, {
+              addedIds,
+              deletedIds,
+              count,
+              isFromDefault: this.isFromDefault,
+            }),
+          ),
+          undefined,
+          searchByChange,
         );
       } else {
         onChange(`deleteRowIds: ${deletedIds.join(',')}`);
@@ -104,6 +149,7 @@ export default class Widgets extends Component {
       <React.Fragment>
         {showtype !== RELATE_RECORD_SHOW_TYPE.DROPDOWN || browserIsMobile() ? (
           <RelateRecordCards
+            ref={this.cardsComp}
             flag={flag}
             recordId={recordId}
             allowOpenRecord={advancedSetting.allowlink === '1'}
@@ -115,10 +161,10 @@ export default class Widgets extends Component {
                 ? records.filter((_, index) => !index)
                 : records
             }
-            // addedIds={deletedIds}
-            // deletedIds={deletedIds}
             multiple={enumDefault === 2}
+            showCoverAndControls={advancedSetting.ddset === '1'}
             onChange={this.handleChange}
+            from={from}
           />
         ) : (
           <RelateRecordDropdown

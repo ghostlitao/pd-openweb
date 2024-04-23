@@ -59,6 +59,7 @@ function EditPanel(props) {
     projectGroups = [],
     selectedGroupIds = [],
     onUpdateAppBelongGroups,
+    isDashboard,
   } = props;
   const [selectedIds, setSelectedIds] = useState(selectedGroupIds);
   const [keywords, setKeywords] = useState();
@@ -93,7 +94,7 @@ function EditPanel(props) {
       <EditPanelCon>
         <Empty>
           <i className="icon icon-folder_off Font26 Gray_9e"></i>
-          <div className="Font13 Gray_9e mTop12">{_l('无分组，可从左侧列表创建')}</div>
+          <div className="Font13 Gray_9e mTop12">{isDashboard ? _l('无分组') : _l('无分组，可从左侧列表创建')}</div>
         </Empty>
       </EditPanelCon>
     );
@@ -126,14 +127,10 @@ function EditPanel(props) {
 }
 
 export default function EditGroupMenuItem(props) {
-  const { keywords, isAdmin, groups = [] } = props;
+  const { isAdmin, groups = [] } = props;
   const itemRef = useRef();
-  const personalGroups = groups.filter(
-    g => g.groupType === 0 && (!keywords || new RegExp(keywords.toUpperCase()).test(g.name)),
-  );
-  const projectGroups = groups.filter(
-    g => g.groupType === 1 && (!keywords || new RegExp(keywords.toUpperCase()).test(g.name)),
-  );
+  const personalGroups = groups.filter(g => g.groupType === 0);
+  const projectGroups = groups.filter(g => g.groupType === 1);
   const isEmpty = !personalGroups.length && (!projectGroups.length || !isAdmin);
   return (
     <Trigger

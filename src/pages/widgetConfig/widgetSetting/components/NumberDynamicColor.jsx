@@ -10,7 +10,7 @@ const DynamicColorWrap = styled.div`
   align-items: center;
   margin-bottom: 12px;
   input {
-    width: 150px;
+    width: 140px;
     height: 36px;
     border-radius: 3px;
     padding: 0 12px;
@@ -71,7 +71,7 @@ export default function NumberDynamicColor(props) {
           {_l('为进度区间设置颜色。当鼠标悬停或字段值在对应区间，显示该区间设置的颜色。')}
         </div>
         {dynamicColor.map((item, index) => {
-          const deleteDisabled = dynamicColor.length === 1 || parseFloat(item.key) <= parseFloat(max);
+          const deleteDisabled = dynamicColor.length === 1;
           return (
             <DynamicColorWrap>
               <span>{_l('当数值≤')}</span>

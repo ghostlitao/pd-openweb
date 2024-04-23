@@ -2,7 +2,7 @@ import React from 'react';
 import cx from 'classnames';
 import styled from 'styled-components';
 import emptyCover from 'src/pages/worksheet/assets/emptyCover.png';
-import { getAdvanceSetting, getClassNameByExt, browserIsMobile } from 'src/util';
+import { getAdvanceSetting, getClassNameByExt, browserIsMobile, addBehaviorLog } from 'src/util';
 import { openControlAttachmentInNewTab } from 'worksheet/controllers/record';
 import { filter, includes, head, get } from 'lodash';
 import { isOpenPermit } from 'src/pages/FormSet/util.js';
@@ -26,11 +26,12 @@ const CoverImageWrap = styled.div`
     display: flex;
     align-items: center;
     justify-content: center;
+    border-radius: 3px 3px 0 0;
+    background: #fff;
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
     background-clip: content-box;
-    border-radius: 3px 3px 0 0;
 
     &.emptyCoverWrap {
       img {
@@ -104,7 +105,7 @@ const CoverImageWrap = styled.div`
   }
   &.dir-left {
     border: none;
-    border-right: 1px solid rgba(0, 0, 0, 0.08);
+    border-right: 1px solid rgba(0, 0, 0, 0.04);
     &.display-circle,
     &.display-square {
       border: none;
@@ -154,6 +155,7 @@ export default function CardCoverImage(props) {
   const { previewUrl, ext } = head(allAttachments) || {};
   const { viewType, appId, worksheetId } = currentView;
   const isGalleryView = String(viewType) === '3';
+  const isHierarchyView = String(viewType) === '2';
   const coverImage = data.coverImage || previewUrl;
   const coverSetting = getMultiRelateViewConfig(currentView, stateData);
   const { coverCid, coverType } = coverSetting;
@@ -161,7 +163,7 @@ export default function CardCoverImage(props) {
   const position = COVER_IMAGE_POSITION[coverposition];
 
   if (!coverCid) return null;
-  if (!isGalleryView && position !== 'left' && !coverImage && type !== 47) return null;
+  if (!isGalleryView && !isHierarchyView && position !== 'left' && !coverImage && type !== 47) return null;
   // 嵌入字段iframe展示
   const isIframeCover = isIframeControl(coverData);
   const previewAttachment = e => {
@@ -179,6 +181,11 @@ export default function CardCoverImage(props) {
       /* 是否不可下载 且 不可保存到知识和分享 */
       hideFunctions.push('download', 'share', 'saveToKnowlege');
     }
+
+    addBehaviorLog('previewFile', worksheetId, {
+      fileId: _.get(allAttachments, `[${0}].fileID`),
+      rowId,
+    });
     previewAttachments(
       {
         index: 0,
@@ -189,6 +196,9 @@ export default function CardCoverImage(props) {
         ),
         showThumbnail: true,
         hideFunctions: hideFunctions,
+        recordId: rowId,
+        worksheetId,
+        controlId,
       },
       {
         openControlAttachmentInNewTab: recordAttachmentSwitch

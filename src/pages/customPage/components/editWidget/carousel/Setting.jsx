@@ -8,6 +8,8 @@ import { Dropdown, Icon, LoadDiv, Radio } from 'ming-ui';
 import { Select, Divider } from 'antd';
 import { connect } from 'react-redux';
 import sheetApi from 'src/api/worksheet';
+import { replaceControlsTranslateInfo } from 'src/pages/worksheet/util';
+import { getTranslateInfo } from 'src/util';
 import _ from 'lodash';
 
 const Wrap = styled.div`
@@ -91,7 +93,7 @@ const fillColorType = [
   },
   {
     name: _l('黑色'),
-    value: '#333333',
+    value: '#454545',
   },
 ];
 
@@ -149,9 +151,15 @@ function Setting(props) {
         .then(res => {
           const { resultCode, views = [], template } = res;
           if (resultCode === 1) {
+            const controls = replaceControlsTranslateInfo(appId, template.controls);
             setDataSource({
-              views: views,
-              controls: template.controls,
+              views: views.map(data => {
+                return {
+                  ...data,
+                  name: getTranslateInfo(appId, data.viewId).name || data.name
+                }
+              }),
+              controls
             });
           }
           setLoading(false);
@@ -223,20 +231,20 @@ function Setting(props) {
         </Select>
       </div>
       <div className="mBottom16">
-        <div className="mBottom12">{_l('附件字段')}</div>
+        <div className="mBottom12">{_l('图片')}</div>
         <Select
           className={cx('customPageSelect w100', { Red: image && !_.find(controls, { controlId: image }) })}
           value={image ? (_.find(controls, { controlId: image }) ? image : _l('字段已删除')) : undefined}
           suffixIcon={<Icon icon="expand_more" className="Gray_9e Font20" />}
-          placeholder={_l('请选择附件字段')}
-          notFoundContent={<div className="valignWrapper">{_l('暂无附件字段')}</div>}
+          placeholder={_l('请选择字段')}
+          notFoundContent={<div className="valignWrapper">{_l('暂无字段')}</div>}
           getPopupContainer={() => document.querySelector('.customPageCarouselWrap .setting')}
           onChange={value => {
             setComponentConfig({ image: value });
           }}
         >
           {controls
-            .filter(c => c.type === 14)
+            .filter(c => [14, 47].includes(c.type))
             .map(c => (
               <Select.Option className="selectOptionWrapper" key={c.controlId} value={c.controlId}>
                 <div className="valignWrapper h100">
@@ -283,53 +291,55 @@ function Setting(props) {
       </div>
       <Divider className="mTop15 mBottom15" />
       <div className="Font14 bold mBottom15">{_l('轮播图设置')}</div>
-      <div className="mBottom16">
-        <div className="flexRow">
-          <div className="flex">
-            <div className="mBottom8">{_l('填充方式')}</div>
-            <Select
-              className="customPageSelect w100 fillSelect"
-              value={config.fill}
-              suffixIcon={<Icon icon="expand_more" className="Gray_9e Font20" />}
-              getPopupContainer={() => document.querySelector('.customPageCarouselWrap .setting')}
-              onChange={value => {
-                setConfig({ fill: value });
-              }}
-            >
-              {fillType.map(data => (
-                <Select.Option className="selectOptionWrapper" key={data.value} value={data.value}>
-                  <div className="valignWrapper h100">
-                    <span className="Font13 ellipsis">{data.name}</span>
-                  </div>
-                </Select.Option>
-              ))}
-            </Select>
-          </div>
-          {config.fill === 2 && (
-            <div className="flex mLeft10">
-              <div className="mBottom8">{_l('背景色')}</div>
+      {_.get(_.find(controls, { controlId: image }), 'type') === 14 && (
+        <div className="mBottom16">
+          <div className="flexRow">
+            <div className="flex">
+              <div className="mBottom8">{_l('填充方式')}</div>
               <Select
-                className="customPageSelect w100"
-                value={config.fillColor}
+                className="customPageSelect w100 fillSelect"
+                value={config.fill}
                 suffixIcon={<Icon icon="expand_more" className="Gray_9e Font20" />}
                 getPopupContainer={() => document.querySelector('.customPageCarouselWrap .setting')}
                 onChange={value => {
-                  setConfig({ fillColor: value });
+                  setConfig({ fill: value });
                 }}
               >
-                {fillColorType.map(data => (
+                {fillType.map(data => (
                   <Select.Option className="selectOptionWrapper" key={data.value} value={data.value}>
                     <div className="valignWrapper h100">
-                      <FillColor color={data.value} />
-                      <span className="mLeft5 Font13 ellipsis">{data.name}</span>
+                      <span className="Font13 ellipsis">{data.name}</span>
                     </div>
                   </Select.Option>
                 ))}
               </Select>
             </div>
-          )}
+            {config.fill === 2 && (
+              <div className="flex mLeft10">
+                <div className="mBottom8">{_l('背景色')}</div>
+                <Select
+                  className="customPageSelect w100"
+                  value={config.fillColor}
+                  suffixIcon={<Icon icon="expand_more" className="Gray_9e Font20" />}
+                  getPopupContainer={() => document.querySelector('.customPageCarouselWrap .setting')}
+                  onChange={value => {
+                    setConfig({ fillColor: value });
+                  }}
+                >
+                  {fillColorType.map(data => (
+                    <Select.Option className="selectOptionWrapper" key={data.value} value={data.value}>
+                      <div className="valignWrapper h100">
+                        <FillColor color={data.value} />
+                        <span className="mLeft5 Font13 ellipsis">{data.name}</span>
+                      </div>
+                    </Select.Option>
+                  ))}
+                </Select>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
       <div className="mBottom16">
         <div className="mBottom8">{_l('标题')}</div>
         <Select

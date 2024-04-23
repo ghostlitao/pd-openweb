@@ -8,7 +8,8 @@ import '@mdfe/ckeditor5-custom-build/build/translations/zh.js';
 import '@mdfe/ckeditor5-custom-build/build/translations/en.js';
 import filterXSS from 'xss';
 import { whiteList } from 'xss/lib/default';
-import _ from 'lodash';
+import _, { get } from 'lodash';
+import autoSize from 'ming-ui/decorators/autoSize';
 
 let whiteListClone = Object.assign({}, whiteList, {
   img: ['src'],
@@ -21,9 +22,11 @@ let whiteListClone = Object.assign({}, whiteList, {
   thead: [],
   tr: [],
   figure: [],
+  oembed: ['url'],
   label: [],
   input: [],
   button: [],
+  iframe: ['src'],
 });
 let newWhiteList = {};
 for (let key in whiteListClone) {
@@ -51,7 +54,7 @@ for (let key in whiteListClone) {
   ];
 }
 const Wrapper = styled.div(
-  ({ minHeight, maxWidth, maxHeight, dropdownPanelPosition = {} }) => `
+  ({ minHeight, maxWidth, maxHeight, dropdownPanelPosition = {}, width }) => `
   .ck {
     &.ckByHtml {
       .ck-content table td, .ck-content table th {
@@ -72,7 +75,7 @@ const Wrapper = styled.div(
       }
     }
     &.ck-toolbar-dropdown>.ck-dropdown__panel{
-      max-width: ${maxWidth}px ;
+      max-width: ${maxWidth || width}px ;
     }
     .ck-toolbar__items {
       height: 100% !important;
@@ -92,14 +95,13 @@ const Wrapper = styled.div(
         background: #ffffff !important;
         border: 1px solid #e8e8e8 !important;
         box-shadow: 0px 3px 6px 0px rgba(0, 0, 0, 0.16) !important;
-        // height: 36px !important;
       }
       .ck-dropdown__panel.ck-dropdown__panel_ne,
       .ck.ck-dropdown .ck-dropdown__panel.ck-dropdown__panel_se{
-        left: ${dropdownPanelPosition.left ? dropdownPanelPosition.left : 'initial'} ;
-        right:  ${dropdownPanelPosition.right ? dropdownPanelPosition.right : '0'};
-        max-height: 200px ;
-        overflow: auto;
+        // left: ${dropdownPanelPosition.left ? dropdownPanelPosition.left : 'initial'} ;
+        // right:  ${dropdownPanelPosition.right ? dropdownPanelPosition.right : '0'};
+        max-height: 300px ;
+        overflow-y: auto;
       }
     }
     .ck-content {
@@ -185,8 +187,10 @@ const Wrapper = styled.div(
 `,
 );
 class MyUploadAdapter {
-  constructor(loader) {
+  constructor(loader, tokenArgs, options = {}) {
     this.loader = loader;
+    this.tokenArgs = tokenArgs;
+    this.options = options;
   }
 
   // Starts the upload process.
@@ -250,24 +254,26 @@ class MyUploadAdapter {
       let fileExt = `.${File.GetExt(result.name)}`;
       let isPic = File.isPicture(fileExt);
       this.url = '';
-      getToken([{ bucket: isPic ? 4 : 2, ext: fileExt }]).then(res => {
-        data.append('token', res[0].uptoken);
-        data.append('file', result);
-        data.append('key', res[0].key);
-        data.append('x:serverName', res[0].serverName);
-        data.append('x:filePath', res[0].key.replace(res[0].fileName, ''));
-        data.append('x:fileName', res[0].fileName);
-        data.append(
-          'x:originalFileName',
-          encodeURIComponent(
-            res[0].fileName.indexOf('.') > -1 ? res[0].fileName.split('.').slice(0, -1).join('.') : res[0].fileName,
-          ),
-        );
-        var fileExt = '.' + File.GetExt(res[0].fileName);
-        data.append('x:fileExt', fileExt);
-        this.url = res[0].url;
-        this.xhr.send(data);
-      });
+      getToken([{ bucket: get(this, 'options.bucket') || (isPic ? 4 : 2), ext: fileExt }], 9, this.tokenArgs).then(
+        res => {
+          data.append('token', res[0].uptoken);
+          data.append('file', result);
+          data.append('key', res[0].key);
+          data.append('x:serverName', res[0].serverName);
+          data.append('x:filePath', res[0].key.replace(res[0].fileName, ''));
+          data.append('x:fileName', res[0].fileName);
+          data.append(
+            'x:originalFileName',
+            encodeURIComponent(
+              res[0].fileName.indexOf('.') > -1 ? res[0].fileName.split('.').slice(0, -1).join('.') : res[0].fileName,
+            ),
+          );
+          var fileExt = '.' + File.GetExt(res[0].fileName);
+          data.append('x:fileExt', fileExt);
+          this.url = res[0].url || (res[0].serverName && res[0].key) ? res[0].serverName + res[0].key : '';
+          this.xhr.send(data);
+        },
+      );
       this.xhr.addEventListener('load', () => {
         const response = this.xhr.response;
         if (!response || response.error) {
@@ -285,7 +291,11 @@ class MyUploadAdapter {
   }
 }
 
-export default ({
+const RichText = ({
+  bucket,
+  projectId,
+  appId,
+  worksheetId,
   data,
   disabled,
   onSave,
@@ -304,12 +314,13 @@ export default ({
   isRemark,
   clickInit = false,
   autoFocus = false,
+  width,
 }) => {
   const [MDEditor, setComponent] = useState(null);
   const editorDiv = useRef();
   let editorDom = useRef();
   const lang = () => {
-    const lang = getCookie('i18n_langtag') || getNavigatorLang();
+    const lang = getCookie('i18n_langtag') || md.global.Config.DefaultLang;
     if (lang === 'zh-Hant') {
       return 'zh';
     } else if (lang === 'ja') {
@@ -320,6 +331,11 @@ export default ({
       return 'en';
     }
   };
+  const tokenArgs = {
+    projectId,
+    appId,
+    worksheetId,
+  };
 
   function initEditor() {
     import('@mdfe/ckeditor5-custom-build').then(component => {
@@ -327,10 +343,13 @@ export default ({
       setTimeout(() => {
         if (!disabled && editorDom && editorDom.current && editorDom.current.editor) {
           editorDom.current.editor.plugins.get('FileRepository').createUploadAdapter = loader => {
-            return new MyUploadAdapter(loader);
+            return new MyUploadAdapter(loader, tokenArgs, { bucket });
           };
           if (clickInit || autoFocus) {
             editorDom.current.editor.focus();
+            editorDom.current.editor.model.change(writer => {
+              writer.setSelection(writer.createPositionAt(editorDom.current.editor.model.document.getRoot(), 'end'));
+            });
           }
         }
       }, 20);
@@ -358,7 +377,6 @@ export default ({
             contenteditable="false"
             dangerouslySetInnerHTML={{
               __html: filterXSS(data || placeholder, {
-                stripIgnoreTag: true,
                 whiteList: newWhiteList,
                 css: false,
               }),
@@ -380,7 +398,7 @@ export default ({
               : [
                   'undo',
                   'redo',
-                  'removeFormat',
+                  'findAndReplace',
                   '|',
                   'paragraph',
                   'heading1',
@@ -398,6 +416,7 @@ export default ({
                   'strikethrough',
                   'subscript',
                   'superscript',
+                  'removeFormat',
                   '|',
                   'bulletedList',
                   'numberedList',
@@ -416,7 +435,6 @@ export default ({
                   'codeBlock',
                   '|',
                   'sourceEditing',
-                  'findAndReplace',
                   // 'htmlEmbed',
                 ],
             shouldNotGroupWhenFull: showTool,
@@ -503,7 +521,12 @@ export default ({
           htmlSupport: {
             allow: [
               {
-                name: /^(p|span|div|img|iframe|table|tbody|thead|tfoot|tr|td|th|col|colgroup|caption|hr|br|ul|ol|li|blockquote|em|h[2-6])$/,
+                name: /^(p|span|div|img|table|tbody|thead|tfoot|tr|td|th|col|colgroup|caption|hr|br|ul|ol|li|blockquote|em|h[2-6])$/,
+                styles: true,
+              },
+              {
+                name: 'iframe',
+                attributes: true,
                 styles: true,
               },
             ],
@@ -515,7 +538,7 @@ export default ({
         onReady={editor => {
           if (editor && editor.plugins) {
             editor.plugins.get('FileRepository').createUploadAdapter = loader => {
-              return new MyUploadAdapter(loader);
+              return new MyUploadAdapter(loader, tokenArgs);
             };
           }
         }}
@@ -565,8 +588,10 @@ export default ({
           }
         }
       }}
+      width={width}
     >
       {content}
     </Wrapper>
   );
 };
+export default autoSize(RichText, { onlyWidth: true });

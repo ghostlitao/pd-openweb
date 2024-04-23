@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom';
 import departmentController from 'src/api/department';
 import { DepartmentList } from 'src/components/dialogSelectUser/GeneralSelect';
 import NoData from 'src/components/dialogSelectUser/GeneralSelect/NoData';
-import CreateDialog from 'src/pages/Admin/structure/modules/dialogCreateEditDept';
+import { createEditDeptDialog } from 'src/pages/Admin/user/membersDepartments/structure/components/CreateEditDeptDialog';
 import roleController from 'src/api/role';
 import { Dialog, LoadDiv, Radio, Checkbox } from 'ming-ui';
 import functionWrap from 'ming-ui/components/FunctionWrap';
@@ -111,9 +111,20 @@ class DialogSelectDept extends React.Component {
     }
   }
 
+  getDepartmentPath(dept) {
+    const pathData = this.getParentId(this.state.list, dept.departmentId);
+    return pathData
+      .filter(item => item.departmentId !== dept.departmentId)
+      .map((item, index) => ({
+        departmentId: item.departmentId,
+        departmentName: item.departmentName,
+        depth: index + 1,
+      }));
+  }
+
   selectFn() {
     const { selectedDepartment } = this.state;
-    const { checkIncludeChilren } = this.props; //是否选择包含子集
+    const { checkIncludeChilren, allPath } = this.props; //是否选择包含子集
 
     const selectFn = this.props.selectFn;
     selectFn.call(
@@ -125,6 +136,7 @@ class DialogSelectDept extends React.Component {
           departmentName: dept.departmentName,
           haveSubDepartment: dept.haveSubDepartment,
           userCount: dept.userCount,
+          ...(allPath ? { departmentPath: this.getDepartmentPath(dept) } : {}),
         }),
       ),
       checkIncludeChilren
@@ -135,6 +147,7 @@ class DialogSelectDept extends React.Component {
               departmentName: dept.departmentName,
               haveSubDepartment: dept.haveSubDepartment,
               userCount: dept.userCount,
+              ...(allPath ? { departmentPath: this.getDepartmentPath(dept) } : {}),
             }),
           )
         : null,
@@ -224,14 +237,16 @@ class DialogSelectDept extends React.Component {
           ? getTree(data)
           : this.state.list.concat(getTree(data));
         let states = !this.state.keywords
-          ? {}
+          ? {
+              allList: list,
+            }
           : {
               rootPageIndex: 1,
               departmentMoreIds: [],
             };
         this.setState({
           list,
-          activeIds: [list[0].departmentId],
+          activeIds: !_.isEmpty(list) ? [list[0].departmentId] : [],
           loading: false,
           rootLoading: false,
           rootPageAll: usePageDepartment && (list.length % this.state.pageSize > 0 || data.length <= 0),
@@ -407,10 +422,8 @@ class DialogSelectDept extends React.Component {
             //选中的是组织
             selectedDepartments = [];
           } else {
-            let list = this.getParentId(this.state.list, department.departmentId) || [];
-            list = list.map(it => it.departmentId);
             selectedDepartment.map(o => {
-              let l = this.getParentId(this.state.list, o.departmentId);
+              let l = this.getParentId(this.state.allList, o.departmentId) || [];
               l = l.map(it => it.departmentId);
               if (l.includes(department.departmentId)) {
                 selectedDepartments = selectedDepartments.filter(it => it.departmentId !== o.departmentId);
@@ -457,7 +470,7 @@ class DialogSelectDept extends React.Component {
 
   renderContent() {
     const { activeIds } = this.state;
-    if (this.state.loading && this.state.rootPageIndex <= 0) {
+    if (this.state.loading && this.state.rootPageIndex <= 1) {
       return <LoadDiv />;
     } else if (this.state.list && this.state.list.length) {
       const { selectedDepartment, list, keywords, departmentMoreIds } = this.state;
@@ -553,7 +566,7 @@ class DialogSelectDept extends React.Component {
   }
 
   render() {
-    const { title, width, onClose } = this.props;
+    const { title, width, onClose, className } = this.props;
     const { showProjectAll } = this.state;
     return (
       <Dialog
@@ -561,8 +574,7 @@ class DialogSelectDept extends React.Component {
         type="scroll"
         title={title}
         width={width}
-        // className={cx({ mobileDepartmentPickerDialog: this.props.displayType === 'mobile' })}
-        className={cx('mobileDepartmentPickerDialog')}
+        className={cx('mobileDepartmentPickerDialog', className)}
         ref={dialog => {
           this.dialog = dialog;
         }}
@@ -664,7 +676,7 @@ class DialogSelectDept extends React.Component {
               <div
                 className="selectDepartmentCreateBtn pointer ThemeColor3"
                 onClick={() => {
-                  CreateDialog({
+                  createEditDeptDialog({
                     type: 'create',
                     projectId: this.props.projectId,
                     departmentId: '',
@@ -705,11 +717,13 @@ export default function (opts) {
   const options = _.extend({}, DEFAULTS, opts);
 
   const listProps = {
+    className: options.className,
     title: options.title,
     width: options.displayType === 'mobile' ? '100%' : 480,
     unique: options.unique,
     projectId: options.projectId,
     returnCount: options.returnCount,
+    allPath: options.allPath,
     selectedDepartment: options.selectedDepartment,
     selectFn: options.selectFn,
     showCreateBtn: options.showCreateBtn,

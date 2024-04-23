@@ -2,6 +2,7 @@ import _ from 'lodash';
 import Constant from './constant';
 import { htmlDecodeReg } from 'src/util';
 import moment from 'moment';
+import Emotion from 'src/components/emotion/emotion';
 
 /**
  * 时间戳的转换
@@ -9,7 +10,6 @@ import moment from 'moment';
  * @returns {*}
  */
 export const createTimeSpan = dateStr => {
-
   if (!dateStr) return dateStr;
 
   const dateTime = new Date();
@@ -52,7 +52,7 @@ export const createTimeSpan = dateStr => {
     } else if (milliseconds > 86400000 && year == today.getFullYear()) {
       timeSpanStr = _l('%0月%1日', month + 1, day) + ' ' + hour + ':' + minute;
     } else {
-      timeSpanStr = _l('%0/%1/%2/', year, month + 1, day) + ' ' + hour + ':' + minute;
+      timeSpanStr = `${year}/${month + 1}/${day} ${hour}:${minute}`;
     }
   }
   return timeSpanStr;
@@ -122,9 +122,7 @@ const getTimeStamp = (time, prevTime, force) => {
     const ms = Number(_time.substring(_time.lastIndexOf('.') + 1));
     _time = new Date(_time.substring(0, _time.lastIndexOf('.'))).getTime() + ms;
   } else {
-    _time = moment(getCurrentTime())
-      .toDate()
-      .getTime();
+    _time = moment(getCurrentTime()).toDate().getTime();
   }
 
   let timeStamp = '';
@@ -366,8 +364,8 @@ export const formatNewSession = message => {
     message.value = message.isGroup
       ? message.to
       : md.global.Account.accountId === message.from
-        ? message.to
-        : message.from;
+      ? message.to
+      : message.from;
     message.logo = message.isGroup ? message.avatar : message.logo;
     message.type = message.isGroup ? Constant.SESSIONTYPE_GROUP : Constant.SESSIONTYPE_USER;
     message.time = message.time ? message.time : getCurrentTime();
@@ -501,11 +499,7 @@ export const tagConvert = msg => {
  * @param {*} message
  */
 export const messageContentParser = message => {
-  return $.fn.emotion.parse(
-    toLink(tagConvert(message))
-      .replace(/\n/g, '<br>')
-      .replace(/\s{2}/g, ' &nbsp;'),
-  );
+  return Emotion.parse(toLink(tagConvert(message)).replace(/\n/g, '<br>').replace(/\s{2}/g, ' &nbsp;'));
 };
 
 /**
@@ -726,7 +720,8 @@ export const isCount = (list, filterValue) => {
   for (let i = 0; i < list.length; i++) {
     const session = list[i] || {};
     const hasPush = 'isPush' in session ? session.isPush : true;
-    if (session && session.count && hasPush) {
+    const notSilient = 'isSilent' in session ? (!session.isSilent || [1, 2].includes(session.showBadge) )  : true;
+    if (session && session.count && hasPush && notSilient) {
       isCount = true;
       continue;
     }

@@ -5,8 +5,9 @@ import { Provider } from 'react-redux';
 import store from 'src/redux/configureStore';
 import SvgIcon from 'src/components/SvgIcon';
 import appManagement from 'src/api/appManagement';
-import CustomPageContent from 'worksheet/components/CustomPageContent';
+import CustomPageContent from 'src/pages/customPage/pageContent';
 import { ShareState, VerificationPass, SHARE_STATE } from 'worksheet/components/ShareState';
+import DocumentTitle from 'react-document-title';
 import { LoadDiv } from 'ming-ui';
 import styled from 'styled-components';
 import _ from 'lodash';
@@ -16,7 +17,7 @@ const Wrap = styled.div`
   .header {
     height: 44px;
     padding: 0 24px;
-    box-shadow: 0px 1px 2px rgba(0,0,0,0.16);
+    box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.16);
     justify-content: space-between;
     background-color: #fff;
     z-index: 1;
@@ -31,7 +32,16 @@ const Entry = props => {
 
   useEffect(() => {
     const clientId = sessionStorage.getItem(id);
-    getEntityShareById({ clientId }).then(data => {
+    window.clientId = clientId;
+    getEntityShareById({ clientId }).then(({ data }) => {
+      localStorage.setItem('currentProjectId', data.projectId);
+      preall(
+        { type: 'function' },
+        {
+          allownotlogin: true,
+          requestParams: { projectId: data.projectId },
+        },
+      );
       setLoading(false);
     });
   }, []);
@@ -39,9 +49,8 @@ const Entry = props => {
   const getEntityShareById = data => {
     return new Promise(async (resolve, reject) => {
       const result = await appManagement.getEntityShareById({ id, sourceType: 21, ...data });
-      const shareAuthor = _.get(result, 'data.shareAuthor');
       const clientId = _.get(result, 'data.clientId');
-      window.share = shareAuthor;
+      window.clientId = clientId;
       clientId && sessionStorage.setItem(id, clientId);
       setShare(result);
       resolve(result);
@@ -82,16 +91,15 @@ const Entry = props => {
       );
     }
     return <ShareState code={share.resultCode} />;
-  }
+  };
 
   if (share.resultCode === 1) {
     return (
       <Provider store={store}>
-        <CustomPageContent id={share.data.sourceId} />
+        <CustomPageContent id={share.data.sourceId} ids={{ worksheetId: share.data.sourceId }} />
       </Provider>
     );
   }
-
 
   const { appName, customerPageName, appIcon, appIconColor } = share.data || {};
 
@@ -99,15 +107,21 @@ const Entry = props => {
     <Wrap className="flexColumn h100">
       <div className="header flexRow alignItemsCenter">
         <div className="Font16 bold flexRow alignItemsCenter">
-          {appIcon && <SvgIcon url={appIcon} fill={appIconColor} size={32} />}
+          {appIcon && (
+            <div
+              className="svgWrap flexRow alignItemsCenter justifyContentCenter mRight10"
+              style={{ backgroundColor: appIconColor }}
+            >
+              <SvgIcon url={appIcon} fill="#fff" size={22} />
+            </div>
+          )}
           {appName && `${appName}-${customerPageName}`}
+          {appName && <DocumentTitle title={`${appName}-${customerPageName}`} />}
         </div>
       </div>
       {renderContent()}
     </Wrap>
   );
-}
+};
 
-const Comp = preall(Entry, { allownotlogin: true });
-
-ReactDom.render(<Comp />, document.getElementById('app'));
+ReactDom.render(<Entry />, document.getElementById('app'));

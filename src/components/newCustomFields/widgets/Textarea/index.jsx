@@ -4,7 +4,7 @@ import { Textarea, Linkify, Icon } from 'ming-ui';
 import cx from 'classnames';
 import TextScanQRCode from '../../components/TextScanQRCode';
 import { getIsScanQR } from '../../components/ScanQRCode';
-import { dealMaskValue } from 'src/pages/widgetConfig/widgetSetting/components/ControlMask/util';
+import { dealMaskValue } from 'src/pages/widgetConfig/widgetSetting/components/WidgetSecurity/util';
 import { browserIsMobile } from 'src/util';
 
 export default class Widgets extends Component {
@@ -27,7 +27,10 @@ export default class Widgets extends Component {
   isOnComposition = false;
 
   componentWillReceiveProps(nextProps, nextState) {
-    if (this.text) {
+    if (
+      this.text &&
+      (!_.isEqual(nextProps.enumDefault, this.props.enumDefault) || !_.isEqual(nextProps.value, this.props.value))
+    ) {
       this.text.value =
         nextProps.enumDefault === 2 ? (nextProps.value || '').replace(/\r\n|\n/g, ' ') : nextProps.value || '';
     }
@@ -37,7 +40,8 @@ export default class Widgets extends Component {
     // 单多行均有此问题
     // 文本框 tab键聚焦或shift+tab键聚焦 值不写入问题
     if ((!this.text && this.props.value) || (this.text && this.text.value !== this.props.value)) {
-      if (this.props.enumDefault !== 2) {
+      // 客户配置出现enumDefault为0的情况，统一按单行来
+      if (!_.includes([0, 2], this.props.enumDefault)) {
         this.joinTextareaEdit(e);
       } else {
         e.target.value = this.props.value || '';
@@ -137,7 +141,7 @@ export default class Widgets extends Component {
 
     // 开启扫码输入并且禁止手动输入
     if (startTextScanCode && disabledInput) {
-      hint = _l('请扫码输入');
+      hint = hint || _l('请扫码输入');
     } else if (disabledInput) {
       hint = _l('请在移动端扫码输入');
     }
@@ -161,7 +165,7 @@ export default class Widgets extends Component {
             onClick={this.joinTextareaEdit}
           >
             <span
-              className={cx({ maskHoverTheme: disabled && isMask })}
+              className={cx('WordBreak', { maskHoverTheme: disabled && isMask })}
               style={browserIsMobile() ? { wordWrap: 'break-word' } : {}}
               onClick={() => {
                 if (disabled && isMask) this.setState({ maskStatus: false });
@@ -229,7 +233,13 @@ export default class Widgets extends Component {
           />
         )}
 
-        {startTextScanCode && <TextScanQRCode projectId={projectId} disablePhoto={strDefault.split('')[0] === '1'} onChange={this.onChange} />}
+        {startTextScanCode && (
+          <TextScanQRCode
+            projectId={projectId}
+            disablePhoto={strDefault.split('')[0] === '1'}
+            onChange={this.onChange}
+          />
+        )}
       </Fragment>
     );
   }

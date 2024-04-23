@@ -6,8 +6,8 @@ import _ from 'lodash';
 
 export default class CalendarMembers extends Component {
   renderWxMembers() {
-    const { thirdUser, bindBusinessCard } = this.props;
-    const memberOtherProps = { bindBusinessCard };
+    const { thirdUser, editable, callback, argProps } = this.props;
+    const memberOtherProps = { editable, callback, argProps };
     return (
       <div className="membersContainer">
         {thirdUser.map(m => {
@@ -18,10 +18,10 @@ export default class CalendarMembers extends Component {
   }
 
   render() {
-    const { members, thirdUser, createUser, editable, addCalendarMember, bindBusinessCard } = this.props;
+    const { members, thirdUser, createUser, editable, addCalendarMember, callback, argProps } = this.props;
     const creator = _.find(members, m => m.accountID === createUser);
     const others = _.filter(members, m => m.accountID !== createUser);
-    const memberOtherProps = { bindBusinessCard };
+    const memberOtherProps = { editable, callback, argProps };
     return (
       <div className="calendarMember calRow">
         <Icon icon={'group'} className="Font18 calIcon" />
@@ -34,7 +34,7 @@ export default class CalendarMembers extends Component {
             {editable ? (
               <span onClick={addCalendarMember} className="addCalendarMember ThemeHoverColor3">
                 <Icon icon={'task-add-member-circle'} className="Font26 mRight15 addBtn" />
-                {_l('添加参与者')}
+                {_l('添加出席者')}
               </span>
             ) : null}
           </div>

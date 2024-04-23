@@ -21,6 +21,7 @@ import AttachmentInfo from './attachmentInfo';
 import PreviewHeader from './previewHeader/previewHeader';
 import AttachmentsLoading from './attachmentsLoading';
 import { formatFileSize, getClassNameByExt, addToken } from 'src/util';
+import { isWpsPreview } from '../../utils';
 import './attachmentsPreview.less';
 import { getPssId } from 'src/util/pssId';
 import _ from 'lodash';
@@ -134,8 +135,8 @@ class AttachmentsPreview extends React.Component {
     this.refImageViewer && this.refImageViewer.fitit();
   };
 
-  rotate = () => {
-    this.refImageViewer && this.refImageViewer.rotate();
+  rotate = ({ reverse } = {}) => {
+    this.refImageViewer && this.refImageViewer.rotate(reverse ? 90 : -90);
   };
 
   bigit = () => {
@@ -152,7 +153,17 @@ class AttachmentsPreview extends React.Component {
     if (!this.props.attachments.length) {
       return <LoadDiv />;
     }
-    const { showTitle, attachments, index, showAttInfo, hideFunctions, extra, error, options = {} } = this.props;
+    const {
+      showTitle,
+      attachments,
+      index,
+      showAttInfo,
+      hideFunctions,
+      extra,
+      error,
+      options = {},
+      previewService,
+    } = this.props;
     const currentAttachment = attachments[index];
     const { ext, name, previewAttachmentType } = currentAttachment;
     let { previewType } = currentAttachment;
@@ -167,8 +178,73 @@ class AttachmentsPreview extends React.Component {
       previewType = PREVIEW_TYPE.TXT;
     }
 
+    if (
+      _.includes(
+        [
+          'md',
+          'js',
+          'ts',
+          'java',
+          'py',
+          'rb',
+          'cpp',
+          'c',
+          'html',
+          'css',
+          'php',
+          'swift',
+          'go',
+          'rust',
+          'lua',
+          'sql',
+          'pl',
+          'sh',
+          'md',
+          'json',
+          'xml',
+          'cs',
+          'vb',
+          'scala',
+          'perl',
+          'r',
+          'matlab',
+          'groovy',
+          'jsp',
+          'jsx',
+          'tsx',
+          'sass',
+          'less',
+          'scss',
+          'coffee',
+          'asm',
+          'bat',
+          'powershell',
+          'h',
+          'hpp',
+          'm',
+          'mm',
+          'd',
+          'kt',
+          'groovy',
+          'ini',
+          'yml',
+        ],
+        ext,
+      ) &&
+      previewType !== PREVIEW_TYPE.MARKDOWN &&
+      previewAttachmentType === 'QINIU' &&
+      _.get(currentAttachment, 'sourceNode.path')
+    ) {
+      previewType = ext === 'md' ? PREVIEW_TYPE.MARKDOWN : PREVIEW_TYPE.CODE;
+      viewUrl = _.get(currentAttachment, 'sourceNode.path');
+    }
+
     if (!currentAttachment.msg && getClassNameByExt(ext) === 'fileIcon-mp3') {
       previewType = PREVIEW_TYPE.VIDEO;
+    }
+
+    if (previewService === 'wps' && ext === 'wps') {
+      previewType = PREVIEW_TYPE.IFRAME;
     }
 
     const isFullScreen = this.props.fullscreen; // ***** TODO 全屏
@@ -198,7 +274,13 @@ class AttachmentsPreview extends React.Component {
                   ref={prev => {
                     this.btnPrev = prev;
                   }}
-                  onClick={this.props.actions.prev}
+                  onClick={() => {
+                    this.props.actions.prev({
+                      recordId: options.recordId,
+                      worksheetId: options.worksheetId,
+                      controlId: options.controlId,
+                    });
+                  }}
                 >
                   <i className="icon-arrow-left-border" />
                 </span>
@@ -209,7 +291,13 @@ class AttachmentsPreview extends React.Component {
                   ref={next => {
                     this.btnNext = next;
                   }}
-                  onClick={this.props.actions.next}
+                  onClick={() => {
+                    this.props.actions.next({
+                      recordId: options.recordId,
+                      worksheetId: options.worksheetId,
+                      controlId: options.controlId,
+                    });
+                  }}
                 >
                   <i className="icon-arrow-right-border" />
                 </span>
@@ -263,7 +351,8 @@ class AttachmentsPreview extends React.Component {
                     );
                   }
                   case PREVIEW_TYPE.IFRAME:
-                    {/*if ((ext || '').toLocaleLowerCase() === 'pdf' && !window.isDingTalk) {
+                    {
+                      /*if ((ext || '').toLocaleLowerCase() === 'pdf' && !window.isDingTalk) {
                       return (
                         <iframe
                           width="100%"
@@ -273,11 +362,22 @@ class AttachmentsPreview extends React.Component {
                         />
                       );
                     }
-                    */}
+                    */
+                    }
                     if (previewAttachmentType === 'KC' && extra && extra.shareFolderId) {
                       viewUrl = previewUtil.urlAddParams(viewUrl, { shareFolderId: extra.shareFolderId });
                     }
+
+                    if (previewService === 'wps' && isWpsPreview(ext)) {
+                      viewUrl = `${md.global.Config.WpsUrl}/view?url=${encodeURIComponent(
+                        currentAttachment.viewUrl,
+                      )}&attname=${encodeURIComponent(
+                        currentAttachment.name || currentAttachment.sourceNode.originalFilename,
+                      )}.${ext}`;
+                    }
+
                     viewUrl = addToken(viewUrl, false);
+
                     return (
                       <iframe
                         className="fileViewer iframeViewer"
@@ -429,6 +529,7 @@ function mapStateToProps(state) {
     index: state.index,
     error: state.error,
     showAttInfo: state.showAttInfo,
+    previewService: state.previewService,
   };
 }
 

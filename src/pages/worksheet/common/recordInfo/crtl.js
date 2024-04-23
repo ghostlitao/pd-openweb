@@ -1,5 +1,6 @@
 import quickSelectUser from 'ming-ui/functions/quickSelectUser';
 import worksheetAjax from 'src/api/worksheet';
+import publicWorksheetApi from 'src/api/publicWorksheet';
 import { getRowDetail } from 'worksheet/api';
 import { getCustomWidgetUri } from 'src/pages/worksheet/constants/common';
 import { formatControlToServer, getTitleTextFromControls } from 'src/components/newCustomFields/tools/utils.js';
@@ -8,6 +9,10 @@ import { getAppFeaturesPath } from 'src/util';
 import { replacePorTalUrl } from 'src/pages/PortalAccount/util';
 import createTask from 'src/components/createTask/createTask';
 import _ from 'lodash';
+import { handleRecordError, postWithToken, replaceBtnsTranslateInfo } from 'worksheet/util';
+import { getRuleErrorInfo } from 'src/components/newCustomFields/tools/filterFn';
+import appManagement from 'src/api/appManagement';
+import { exportSheet } from 'worksheet/components/ChildTable/redux/actions';
 
 export function getWorksheetInfo(...args) {
   return worksheetAjax.getWorksheetInfo(...args);
@@ -25,19 +30,24 @@ export function loadRecord({
   controls,
 }) {
   return new Promise((resolve, reject) => {
-    const apiargs = {
+    let apiargs = {
       worksheetId,
       rowId: recordId,
       getType,
       appId,
       viewId,
-      checkView: true,
+      checkView: !!viewId,
     };
     if (instanceId && workId) {
       apiargs.getType = 9;
       apiargs.instanceId = instanceId;
       apiargs.workId = workId;
     }
+
+    if (_.get(window, 'shareState.isPublicWorkflowRecord') && _.get(window, 'shareState.shareId')) {
+      apiargs.shareId = _.get(window, 'shareState.shareId');
+    }
+
     let promise;
     if (!getRules) {
       promise = Promise.all([(promise = getRowDetail(apiargs, controls, { fireImmediately: true }))]);
@@ -53,10 +63,6 @@ export function loadRecord({
     promise
       .then(([row, rules]) => {
         if (row.resultCode === 1) {
-          if (instanceId && workId && !viewId) {
-            // 工作流调用
-            row.formData = row.formData.map(c => Object.assign({}, c, { fieldPermission: '111' }));
-          }
           resolve(rules ? { ...row, rules } : row);
         } else {
           reject(row);
@@ -81,13 +87,16 @@ export function updateRecord(
     isDraft,
     triggerUniqueError,
     updateSuccess,
+    allowEmptySubmit,
+    setSublistUniqueError = () => {},
+    setRuleError = () => {},
   },
   callback = () => {},
 ) {
   const updatedControls = data
     .filter(control => updateControlIds.indexOf(control.controlId) > -1 && control.type !== 30)
     .map(control => formatControlToServer(control, { isDraft }));
-  const apiargs = {
+  let apiargs = {
     appId,
     viewId,
     getType,
@@ -95,6 +104,7 @@ export function updateRecord(
     rowId: recordId,
     newOldControl: updatedControls,
     projectID: projectId,
+    pushUniqueId: md.global.Config.pushUniqueId,
   };
   if (instanceId && workId) {
     apiargs.getType = 9;
@@ -102,8 +112,17 @@ export function updateRecord(
     apiargs.workId = workId;
   }
 
+  const isPublicForm = _.get(window, 'shareState.isPublicForm') && window.shareState.shareId;
+
+  if (isPublicForm) {
+    apiargs = {
+      rowId: recordId,
+      newOldControl: updatedControls,
+    };
+  }
+
   // 处理工作流的暂存直接点击的情况
-  if (!updatedControls.length) {
+  if (!updatedControls.length && !allowEmptySubmit) {
     if (!(instanceId && workId)) {
       alert(_l('没有需要保存的字段'), 2);
     }
@@ -111,7 +130,7 @@ export function updateRecord(
     return;
   }
 
-  worksheetAjax
+  (isPublicForm ? publicWorksheetApi : worksheetAjax)
     .updateWorksheetRow(apiargs)
     .then(res => {
       if (res && res.data) {
@@ -126,9 +145,15 @@ export function updateRecord(
       } else {
         if (res.resultCode === 11) {
           triggerUniqueError(res.badData);
+        } else if (res.resultCode === 22) {
+          setSublistUniqueError(res.badData);
+          handleRecordError(res.resultCode);
+        } else if (res.resultCode === 32) {
+          setRuleError(res.badData);
         } else {
-          alert(_l('保存失败，请稍后重试'), 2);
+          handleRecordError(res.resultCode);
         }
+        callback(true);
       }
     })
     .fail(err => {
@@ -137,7 +162,7 @@ export function updateRecord(
     });
 }
 
-export function updateRecordControl({ appId, viewId, worksheetId, recordId, cell, cells = [] }) {
+export function updateRecordControl({ appId, viewId, worksheetId, recordId, cell, rules, cells = [] }) {
   return new Promise((resolve, reject) => {
     if (_.isEmpty(cells) && cell) {
       cells = [cell];
@@ -152,11 +177,15 @@ export function updateRecordControl({ appId, viewId, worksheetId, recordId, cell
       })
       .then(data => {
         if (!data.data) {
-          if (data.resultCode === 11) {
-            alert(_l('编辑失败，%0不允许重复', cell.controlName || ''), 3);
-          } else {
-            alert(_l('编辑失败'), 3);
+          if (data.resultCode === 32) {
+            const errorResult = getRuleErrorInfo(rules, data.badData);
+            if (_.get(errorResult, '0.errorInfo.0')) {
+              alert('编辑失败，' + _.get(errorResult, '0.errorInfo.0.errorMessage'), 2);
+            }
+            reject();
+            return;
           }
+          handleRecordError(data.resultCode, cell);
           reject();
         } else {
           resolve(data.data);
@@ -165,12 +194,12 @@ export function updateRecordControl({ appId, viewId, worksheetId, recordId, cell
   });
 }
 
-export function deleteRecord({ worksheetId, recordId, viewId, appId, deleteType }) {
+export function deleteRecord({ worksheetId, recordIds, recordId, viewId, appId, deleteType }) {
   return new Promise((resolve, reject) => {
     worksheetAjax
       .deleteWorksheetRows({
         worksheetId,
-        rowIds: [recordId],
+        rowIds: recordIds || [recordId],
         viewId,
         appId,
         deleteType: deleteType === 21 ? deleteType : undefined,
@@ -201,7 +230,7 @@ export class RecordApi {
       worksheetAjax
         .getWorksheetBtns(_.assign({}, this.baseArgs, options))
         .then(data => {
-          resolve(data);
+          resolve(replaceBtnsTranslateInfo(this.baseArgs.appId, data));
         })
         .fail(err => {
           reject(err);
@@ -332,7 +361,7 @@ export function handleChangeOwner({ recordId, ownerAccountId, appId, projectId, 
   });
 }
 
-export async function handleShare({ isCharge, appId, worksheetId, viewId, recordId }, callback) {
+export async function handleShare({ isCharge, appId, worksheetId, viewId, recordId, hidePublicShare }, callback) {
   try {
     const row = await getRowDetail({ appId, worksheetId, viewId, rowId: recordId });
     let recordTitle = getTitleTextFromControls(row.formData);
@@ -343,6 +372,7 @@ export async function handleShare({ isCharge, appId, worksheetId, viewId, record
       title: _l('分享记录'),
       isPublic: shareRange === 2,
       isCharge: allowChange,
+      hidePublicShare,
       params: {
         appId,
         worksheetId,
@@ -416,4 +446,35 @@ export function handleCustomWidget(worksheetId) {
       },
     });
   });
+}
+
+export async function exportRelateRecordRecords({
+  appId,
+  worksheetId,
+  viewId,
+  projectId,
+  exportControlsId,
+  downLoadUrl,
+  rowIds,
+  rowId,
+  controlId,
+  fileName,
+  onDownload,
+} = {}) {
+  const token = await appManagement.getToken({ worksheetId, viewId, tokenType: 8 });
+  const args = {
+    token,
+    accountId: md.global.Account.accountId,
+    worksheetId,
+    appId,
+    viewId,
+    projectId,
+    exportControlsId,
+    rowIds,
+  };
+  if (typeof rowIds !== 'undefined') {
+    postWithToken(`${downLoadUrl}/ExportExcel/Export`, { worksheetId, tokenType: 8 }, args);
+  } else {
+    exportSheet({ worksheetId, rowId, controlId, fileName, onDownload })();
+  }
 }

@@ -2,11 +2,10 @@
 import React, { Component } from 'react';
 import cx from 'classnames';
 import ajaxRequest from 'src/api/taskCenter';
-import DialogLayer from 'src/components/mdDialog/dialog';
 import CreateFolder from '../createFolder/createFolder';
-import { navigateTo } from 'src/router/navigateTo';
 import { errorMessage } from '../../utils/utils';
 import _ from 'lodash';
+import { LoadDiv, Dialog } from 'ming-ui';
 
 export default class FolderTemplate extends Component {
   constructor(props) {
@@ -87,29 +86,25 @@ export default class FolderTemplate extends Component {
   delTemplate(templateId, evt) {
     evt.stopPropagation();
 
-    $.DialogLayer({
-      dialogBoxID: 'delTemplate',
-      showClose: false,
-      container: {
-        header: _l('您确定要删除当前模板吗？'),
-        content: _l('模板被删除后，将无法恢复'),
-        yesText: _l('删除'),
-        yesFn: () => {
-          ajaxRequest
-            .removeMyFolderTemplateOne({
-              templateId,
-            })
-            .then(source => {
-              if (source.status) {
-                alert(_l('删除成功'));
-                const templates = this.state.templates;
-                _.remove(templates, template => template.templateId === templateId);
-                this.setState({ templates });
-              } else {
-                errorMessage(source.error);
-              }
-            });
-        },
+    Dialog.confirm({
+      title: _l('您确定要删除当前模板吗？'),
+      children: <div>{_l('模板被删除后，将无法恢复')}</div>,
+      okText: _l('删除'),
+      onOk: () => {
+        ajaxRequest
+          .removeMyFolderTemplateOne({
+            templateId,
+          })
+          .then(source => {
+            if (source.status) {
+              alert(_l('删除成功'));
+              const templates = this.state.templates;
+              _.remove(templates, template => template.templateId === templateId);
+              this.setState({ templates });
+            } else {
+              errorMessage(source.error);
+            }
+          });
       },
     });
   }
@@ -117,26 +112,17 @@ export default class FolderTemplate extends Component {
   render() {
     const templateType = this.state.templateType;
     const templates = this.state.templates;
-    const settings = {
-      dialogBoxID: 'folderTemplate',
-      width: templateType.length === 1 ? 615 : 760,
-      isSameClose: false,
-      container: {
-        header: _l('新建项目'),
-        yesText: '',
-        noText: '',
-        noFn: this.props.onClose,
-      },
-    };
-
-    // 请求未完成
-    if (templateType.length === 0) {
-      return <DialogLayer {...settings} />;
-    }
 
     return (
-      <DialogLayer {...settings}>
-        <div className="flexRow">
+      <Dialog
+        className="folderTemplate"
+        visible
+        width={templateType.length === 1 ? 615 : 760}
+        title={_l('新建项目')}
+        showFooter={false}
+        onCancel={this.props.onClose}
+      >
+        {templateType.length === 0 ? <LoadDiv /> : <div className="flexRow">
           {templateType.length > 1 && (
             <ul className="folderTemplateSidebar">
               {templateType.map((type, i) => {
@@ -155,7 +141,7 @@ export default class FolderTemplate extends Component {
           )}
 
           <ul className="flex folderTemplateList">
-            {templates.length ? undefined : <div dangerouslySetInnerHTML={{ __html: LoadDiv() }} />}
+            {templates.length ? undefined : <LoadDiv />}
             {templates
               .filter(tpl => tpl.templateId || (!tpl.templateId && this.state.selectType === '0'))
               .map((tpl, i) => {
@@ -182,9 +168,7 @@ export default class FolderTemplate extends Component {
                       <div className="folderTemplateDesc">
                         <div>{tpl.title ? tpl.title : <span className="Font15">{tpl.templateName}</span>}</div>
                       </div>
-                    ) : (
-                      undefined
-                    )}
+                    ) : undefined}
 
                     {tpl.templateId ? (
                       <div className="folderTemplateOperator">
@@ -196,18 +180,14 @@ export default class FolderTemplate extends Component {
                           >
                             <i className="icon-task-new-delete" />
                           </span>
-                        ) : (
-                          undefined
-                        )}
+                        ) : undefined}
                       </div>
-                    ) : (
-                      undefined
-                    )}
+                    ) : undefined}
                   </li>
                 );
               })}
           </ul>
-        </div>
+        </div>}
 
         {this.state.showCreateFolder ? (
           <CreateFolder
@@ -222,10 +202,8 @@ export default class FolderTemplate extends Component {
               this.setState({ showCreateFolder: false });
             }}
           />
-        ) : (
-          undefined
-        )}
-      </DialogLayer>
+        ) : undefined}
+      </Dialog>
     );
   }
 }

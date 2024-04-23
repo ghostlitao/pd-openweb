@@ -9,9 +9,12 @@ import appManagement from 'src/api/appManagement';
 import './EditUserExtendInfo.less';
 
 const EditUserExtendInfoCon = styled.div`
+  padding: 0 40px;
+  overflow: auto;
+  height: 100%;
   .selectWorksheet,
   .selectControl {
-    width: 560px;
+    width: 100%;
     height: 36px;
   }
   .ant-select-focused:not(.ant-select-disabled).ant-select:not(.ant-select-customize-input) .ant-select-selector {
@@ -43,9 +46,6 @@ const EditUserExtendInfoCon = styled.div`
   .clearBtn:hover {
     border: 1px solid #ccc;
     background: #fff !important;
-  }
-  .buttons {
-    width: 560px;
   }
   .cancelBtn {
     float: right;
@@ -152,7 +152,7 @@ export default function EditUserExtendInfo(props) {
         {_l(
           '通过工作表管理应用成员额外的扩展信息字段，在角色权限、筛选器中可以使用用户的扩展信息字段来作为动态筛选条件',
         )}
-        <Support className="help" type={3} href="https://help.mingdao.com/zh/user4.html" text={_l('帮助')} />
+        <Support className="help" type={3} href="https://help.mingdao.com/user4" text={_l('帮助')} />
       </div>
       <div className="selectTitle Bold valignWrapper mTop30">{_l('选择应用')}</div>
       <Select

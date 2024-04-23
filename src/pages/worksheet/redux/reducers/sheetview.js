@@ -1,17 +1,4 @@
 import _ from 'lodash';
-// 表视图记录更新临时存储
-export function rowCache(state = {}, action) {
-  switch (action.type) {
-    case 'WORKSHEET_SHEETVIEW_UPDATE_ROW_CACHE':
-      return { ...state, [action.recordId + '-' + action.controlId]: action.value };
-    case 'WORKSHEET_INIT':
-    case 'WORKSHEET_SHEETVIEW_FETCH_ROWS_START':
-    case 'WORKSHEET_SHEETVIEW_CLEAR':
-      return {};
-    default:
-      return state;
-  }
-}
 
 // 表视图表格属性
 
@@ -74,7 +61,7 @@ export function sheetFetchParams(state = initialSheetFetchParams, action) {
     case 'WORKSHEET_SHEETVIEW_CHANGE_PAGEINDEX':
       return { ...state, pageIndex: action.pageIndex };
     case 'WORKSHEET_SHEETVIEW_CHANGE_PAGESIZE':
-      return { ...state, pageSize: action.pageSize, pageIndex: 1 };
+      return { ...state, pageSize: action.pageSize, pageIndex: action.pageIndex || 1 };
     case 'WORKSHEET_SHEETVIEW_UPDATE_SORTS':
       return {
         ...state,

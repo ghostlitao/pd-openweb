@@ -3,7 +3,7 @@ import { ScrollView, Dialog, LoadDiv } from 'ming-ui';
 import cx from 'classnames';
 import { APP_TYPE, DATE_TYPE, TRIGGER_ID } from '../../enum';
 import flowNode from '../../../api/flowNode';
-import { checkConditionsIsNull, getIcons, getStartNodeColor, checkJSON } from '../../utils';
+import { checkConditionsIsNull, getIcons, getStartNodeColor, checkJSON, clearFlowNodeMapParameter } from '../../utils';
 import { DetailHeader, DetailFooter } from '../components';
 import LoopContent from './LoopContent';
 import WebhookContent from './WebhookContent';
@@ -48,7 +48,7 @@ export default class Start extends Component {
   /**
    * 获取动作详情
    */
-  getNodeDetail = (appId, fields) => {
+  getNodeDetail = ({ appId = undefined, fields = undefined } = {}) => {
     const { processId, selectNodeId, selectNodeType, flowInfo, isIntegration } = this.props;
 
     flowNode
@@ -57,12 +57,20 @@ export default class Start extends Component {
         { isIntegration },
       )
       .then(result => {
-        if (result.appType === APP_TYPE.LOOP && !result.executeTime) {
-          result.executeTime = moment().format('YYYY-MM-DD 08:00');
-        }
-
         if (result.appType === APP_TYPE.PBC && !flowInfo.child && !result.controls.length) {
           result.controls = [{ controlId: uuidv4(), controlName: '', type: 2, alias: '', required: false, desc: '' }];
+        }
+
+        if (result.appType === APP_TYPE.APPROVAL_START && fields) {
+          result = Object.assign(this.state.data, { fields: result.fields, flowNodeMap: result.flowNodeMap });
+        }
+
+        if (
+          result.appType === APP_TYPE.APPROVAL_START &&
+          (!result.processConfig.userTaskNullMaps || result.processConfig.userTaskNullMaps[0])
+        ) {
+          result.processConfig.userTaskNullMaps = { [result.processConfig.userTaskNullPass ? 1 : 3]: [] };
+          result.processConfig.userTaskNullPass = false;
         }
 
         this.setState({ data: result });
@@ -85,8 +93,10 @@ export default class Start extends Component {
     const { data, saveRequest } = this.state;
     // 处理按时间触发时间日期
     const isDateField =
-      _.get(_.find(data.controls, ({ controlId }) => controlId === _.get(data, 'assignFieldId')), 'type') ===
-      START_NODE_EXECUTE_DATE_TYPE;
+      _.get(
+        _.find(data.controls, ({ controlId }) => controlId === _.get(data, 'assignFieldId')),
+        'type',
+      ) === START_NODE_EXECUTE_DATE_TYPE;
     const {
       appId,
       appType,
@@ -112,6 +122,8 @@ export default class Start extends Component {
       processConfig,
       hooksAll,
       hooksBody,
+      fields,
+      flowNodeMap,
     } = data;
     let { time } = data;
     time = isDateField ? '' : time;
@@ -191,6 +203,15 @@ export default class Start extends Component {
         alert(_l('结束执行时间不能小于开始执行时间'), 2);
         return;
       }
+
+      if (
+        appType === APP_TYPE.APPROVAL_START &&
+        ((processConfig.initiatorMaps[5] && !(processConfig.initiatorMaps[5] || []).length) ||
+          (processConfig.userTaskNullMaps[5] && !(processConfig.userTaskNullMaps[5] || []).length))
+      ) {
+        alert(_l('必须指定代理人'), 2);
+        return;
+      }
     }
 
     flowNode
@@ -226,6 +247,8 @@ export default class Start extends Component {
           returns: returns.filter(o => !!o.name),
           processConfig,
           hooksBody,
+          fields,
+          flowNodeMap: clearFlowNodeMapParameter(flowNodeMap),
         },
         { isIntegration: this.props.isIntegration },
       )
@@ -242,7 +265,7 @@ export default class Start extends Component {
    * 切换工作表
    */
   switchWorksheet = appId => {
-    const refreshSource = () => this.getNodeDetail(appId);
+    const refreshSource = () => this.getNodeDetail({ appId });
 
     if (this.state.data.appId) {
       Dialog.confirm({
@@ -278,17 +301,13 @@ export default class Start extends Component {
     const isNatural = data.appId || _.includes([APP_TYPE.USER, APP_TYPE.DEPARTMENT], data.appType);
 
     return (
-      <div className="mTop25">
+      <div className="addActionBtn mTop25">
         <span
-          className={cx(
-            'workflowDetailStartBtn',
-            isNatural
-              ? 'ThemeColor3 ThemeBorderColor3 ThemeHoverColor2 ThemeHoverBorderColor2'
-              : 'Gray_bd borderColor_c',
-          )}
+          className={isNatural ? 'ThemeBorderColor3' : 'Gray_bd borderColor_c'}
           onClick={() => isNatural && this.updateSource({ operateCondition: [[{}]] })}
         >
-          {_l('设置筛选条件')}
+          <i className="icon-add Font16" />
+          {_l('筛选条件')}
         </span>
         <div className={cx('mTop10', isNatural ? 'Gray_9e' : 'Gray_bd')}>
           {_l('设置筛选条件，仅使满足条件的记录进入流程。')}
@@ -403,7 +422,12 @@ export default class Start extends Component {
                 )}
                 {data.triggerId === TRIGGER_ID.DISCUSS && <DiscussContent data={data} />}
                 {data.appType === APP_TYPE.APPROVAL_START && (
-                  <ApprovalProcess data={data} updateSource={this.updateSource} />
+                  <ApprovalProcess
+                    {...this.props}
+                    data={data}
+                    getNodeDetail={this.getNodeDetail}
+                    updateSource={this.updateSource}
+                  />
                 )}
               </Fragment>
             )}

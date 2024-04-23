@@ -16,7 +16,7 @@ const VerifyButton = styled(Button)`
   margin-top: 32px;
 `;
 const HierarchyViewConfigWrap = styled.div`
-  padding: 0 32px 24px 32px;
+  padding: 0 32px 24px;
   .relateTypeRadio {
     .Radio:last-child {
       margin-left: 88px;
@@ -99,7 +99,7 @@ export default function HierarchyViewConfig({
 
   const handleClick = () => {
     if (isRelateOtherSheet) {
-      handleSelect({ childType: relateType, viewControls: hierarchyControls });
+      handleSelect({ childType: relateType, viewControls: hierarchyControls, viewControl: '' });
       return;
     }
     if (singleRelate) {

@@ -1,8 +1,6 @@
 import React, { useState, Fragment, useEffect } from 'react';
-import Dialog from 'rc-dialog';
-import 'rc-dialog/assets/index.css';
 import { Icon } from 'ming-ui';
-import { ConfigProvider, Button, Tooltip } from 'antd';
+import { ConfigProvider, Button, Tooltip, Modal } from 'antd';
 import { Header, EditWidgetContent } from '../../../styled';
 import styled from 'styled-components';
 import Preview from './Preview';
@@ -52,7 +50,7 @@ const defaultConfig = {
   effect: 'scrollx',
   autoplaySpeed: 3,
   fill: 1,
-  fillColor: '#333333',
+  fillColor: '#454545',
   displayMode: 0,
 };
 
@@ -70,12 +68,17 @@ export default function Carousel(props) {
   };
 
   return (
-    <Dialog
+    <Modal
       maskStyle={{ zIndex: 999 }}
       wrapClassName="customPageCarouselWrap"
       className="editWidgetDialogWrap"
       visible
-      onClose={onClose}
+      transitionName=""
+      maskTransitionName=""
+      width="100%"
+      footer={null}
+      centered={true}
+      onCancel={onClose}
     >
       <Header>
         <div className="typeName">{_l('轮播图')}</div>
@@ -122,6 +125,6 @@ export default function Carousel(props) {
           />
         </Wrap>
       </EditWidgetContent>
-    </Dialog>
+    </Modal>
   );
 }

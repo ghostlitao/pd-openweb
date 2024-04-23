@@ -1,9 +1,13 @@
 import React, { createRef, useState, useEffect, useRef } from 'react';
 import styled from 'styled-components';
-import { updateViewAdvancedSetting } from 'src/pages/worksheet/common/ViewConfig/util';
+import {
+  updateViewAdvancedSetting,
+  formatObjWithNavfilters,
+  formatAdvancedSettingByNavfilters,
+} from 'src/pages/worksheet/common/ViewConfig/util';
 import { Icon, Tooltip } from 'ming-ui';
 import './index.less';
-import { FASTFILTER_CONDITION_TYPE, getSetDefault } from './util';
+import { getSetDefault } from './util';
 import { Checkbox } from 'ming-ui';
 import bgFastFilters from './img/bgFastFilters.png';
 import FastFilterCon from './fastFilterCon';
@@ -30,7 +34,7 @@ const Wrap = styled.div`
     .cover {
       padding-top: 60px;
       img {
-        height: 212px;
+        width: 100%;
         display: block;
       }
     }
@@ -74,25 +78,29 @@ export default function FastFilter(params) {
   };
   const onEdit = id => {
     setFastFilter(true, id);
+    setShowAddCondition(false);
   };
   const onDelete = controlId => {
     updateView(fastFilters.filter(o => o.controlId !== controlId));
   };
   const updateView = fastFilters => {
+    let data =
+      fastFilters.length > 0
+        ? {
+            ...advancedSetting,
+            enablebtn: fastFilters.length > 3 ? '1' : advancedSetting.enablebtn,
+          }
+        : {
+            ...advancedSetting,
+            clicksearch: '0', //
+            enablebtn: '0',
+          };
     updateCurrentView(
       Object.assign(view, {
-        fastFilters,
-        advancedSetting:
-          fastFilters.length > 0
-            ? {
-                ...advancedSetting,
-                enablebtn: fastFilters.length > 3 ? '1' : advancedSetting.enablebtn,
-              }
-            : {
-                ...advancedSetting,
-                clicksearch: '0', //
-                enablebtn: '0',
-              },
+        fastFilters: fastFilters.map(o => {
+          return formatObjWithNavfilters(o);
+        }),
+        advancedSetting: formatAdvancedSettingByNavfilters(view, _.omit(data, 'navfilters')),
         editAttrs: ['fastFilters', 'advancedSetting'],
       }),
     );

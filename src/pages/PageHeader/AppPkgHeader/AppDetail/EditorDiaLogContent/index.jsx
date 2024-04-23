@@ -1,14 +1,22 @@
 ﻿import PropTypes from 'prop-types';
 import React, { Component, Fragment } from 'react';
 import cx from 'classnames';
+import { Divider, Button, Tooltip } from 'antd';
 import { Icon, RichText } from 'ming-ui';
+import SvgIcon from 'src/components/SvgIcon';
+import UserHead from 'src/components/userHead';
 import styled from 'styled-components';
 import './index.less';
-import { canEditApp } from 'src/pages/worksheet/redux/actions/util.js';
+import { canEditData, canEditApp } from 'src/pages/worksheet/redux/actions/util.js';
+import appManagementApi from 'src/api/appManagement';
 
 const Wrap = styled.div`
   .ck-editor__main {
-    max-height: ${props => `${props.richTextHeight}px`};
+    max-height: ${props => props.richTextHeight ? `${props.richTextHeight}px` : `100%`};
+  }
+  .flexShrink0 {
+    flex-shrink: 0;
+    min-width: 0;
   }
 `;
 
@@ -43,6 +51,7 @@ export default class Editor extends Component {
     this.state = {
       showCache: false,
       bindCreateUpload: false,
+      clearCacheLoading: false
     };
   }
 
@@ -73,6 +82,17 @@ export default class Editor extends Component {
 
   componentWillUnmount() {
     $('body').off('.editor');
+  }
+
+  handleClearCache = () => {
+    const { data } = this.props;
+    if (this.state.clearCacheLoading) return;
+    this.setState({ clearCacheLoading: true });
+    appManagementApi.refresh({
+      appId: data.id
+    }).then(data => {
+      this.setState({ clearCacheLoading: false });
+    });
   }
 
   /**
@@ -135,9 +155,10 @@ export default class Editor extends Component {
    * onSave
    */
   onSave = () => {
-    const { cacheKey } = this.props;
+    const { cacheKey, onSave, changeEditState } = this.props;
     const content = localStorage.getItem('mdEditor_' + cacheKey);
-    this.props.onSave(content);
+    onSave(content);
+    changeEditState && changeEditState(false);
     this.clearStorage();
   };
 
@@ -149,39 +170,112 @@ export default class Editor extends Component {
       placeholder,
       joinEditing,
       onCancel,
+      changeEditState,
       permissionType,
+      isLock,
       summary,
       title,
       changeSetting,
       toorIsBottom,
       maxHeight,
       minHeight,
+      cacheKey,
+      data = {},
+      renderLeftContent
     } = this.props;
 
+    const isAppIntroDescription = cacheKey === 'appIntroDescription';
     const clientHeight = document.body.clientHeight;
     const distance = isEditing ? 198 : 135;
-    const richTextHeight = clientHeight - distance;
+    const richTextHeight = (isAppIntroDescription && !isEditing) ? 0 : clientHeight - distance;
 
     if (!isEditing) {
+      const { name, iconUrl, iconColor, projectId, managers } = data;
+      const { projects } = md.global.Account;
+      const { companyName } = _.filter(projects, { projectId })[0] || {};
+      const isEditAppDescription = !isEditing && (canEditData(permissionType) || canEditApp(permissionType, isLock));
       return (
         <Wrap
           className={cx('mdEditor', { Alpha8: !auth }, className, { pBottom15: summary })}
           onClick={joinEditing}
           richTextHeight={richTextHeight}
         >
-          <header className="appIntroHeader">
-            <div className="caption">{title || _l('应用说明')}</div>
-            {!isEditing && canEditApp(permissionType) && (
-              <div className="editAppIntro" onClick={() => this.props.changeEditState(true)}>
-                <Icon icon="edit" />
-                <span className="Font13 ">{_l('编辑')}</span>
+          {isAppIntroDescription && !_.isEmpty(data) ? (
+            <header className="appDescriptionHeader flexColumn alignItemsCenter justifyContentCenter">
+              <div
+                className="flexRow alignItemsCenter justifyContentCenter circle mBottom10"
+                style={{ width: 60, height: 60, marginTop: 64, backgroundColor: iconColor }}
+              >
+                <SvgIcon url={iconUrl} fill="#fff" size={40} />
               </div>
-            )}
-          </header>
+              <div className="Font20 Gray bold mBottom5 pLeft20 pRight20">{name}</div>
+              {companyName && <div className="Font14 Gray_9e">{companyName}</div>}
+              {!!managers.length && (
+                <div className="mTop15 mBottom10 flexRow alignItemsCenter managersWrap">
+                  <div className="Gray_9e managersLabel">{_l('管理员')}</div>
+                  <div className="flexRow pLeft20 pRight20 managersList">
+                    {managers.slice(0, 20).map(data => (
+                      <UserHead
+                        key={data.accountId}
+                        className="manager"
+                        projectId={projectId}
+                        size={32}
+                        user={{
+                          ...data,
+                          accountId: data.accountId,
+                          userHead: data.avatar,
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {isEditAppDescription && (
+                <Divider className="mBottom5">
+                  <Button
+                    size="small"
+                    onClick={() => changeEditState(true)}
+                  >
+                    <Icon className="mRight2" icon="edit" />
+                    <span className="Font13">{_l('编辑')}</span>
+                  </Button>
+                </Divider>
+              )}
+              {isEditAppDescription && (
+                <Tooltip title={_l('当应用权限异常时，可尝试清除缓存的权限数据')} placement="bottom">
+                  <div
+                    className={cx('flexRow alignItemsCenter Gray_9e pointer clearCache', { isLoading: this.state.clearCacheLoading })}
+                    onClick={this.handleClearCache}
+                  >
+                    <Icon className="Font18" icon="task-later" />
+                    {_l('清除缓存')}
+                  </div>
+                </Tooltip>
+              )}
+            </header>
+          ) : (
+            <header className="appIntroHeader">
+              <div className="caption">{title || _l('应用说明')}</div>
+              {isEditAppDescription && (
+                <div className="editAppIntro" onClick={() => changeEditState(true)}>
+                  <Icon icon="edit" />
+                  <span className="Font13 ">{_l('编辑')}</span>
+                </div>
+              )}
+            </header>
+          )}
+          {isAppIntroDescription && !summary && (
+            <div className="Font14 pTop45 pBottom100 flexRow alignItemsCenter justifyContentCenter">
+              {'👏'}
+              {_l('欢迎使用')}
+              <span className="Gray_9e mLeft5">{`(${_l('未添加应用说明')})`}</span>
+            </div>
+          )}
           {summary ? (
             <RichText
               // placeholder={_l('为应用填写使用说明，当用户第一次访问应用时会打开此说明')}
               data={summary || ''}
+              autoFocus={true}
               className={'mdEditorContent editorContent'}
               disabled={true}
               backGroundColor={'#fff'}
@@ -199,6 +293,7 @@ export default class Editor extends Component {
           <RichText
             // placeholder={_l('为应用填写使用说明，当用户第一次访问应用时会打开此说明')}
             data={summary || ''}
+            autoFocus={true}
             className={'editorContent mdEditorContent'}
             showTool={true}
             onActualSave={this.onChange}
@@ -216,7 +311,10 @@ export default class Editor extends Component {
             className="mdEditorCancel ThemeColor3"
             onClick={() => {
               this.clearStorage();
-              onCancel();
+              changeEditState && changeEditState(false);
+              if (cacheKey === 'customPageEditWidget' || cacheKey === 'appMultilingual') {
+                onCancel();
+              }
             }}
           >
             {_l('取消')}
@@ -225,18 +323,28 @@ export default class Editor extends Component {
             {_l('保存')}
           </div>
         </div>
-        {!toorIsBottom && (
-          <RichText
-            // placeholder={_l('为应用填写使用说明，当用户第一次访问应用时会打开此说明')}
-            data={summary || ''}
-            className={'editorContent mdEditorContent'}
-            showTool={true}
-            onActualSave={this.onChange}
-            changeSetting={changeSetting}
-            minHeight={minHeight || 320}
-            maxHeight={maxHeight}
-          />
-        )}
+        <div className="flexRow">
+          {renderLeftContent && (
+            <div className="leftContent flex">
+              {renderLeftContent()}
+            </div>
+          )}
+          {!toorIsBottom && (
+            <div className="flex flexShrink0">
+              <RichText
+                // placeholder={_l('为应用填写使用说明，当用户第一次访问应用时会打开此说明')}
+                data={summary || ''}
+                autoFocus={true}
+                className={'editorContent mdEditorContent'}
+                showTool={true}
+                onActualSave={this.onChange}
+                changeSetting={changeSetting}
+                minHeight={minHeight || 320}
+                maxHeight={maxHeight}
+              />
+            </div>
+          )}
+        </div>
       </Wrap>
     );
   }

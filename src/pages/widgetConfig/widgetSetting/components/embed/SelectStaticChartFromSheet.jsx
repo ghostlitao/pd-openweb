@@ -59,10 +59,13 @@ export default function SelectStaticChartFromSheet(props) {
   const { sheetId, reportId } = ids;
 
   useEffect(() => {
-    homeAppAjax.getAppInfo({ appId }).then(({ appSectionDetail = [] }) => {
-      const workSheetInfo = appSectionDetail.reduce((total, cur) => {
-        const curList = cur.workSheetInfo.filter(item => item.type !== 2);
-        const curChildList = _.flatten(cur.childSections.map(item => item.workSheetInfo));
+    homeAppAjax.getApp({
+      appId,
+      getSection: true
+    }).then(({ sections = [] }) => {
+      const workSheetInfo = sections.reduce((total, cur) => {
+        const curList = cur.workSheetInfo.filter(item => item.type !== 2).filter(item => !item.urlTemplate);
+        const curChildList = _.flatten(cur.childSections.map(item => item.workSheetInfo.filter(item => !item.urlTemplate)));
         return total.concat(curList).concat(curChildList);
       }, []);
       setData({ sheets: workSheetInfo });

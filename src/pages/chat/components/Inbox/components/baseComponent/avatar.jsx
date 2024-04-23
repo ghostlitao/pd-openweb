@@ -1,9 +1,8 @@
 import React from 'react';
 import { MSGTYPES } from '../../constants';
 import { applicationIcon } from 'src/util';
-
 import cx from 'classnames';
-import 'src/components/mdBusinessCard/mdBusinessCard';
+import UserCard from 'src/components/UserCard';
 
 const formatUser = function (props) {
   const { accountId, fullname, avatar, inboxType, appId } = props;
@@ -47,6 +46,7 @@ const formatUser = function (props) {
     fullname,
     avatar,
     applicationType,
+    appId,
   };
 };
 
@@ -56,32 +56,13 @@ export default class Avatar extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      binded: false,
       ...formatUser(props),
     };
   }
 
-  bindBusinessCard() {
-    if (this.state.binded || !this.card) return false;
-
-    this.setState({
-      binded: true,
-    });
-    $(this.card)
-      .mdBusinessCard({
-        accountId: this.state.accountId,
-      })
-      .trigger('mouseenter');
-  }
-
-  componentWillUnMount() {
-    if (this.card) {
-      $(this.carad).mdBusinessCard('destroy');
-    }
-  }
 
   render() {
-    const { accountId, fullname, avatar, applicationType } = this.state;
+    const { accountId, fullname, avatar, applicationType, appId } = this.state;
 
     if (applicationType) {
       return (
@@ -99,17 +80,18 @@ export default class Avatar extends React.Component {
         };
       }
       return (
-        <a
-          {...param}
-          target="_blank"
-          className="inboxAvatar"
-          onMouseOver={this.bindBusinessCard.bind(this)}
-          ref={elem => {
-            this.card = elem;
-          }}
-        >
-          <img src={avatar} title={fullname} />
-        </a>
+        <UserCard sourceId={accountId} appId={appId}>
+          <a
+            {...param}
+            target="_blank"
+            className="inboxAvatar"
+            ref={elem => {
+              this.card = elem;
+            }}
+          >
+            <img src={avatar} title={fullname} />
+          </a>
+        </UserCard>
       );
     }
   }

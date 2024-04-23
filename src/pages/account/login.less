@@ -6,6 +6,7 @@
   background-position: center;
 
   .loginBox {
+    padding-top: 80px;
     a {
       text-decoration: none;
       &:hover {
@@ -24,12 +25,11 @@
       max-width: 420px;
       padding: 48px 48px 23px;
       box-sizing: border-box;
-      margin: 80px auto 0;
+      margin: 0 auto;
       background: #ffffff;
       border-radius: 4px;
       margin-bottom: 15px;
       position: relative;
-
       @media screen and (max-width: 414px) {
         padding: 48px 24px 23px;
       }
@@ -117,15 +117,20 @@
         margin-top: 48px;
       }
 
-      .btnUseOldAccount {
-        font-size: 14px;
-        color: #2196f3;
-        display: block;
+      .footerCon {
         margin: 20px auto 0;
         text-align: center;
-
-        &:hover {
-          color: #1182dd;
+        .changeBtn {
+          font-size: 14px;
+          color: #2196f3;
+          &:hover {
+            color: #1182dd;
+          }
+        }
+        .lineCenter {
+          width: 1px;
+          height: 11px;
+          border: 1px solid #d3d3d3;
         }
       }
     }
@@ -240,3 +245,18 @@
     }
   }
 }
+
+.loginContainerCon .powered {
+  justify-content: center;
+  position: fixed;
+  height: 80px;
+  bottom: 0;
+  left: 0;
+  &.linearGradientBg {
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.4) 100%);
+  }
+  .info:hover {
+    color: #2196F3;
+  }
+}
+

@@ -6,9 +6,9 @@ import ItemCon from './ItemCon';
 import styled from 'styled-components';
 const Wrap = styled.p`
   font-size: 12px;
-  font-weight: 400;
+  font-weight: bold;
   color: #9e9e9e;
-  padding-left: 20px;
+  padding-left: 18px;
   margin: 10px 0 4px 0;
 `;
 
@@ -67,7 +67,8 @@ export default class Con extends React.Component {
               />
             );
           })}
-        {!isForPortal && List.length > 0 && <Wrap>{_l('普通')}</Wrap>}
+        {sysList.length > 0 && <div style={{ paddingTop: 6 }}></div>}
+        {!isForPortal && List.length > 0 && <Wrap>{_l('自定义')}</Wrap>}
         {List && (
           <SortableList
             items={List}

@@ -1,9 +1,8 @@
-
 import PropTypes from 'prop-types';
 import React from 'react';
 import ReactDom from 'react-dom';
-import { compact, map, every, flatten } from 'lodash';
-import { isDescendant } from 'ming-ui/utils/DomHelpers';
+import { emitter } from 'src/util';
+import { compact, map, every, flatten, isFunction } from 'lodash';
 
 function withClickAway(exceptionList, Component = exceptionList) {
   class ClickAwayableComponent extends React.Component {
@@ -18,11 +17,17 @@ function withClickAway(exceptionList, Component = exceptionList) {
     componentDidMount() {
       this.mounted = true;
       this.checkClickAway = this.checkClickAway.bind(this);
+      this.clickAway = this.clickAway.bind(this);
       this.bindClickAway();
     }
     componentWillUnmount() {
       this.mounted = false;
       this.unbindClickAway();
+    }
+    clickAway() {
+      if (isFunction(this.props.onClickAway)) {
+        this.props.onClickAway({});
+      }
     }
     checkClickAway(e = {}) {
       if (!this.mounted) {
@@ -53,8 +58,8 @@ function withClickAway(exceptionList, Component = exceptionList) {
       if (
         this.props.onClickAway &&
         e.target !== el &&
-        !isDescendant(el, e.target) &&
-        every(flatten(exceptions), item => e.target !== item && !isDescendant(item, e.target)) &&
+        !$(e.target).closest($(el)).length &&
+        every(flatten(exceptions), item => e.target !== item && !$(e.target).closest($(item)).length) &&
         document.documentElement.contains(e.target)
       ) {
         // �������Զ������жϺ�������ִ��

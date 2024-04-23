@@ -1,0 +1,46 @@
+.appAnalyticsWrapper {
+  width: 100%;
+  height: 100%;
+  z-index: 999;
+  background-color: #f5f5f5;
+  display: flex;
+  flex-direction: column;
+  .appAnalyticsContent {
+    overflow: auto;
+    flex: 1;
+    .appAnalytics {
+      height: calc(~'100% - 24px');
+      min-height: 0;
+      width: 90%;
+      margin: 0 auto;
+      background: #fff;
+      margin-top: 24px;
+      .tabs {
+        height: 58px;
+        border-bottom: 1px solid #e0e0e0;
+        display: flex;
+        flex-shrink: 0;
+        align-items: center;
+        padding-left: 24px;
+        .tabItem {
+          font-size: 15px;
+          font-weight: 600;
+          margin-right: 40px;
+          height: 100%;
+          line-height: 58px;
+          &.currentTab {
+            color: #2196f3;
+            border-bottom: 2px solid #2196f3;
+            border-radius: unset !important;
+          }
+        }
+      }
+    }
+  }
+  .fontWeight600 {
+    font-weight: 600;
+  }
+  .width150 {
+    width: 150px;
+  }
+}

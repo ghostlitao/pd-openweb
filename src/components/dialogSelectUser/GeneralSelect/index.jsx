@@ -19,6 +19,7 @@ import { RenderTypes, ChooseType, UserTabsId } from './constant';
 import NoData from './NoData';
 import { autobind } from 'core-decorators';
 import _ from 'lodash';
+import { LoadDiv } from 'ming-ui';
 
 const DefaultUserTabs = isNetwork => {
   return [
@@ -292,7 +293,7 @@ export default class GeneraSelect extends Component {
       filterResigned: true,
       unique: false, // 是否只可以选一个
       pageIndex: 1,
-      pageSize: 20,
+      pageSize: 50,
       isMore: true, // 当点击要过滤的用户时
     };
 
@@ -334,7 +335,7 @@ export default class GeneraSelect extends Component {
       /** 选择的用户筛选范围 */
       selectedUserTabId: userSettings.defaultTabs[0].id,
       /** 滚动分页 */
-      pageSize: 20,
+      pageSize: 50,
       pageIndex: 1,
       /** 联系人数据 */
       mainData: null,
@@ -383,6 +384,7 @@ export default class GeneraSelect extends Component {
         includeUndefinedAndMySelf:
           tabItem.type === RenderTypes.CONTACK_USER ? userSettings.includeUndefinedAndMySelf : undefined,
         includeSystemField: tabItem.type === RenderTypes.CONTACK_USER ? userSettings.includeSystemField : undefined,
+        includeMySelf: userSettings.includeMySelf,
       };
 
       if (tabItem.page) {
@@ -1018,7 +1020,7 @@ export default class GeneraSelect extends Component {
         if (item[ID] === id) {
           item.users = list;
           const _arr = selectedData.concat(
-            list.map(user => {
+            (list || []).map(user => {
               return {
                 type: ChooseType.USER,
                 data: user,
@@ -1039,7 +1041,7 @@ export default class GeneraSelect extends Component {
         selectedData,
       });
     };
-    if (group.users.length < group[COUNT]) {
+    if ((group.users || []).length < group[COUNT]) {
       let promiseObj = null;
       if (this.state.selectedUserTabId === UserTabsId.DEPARTMENT) {
         promiseObj = this.handlePromise(
@@ -1072,7 +1074,7 @@ export default class GeneraSelect extends Component {
       let list = group.users;
       if (checked) {
         this.setState({
-          selectedData: selectedData.filter(i => _.find(list, l => l.accountId === i.accountId)),
+          selectedData: selectedData.filter(i => !_.find(list, l => l.accountId === _.get(i, 'data.accountId'))),
         });
       } else {
         selectAll(list);
@@ -1162,6 +1164,7 @@ export default class GeneraSelect extends Component {
           <DefaultUserList
             projectId={commonSettings.projectId}
             data={mainData.data}
+            includeMySelf={this.userSettings.includeMySelf}
             includeUndefinedAndMySelf={this.userSettings.includeUndefinedAndMySelf}
             onChange={this.toogleUserSelect}
             selectedUsers={this.selectedUsers}
@@ -1481,7 +1484,7 @@ export default class GeneraSelect extends Component {
             ref={searchInput => {
               this._searchInput = searchInput;
             }}
-            placeholder={_l('搜索用户%0', this.checkIsProject() ? _l(' / 部门 / 群组') : '')}
+            placeholder={this.checkIsProject() ? _l('搜索用户 / 部门 / 群组') : _l('搜索用户')}
           />
           {keywords && (
             <div className="GSelect-head-searchArea--deleteIcon">
@@ -1496,7 +1499,7 @@ export default class GeneraSelect extends Component {
 
   renderContent() {
     if (this.state.loading) {
-      return <div dangerouslySetInnerHTML={{ __html: LoadDiv() }} />;
+      return <LoadDiv />;
     }
     if (!this.state.mainData) {
       return null;

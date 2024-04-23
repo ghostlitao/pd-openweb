@@ -6,7 +6,7 @@ import { RELATE_RECORD_SHOW_TYPE, ROW_HEIGHT } from 'worksheet/constants/enum';
 import { controlState } from 'src/components/newCustomFields/tools/utils';
 import { Validator, getRangeErrorType } from 'src/components/newCustomFields/tools/utils';
 import { FORM_ERROR_TYPE, FORM_ERROR_TYPE_TEXT } from 'src/components/newCustomFields/tools/config';
-import { onValidator } from 'src/components/newCustomFields/tools/DataFormat';
+import DataFormat, { onValidator } from 'src/components/newCustomFields/tools/DataFormat';
 import { WORKSHEETTABLE_FROM_MODULE } from 'worksheet/constants/enum';
 import {
   checkIsTextControl,
@@ -40,10 +40,20 @@ import BarCode from './BarCode';
 import Time from './Time';
 import OrgRole from './OrgRole';
 import Search from './Search';
+import RelationSearch from './RelationSearch';
 
 import './CellControls.less';
 import _ from 'lodash';
 
+function mergeControlAdvancedSetting(control = {}, advancedSetting = {}) {
+  return {
+    ...control,
+    advancedSetting: {
+      ...(control.advancedSetting || {}),
+      ...advancedSetting,
+    },
+  };
+}
 export default class CellControl extends React.Component {
   static propTypes = {
     isSubList: PropTypes.bool,
@@ -97,6 +107,12 @@ export default class CellControl extends React.Component {
     registerRef(this);
   }
 
+  componentWillReceiveProps(nextProps) {
+    if (this.state.error && !nextProps.error) {
+      this.setState({ error: null });
+    }
+  }
+
   componentWillUnmount() {
     const { registerRef } = this.props;
     registerRef(undefined);
@@ -109,7 +125,8 @@ export default class CellControl extends React.Component {
   cell = React.createRef();
 
   get error() {
-    return this.errorCleared ? this.state.error : this.state.error || this.props.error;
+    return this.state.error || this.props.error;
+    // return this.errorCleared ? this.state.error : this.state.error || this.props.error;
   }
 
   checkCellFullVisible() {
@@ -162,19 +179,20 @@ export default class CellControl extends React.Component {
 
   validate(cell, row) {
     const { tableFromModule, cellUniqueValidate, clearCellError, rowFormData } = this.props;
-    let { errorType } = onValidator({ item: cell, data: rowFormData(), ignoreRequired: true });
-    if (!errorType && cell.unique && tableFromModule === WORKSHEETTABLE_FROM_MODULE.SUBLIST) {
+    let { errorType } = onValidator({ item: cell, data: _.isFunction(rowFormData) ? rowFormData() : rowFormData });
+    if (!errorType && (cell.unique || cell.uniqueInRecord) && tableFromModule === WORKSHEETTABLE_FROM_MODULE.SUBLIST) {
       errorType = cellUniqueValidate(cell.controlId, cell.value, row.rowid) ? '' : 'UNIQUE';
     }
-    this.errorCleared = !errorType;
+    // this.errorCleared = !errorType;
     return errorType;
   }
 
   getErrorText(errorType, cell) {
+    const { isSubList } = this.props;
     if (typeof FORM_ERROR_TYPE_TEXT[errorType] === 'string') {
       return FORM_ERROR_TYPE_TEXT[errorType];
     } else if (typeof FORM_ERROR_TYPE_TEXT[errorType] === 'function') {
-      return FORM_ERROR_TYPE_TEXT[errorType](cell);
+      return FORM_ERROR_TYPE_TEXT[errorType](cell, { isSubList });
     } else {
       return _l('格式不正确');
     }
@@ -182,23 +200,41 @@ export default class CellControl extends React.Component {
 
   @autobind
   onValidate(value, returnObject = false) {
-    const { cell, row, checkRulesErrorOfControl, rowFormData, clearCellError } = this.props;
+    const { projectId, cell, row, checkRulesErrorOfControl, rowFormData, clearCellError } = this.props;
     // 百分比值处理
     if (_.includes([6], cell.type) && cell.advancedSetting && cell.advancedSetting.numshow === '1' && value) {
       value = accDiv(value, 100);
     }
-    const errorType = this.validate({ ...cell, value }, row);
+    const errorType = this.validate(
+      { ...(cell.type === 10 ? mergeControlAdvancedSetting(cell, { otherrequired: '0' }) : { ...cell }), value },
+      row,
+    );
     let errorText;
-    if (_.includes([15, 16], cell.type) && errorType && errorType !== 'REQUIRED') {
-      errorText = onValidator(cell, _.isFunction(rowFormData) ? rowFormData() : rowFormData, undefined, true).errorText;
+    if (_.includes([15, 16, 46], cell.type) && errorType && errorType !== 'REQUIRED') {
+      errorText = onValidator({
+        item: { ...cell, value },
+        data: _.isFunction(rowFormData) ? rowFormData() : rowFormData,
+        ignoreRequired: true,
+      }).errorText;
     } else {
       errorText = errorType && this.getErrorText(errorType, { ...cell, value });
     }
-    if (_.includes([15, 16], cell.type) && !errorText) {
+    if (!errorText) {
       clearCellError(`${(row || {}).rowid}-${cell.controlId}`);
       $('.mdTableErrorTip').remove();
     }
-    const error = checkRulesErrorOfControl(cell, { ...row, [cell.controlId]: value });
+    let rowForCheckRule = { ...row, [cell.controlId]: value };
+    try {
+      const tempRow = new DataFormat({
+        projectId,
+        data: _.isFunction(rowFormData) ? rowFormData() : rowFormData,
+      });
+      tempRow.updateDataSource({ controlId: cell.controlId, value });
+      rowForCheckRule = [{}, ...tempRow.data].reduce((a = {}, b = {}) => Object.assign(a, { [b.controlId]: b.value }));
+    } catch (err) {
+      console.log(err);
+    }
+    const error = checkRulesErrorOfControl(cell, rowForCheckRule);
     if (error) {
       this.setState({ error: error.errorMessage });
       return !error;
@@ -216,7 +252,8 @@ export default class CellControl extends React.Component {
   }
   @autobind
   handleCopy(cell) {
-    handleCopyControlText(cell);
+    const { tableId } = this.props;
+    handleCopyControlText(cell, tableId);
     if (!_.includes([2, 3, 4, 7, 5, 6, 8], cell.type)) {
       window.tempCopyForSheetView = JSON.stringify({
         type: 'origin',
@@ -224,6 +261,7 @@ export default class CellControl extends React.Component {
         textValue: getCopyControlText(cell),
         controlId: cell.controlId,
         controlType: cell.type,
+        tableId,
       });
     }
   }
@@ -258,6 +296,7 @@ export default class CellControl extends React.Component {
   handleTableKeyDown(e, cache) {
     const { tableType, cell, onClick } = this.props;
     const { isediting } = this.state;
+    const haveEditingStatus = this.haveEditingStatus(cell);
     if (e.key === 'c' && (e.metaKey || e.ctrlKey)) {
       this.handleCopy(cell);
       return;
@@ -274,20 +313,22 @@ export default class CellControl extends React.Component {
     if ((e.metaKey || e.ctrlKey) && !(e.key === 'v' && checkIsTextControl(cell.type))) {
       return;
     }
+    window.cellLastKey = e.key;
     switch (e.key) {
       case 'Backspace':
-        if (this.editable && !isediting && !cell.required) {
+        if (this.editable && haveEditingStatus && !isediting && !cell.required) {
           this.handleUpdateCell({ value: '' });
         }
         break;
       case ' ':
-        if (e.target.tagName.toLowerCase() === 'body') {
+        if (!isediting) {
           onClick();
         }
         break;
       case 'Enter':
-        if (this.editable && this.haveEditingStatus(cell) && !isediting) {
+        if (this.editable && haveEditingStatus && !isediting) {
           this.handleUpdateEditing(true);
+          e.preventDefault();
           if (tableType === 'classic') {
             cache.hasEditingCell = true;
             window.hasEditingCell = true;
@@ -327,6 +368,7 @@ export default class CellControl extends React.Component {
       {
         silent: true,
         cell: Object.assign({}, cell, newCell),
+        row,
         ...options,
       },
     );
@@ -342,11 +384,13 @@ export default class CellControl extends React.Component {
     }
     const {
       tableType,
+      tableFromModule,
       cell,
       row,
       cache,
       clearCellError,
       enterEditing = () => {},
+      cellUniqueValidate,
       scrollTo,
       onCellFocus = () => {},
     } = this.props;
@@ -384,6 +428,11 @@ export default class CellControl extends React.Component {
         window.timer = Math.random();
       }
     };
+    if (!isediting && cell.unique) {
+      if (cell.unique && !cell.uniqueInRecord && tableFromModule === WORKSHEETTABLE_FROM_MODULE.SUBLIST) {
+        cellUniqueValidate(cell.controlId, cell.value, row.rowid, true);
+      }
+    }
     if (isediting && !cellFullVisible.fullvisible) {
       let newPos = {};
       if (_.isNumber(cellFullVisible.newLeft)) {
@@ -444,6 +493,7 @@ export default class CellControl extends React.Component {
       tableId,
       tableType,
       worksheetId,
+      isMobileTable,
       isSubList,
       isTrash,
       cache,
@@ -513,7 +563,9 @@ export default class CellControl extends React.Component {
       cell.isSubtotal = true;
       if (cell.advancedSetting && cell.advancedSetting.summaryresult === '1') {
         cell.type = 2;
-        cell.value = _.round(parseFloat(cell.value) * 100, cell.dot || 0).toFixed(cell.dot || 0) + '%';
+        cell.value = _.isUndefined(cell.value)
+          ? ''
+          : _.round(parseFloat(cell.value) * 100, cell.dot || 0).toFixed(cell.dot || 0) + '%';
       } else {
         if (_.includes([15, 16], cell.enumDefault2) && _.includes([2, 3], cell.enumDefault)) {
           cell.advancedSetting = { ...cell.advancedSetting, showtype: cell.unit };
@@ -522,8 +574,7 @@ export default class CellControl extends React.Component {
       }
     }
     const controlPermission = controlState(cell);
-    this.editable =
-      canedit && row && row.allowedit && controlPermission.editable && !cell.isSubtotal && allowlink !== '0';
+    this.editable = canedit && row && row.allowedit && controlPermission.editable && !cell.isSubtotal;
     if (this.editable) {
       className += ' editable';
     }
@@ -542,6 +593,7 @@ export default class CellControl extends React.Component {
       tableId,
       tableType,
       cache,
+      isMobileTable,
       isSubList,
       isTrash,
       worksheetId,
@@ -551,6 +603,7 @@ export default class CellControl extends React.Component {
       columnIndex,
       ref: this.cell,
       editable,
+      row,
       recordId: row && row.rowid,
       rowHeight,
       rowHeightEnum,
@@ -583,7 +636,7 @@ export default class CellControl extends React.Component {
       onFocusCell,
     };
     if (isTextControl) {
-      if (cell.type === 41 || cell.type === 32 || cell.type === 10010) {
+      if (cell.type === 41 || cell.type === 32 || cell.type === 10010 || (cell.type === 2 && cell.enumDefault === 1)) {
         needLineLimit = true;
       }
       if (cell.type === 41) {
@@ -616,6 +669,7 @@ export default class CellControl extends React.Component {
       return <Department {...props} />;
     }
     if (cell.type === 26) {
+      props.disabled = this.props.disabled;
       return <User {...props} />;
     }
     if (cell.type === 21) {
@@ -665,6 +719,9 @@ export default class CellControl extends React.Component {
     }
     if (cell.type === 49 || cell.type === 50) {
       return <Search {...props} />;
+    }
+    if (cell.type === 51) {
+      return <RelationSearch {...props} />;
     }
     return <div className={className} onClick={this.props.onClick} style={style} />;
   }

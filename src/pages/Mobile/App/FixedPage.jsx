@@ -28,7 +28,6 @@ const FixedContent = styled.div`
   .fixeding {
     color: #333;
     font-size: 17px;
-    font-weight: 600;
   }
   .fixedInfo {
     color: #9e9e9e;
@@ -47,10 +46,20 @@ export default class FixedPage extends Component {
     if (isNoPublish) {
       return (
         <FixedContent>
-          <div className="iconInfo mBottom18" style={{ 'marginTop': document.body.clientHeight / 4 }}>
-            <Icon className="Font56 Gray_75" icon="send" />
+          <div className="iconInfo mBottom18" style={{ marginTop: document.body.clientHeight / 4 }}>
+            <Icon className="Font56 Gray_75" icon="computer" />
           </div>
-          <div className="Font18 mBottom20 fixeding">{_l('应用暂未发布')}</div>
+          <div className="Font18 mBottom20 centerAlign fixeding">
+            <div>{_l('应用未在此平台发布')}</div>
+            <div>{_l('请至PC端使用')}</div>
+          </div>
+          <Back
+            icon="home"
+            style={{ bottom: '20px' }}
+            onClick={() => {
+              window.mobileNavigateTo('/mobile/dashboard');
+            }}
+          />
         </FixedContent>
       );
     }
@@ -63,9 +72,10 @@ export default class FixedPage extends Component {
         <div className="fixedInfo mBottom20">{_l('该应用被%0设置为维护中状态,暂停访问', fullName)}</div>
         <div className="fixRemark">{fixRemark}</div>
         <Back
+          icon="home"
           style={{ bottom: '20px' }}
           onClick={() => {
-            window.mobileNavigateTo('/mobile/appHome');
+            window.mobileNavigateTo('/mobile/dashboard');
           }}
         />
       </FixedContent>

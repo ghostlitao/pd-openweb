@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Fragment } from 'react';
 import { string } from 'prop-types';
 import styled from 'styled-components';
 import { LoadDiv } from 'ming-ui';
@@ -7,6 +7,7 @@ import { useSetState } from 'react-use';
 import worksheetAjax from 'src/api/worksheet';
 import VerifyDel from './VerifyDel';
 import _ from 'lodash';
+import { filterAndFormatterControls } from 'src/pages/worksheet/views/util';
 
 const ControlsWrap = styled.div`
   .grade {
@@ -75,6 +76,29 @@ const EmptyHint = styled.div`
   font-weight: 500;
 `;
 
+const InputWrap = styled.div`
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 0 12px;
+  border-bottom: 1px solid #f0f0f0;
+  input {
+    line-height: 32px;
+    border: none;
+    outline: none;
+    padding-left: 8px;
+  }
+`;
+
+const isVisible = control => {
+  let { fieldPermission = '111' } = control;
+  const [visible, editable, canAdd] = fieldPermission.split('');
+  if (visible === '0') {
+    return false;
+  }
+  return true;
+};
+
 export default function HierarchyRelateMultiSheet({ worksheetInfo, viewControls, updateViewControls }) {
   const getSelectableControls = sheetInfo => {
     const { controls = [] } = _.get(sheetInfo, 'template') || {};
@@ -88,10 +112,12 @@ export default function HierarchyRelateMultiSheet({ worksheetInfo, viewControls,
   });
 
   const [delIndex, setIndex] = useState(-1);
+  const [searchValue, setValue] = useState('');
 
   const getAvailableControls = () => {
     const { worksheetId } = _.last(viewControls);
     if (controlLoading) return;
+    setValue('');
     setControls({ controlLoading: true });
     worksheetAjax
       .getWorksheetInfo({ worksheetId, getTemplate: true })
@@ -106,6 +132,12 @@ export default function HierarchyRelateMultiSheet({ worksheetInfo, viewControls,
   };
   const addViewControl = item => {
     worksheetAjax.getWorksheetInfo({ worksheetId: item.dataSource, getTemplate: true }).then(data => {
+      const controls = data.template.controls;
+      const coverControls = filterAndFormatterControls({
+        controls: controls.filter(l => isVisible(l)).filter(c => !!c.controlName),
+        ////扫码|附件可作为封面
+        filter: item => [14, 47].includes(item.type) || [14, 47].includes(item.sourceControlType),
+      });
       setControls({
         availableControls: getSelectableControls(data),
       });
@@ -115,6 +147,14 @@ export default function HierarchyRelateMultiSheet({ worksheetInfo, viewControls,
           worksheetId: data.worksheetId,
           controlId: item.controlId,
           controlName: item.controlName,
+          showControlName: true,
+          coverCid: coverControls[0] ? coverControls[0].value : undefined,
+          coverType: 0,
+          advancedSetting: { coverposition: '0' },
+          showControls: controls
+            .filter(item => item.attribute !== 1)
+            .slice(0, 2)
+            .map(({ controlId }) => controlId),
         }),
       );
     });
@@ -122,27 +162,45 @@ export default function HierarchyRelateMultiSheet({ worksheetInfo, viewControls,
 
   const renderRelate = () => {
     if (controlLoading) return <LoadDiv />;
-    return availableControls.length > 0 ? (
-      <Menu>
-        {availableControls.map(item => {
-          const { controlId, controlName } = item;
-          return (
-            <Menu.Item
-              key={controlId}
-              onClick={() => {
-                addViewControl(item);
-              }}
-            >
-              <i className="icon-link2 Gray_9e Font15"></i>
-              <span style={{ marginLeft: '6px' }} className="controlName Bold">
-                {controlName}
-              </span>
-            </Menu.Item>
-          );
-        })}
+    const filterData = searchValue
+      ? availableControls.filter(i => i.controlName.includes(searchValue))
+      : availableControls;
+    return (
+      <Menu style={{ maxHeight: 300, overflowY: 'auto' }}>
+        <InputWrap>
+          <i className="icon-search Gray_75 Font16"></i>
+          <input
+            autoFocus
+            value={searchValue}
+            placeholder={_l('搜索')}
+            onChange={e => {
+              setValue(e.target.value);
+            }}
+          />
+        </InputWrap>
+        {filterData.length > 0 ? (
+          <Fragment>
+            {filterData.map(item => {
+              const { controlId, controlName } = item;
+              return (
+                <Menu.Item
+                  key={controlId}
+                  onClick={() => {
+                    addViewControl(item);
+                  }}
+                >
+                  <i className="icon-link2 Gray_9e Font15"></i>
+                  <span style={{ marginLeft: '6px' }} className="controlName Bold">
+                    {controlName}
+                  </span>
+                </Menu.Item>
+              );
+            })}
+          </Fragment>
+        ) : (
+          <EmptyHint>{_l('没有可选择的关联字段')}</EmptyHint>
+        )}
       </Menu>
-    ) : (
-      <EmptyHint>{_l('没有可选择的关联字段')}</EmptyHint>
     );
   };
   return (

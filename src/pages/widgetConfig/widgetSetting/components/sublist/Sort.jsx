@@ -12,8 +12,8 @@ const defaultSort = [
 ];
 
 export default function SubListSort(props) {
-  const { data, controls, fromRelate, onChange, onClose } = props;
-  const [sorts, setSorts] = useState(getAdvanceSetting(data, 'sorts'));
+  const { data, controls, fromRelate, onChange, onClose, advancedSettingKey = 'sorts' } = props;
+  const [sorts, setSorts] = useState(getAdvanceSetting(data, advancedSettingKey));
   return (
     <Dialog
       visible
@@ -24,7 +24,7 @@ export default function SubListSort(props) {
       onOk={() => {
         onChange(
           handleAdvancedSettingChange(data, {
-            sorts: fromRelate && _.isEmpty(sorts) ? JSON.stringify(defaultSort) : JSON.stringify(sorts),
+            [advancedSettingKey]: fromRelate && _.isEmpty(sorts) ? JSON.stringify(defaultSort) : JSON.stringify(sorts),
           }),
         );
         onClose();
@@ -32,9 +32,11 @@ export default function SubListSort(props) {
     >
       <SortConditions
         className="subListSortCondition"
-        columns={controls.filter(o => ![43].includes(o.type))}
+        columns={controls.filter(o => ![43, 49, 51].includes(o.type))}
         sortConditions={sorts}
+        showSystemControls
         onChange={setSorts}
+        isSubList={true}
       />
     </Dialog>
   );

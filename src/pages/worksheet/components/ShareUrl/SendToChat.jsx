@@ -1,7 +1,7 @@
 import React, { useState, useCallback, Fragment } from 'react';
 import styled from 'styled-components';
 import Trigger from 'rc-trigger';
-import UserHead from 'src/pages/feed/components/userHead';
+import UserHead from 'src/components/userHead';
 import { Button, LoadDiv, ScrollView } from 'ming-ui';
 import chatAjax from 'src/api/chat';
 import addressBookAjax from 'src/api/addressBook';
@@ -118,31 +118,35 @@ export default function SendToChat(props) {
         );
       });
     } else {
-      chatAjax.getChatList({
-        keywords,
-        size: 20,
-      }).then(data => {
-        setLoading(false);
-        setList(data);
-      });
+      chatAjax
+        .getChatList({
+          keywords,
+          size: 20,
+        })
+        .then(data => {
+          setLoading(false);
+          setList(data);
+        });
     }
   }
   function handleSend() {
     if (card && !card.url) {
       card.url = url;
     }
-    chatAjax.sendCardToChat({
-      cards: card ? [card] : [],
-      message: description,
-      [selectedUser.type === 1 ? 'toAccountId' : 'toGroupId']: selectedUser.value,
-    }).then(data => {
-      if (data) {
-        onClose();
-        alert(_l('发送成功'));
-      } else {
-        alert(_l('发送失败'), 3);
-      }
-    });
+    chatAjax
+      .sendCardToChat({
+        cards: card ? [card] : [],
+        message: description,
+        [selectedUser.type === 1 ? 'toAccountId' : 'toGroupId']: selectedUser.value,
+      })
+      .then(data => {
+        if (data) {
+          onClose();
+          alert(_l('发送成功'));
+        } else {
+          alert(_l('发送失败'), 3);
+        }
+      });
   }
   const debounceLoadChat = useCallback(debounce(loadChat, 300), []);
   const chatListComp = (

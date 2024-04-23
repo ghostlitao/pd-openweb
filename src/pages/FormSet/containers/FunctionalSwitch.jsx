@@ -1,7 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import * as actions from '../redux/actions/action';
-import { connect } from 'react-redux';
-import { bindActionCreators } from 'redux';
 import { Icon, ScrollView, Switch, Tooltip, LoadDiv, Dialog } from 'ming-ui';
 import sheetAjax from 'src/api/worksheet';
 import './functionalSwitch.less';
@@ -23,10 +20,28 @@ import _ from 'lodash';
 
 const tipStr = {
   10: _l('在工作表右上方显示的创建记录按钮。关闭后，则无法直接在工作表中创建记录，只能通过关联记录等其他位置创建'),
-  22: _l('表格视图可以单元格直接编辑，看板、层级、画廊视图可以在卡片上直接修改文本类标题和检查框'),
+  22: (
+    <div>
+      {_l('表格视图可以单元格直接编辑；')}
+      <br />
+      {_l('看板、层级、甘特图在标题字段为文本类型时可以只填写标题字段快速创建记录；')}
+      <br />
+      {_l('可以在看板、层级、画廊和详情视图的卡片上直接修改文本类标题和检查框')}
+    </div>
+  ),
   23: _l('仅控制系统默认的条形码/二维码打印功能。不包含配置的打印模板'),
   32: _l('仅控制系统默认提供的打印方式，不包含打印模版'),
   33: _l('可以控制附件的下载、分享、保存到知识（不包含用户自行上传的附件）'),
+  37: (
+    <div>
+      <div>{_l('使用对应记录的字段值新建记录。')}</div>
+      <div>{_l('以下字段类型在创建时有复制数量限制:')}</div>
+      <div>{_l('关联记录（卡片和下拉框）最多复制5条;')}</div>
+      <div>{_l('关联记录（列表）不复制;')}</div>
+      <div>{_l('子表记录最多复制200条;')}</div>
+      {_l('子表中的关联记录最多复制5条。')}
+    </div>
+  ),
   40: _l('在视图上呈现流程名称、状态、节点负责人、节点开始、剩余时间、发起人、发起时间'),
 };
 // "state": true,  //开关状态
@@ -34,8 +49,7 @@ const tipStr = {
 // "roleType": 0 //角色类型   0=所有人 100=管理员
 
 function FunctionalSwitch(props) {
-  const { formSet } = props;
-  const { worksheetId, worksheetInfo } = formSet;
+  const { worksheetId, worksheetInfo } = props;
   const { views = [], projectId, appId } = worksheetInfo;
   const [show, setShow] = useState(false);
   const [hideBatch, sethideBatch] = useState(false);
@@ -55,8 +69,7 @@ function FunctionalSwitch(props) {
   }, [info.worksheetId]);
 
   useEffect(() => {
-    const { formSet } = props;
-    const { worksheetInfo } = formSet;
+    const { worksheetInfo } = props;
     setCloseAutoID(!!worksheetInfo.closeAutoID);
   }, [props]);
 
@@ -87,6 +100,18 @@ function FunctionalSwitch(props) {
   const getSwitchData = () => {
     sheetAjax.getSwitch({ worksheetId: info.worksheetId }).then(res => {
       let data = res;
+      // //测试
+      // data.push(
+      //   ...[14].map(o => {
+      //     return {
+      //       view: [],
+      //       state: true,
+      //       type: o,
+      //       roleType: 0,
+      //       viewIds: [],
+      //     };
+      //   }),
+      // );
       setInfo({
         ...info,
         loading: false,
@@ -213,7 +238,7 @@ function FunctionalSwitch(props) {
   const closeRangeDiaFn = info => {
     const { viewIds = [], state } = info.showData;
     if (viewIds.length <= 0 && !diaRang && state) {
-      alert('至少选中一个视图！');
+      alert('至少选中一个视图！', 3);
       return;
     }
     setInfo({
@@ -404,7 +429,7 @@ function FunctionalSwitch(props) {
             {info.showDialog && !noRangeList.includes(info.showData.type || '') && (
               <Range
                 showDialog={info.showDialog}
-                hasViewRange={![...statistics, 10, 11, 12, 13].includes(info.showData.type || '')} //是否可选视图范围
+                hasViewRange={![...statistics, 10, 11, 12, 13, 14].includes(info.showData.type || '')} //是否可选视图范围
                 text={{
                   allview: info.showData.type / 10 >= 4 ? _l('所有记录') : '',
                   assignview: info.showData.type / 10 >= 4 ? _l('应用于指定的视图下的记录') : '',
@@ -488,10 +513,4 @@ function FunctionalSwitch(props) {
     </React.Fragment>
   );
 }
-const mapStateToProps = state => ({
-  formSet: state.formSet,
-  sheet: state.sheet,
-});
-const mapDispatchToProps = dispatch => bindActionCreators(actions, dispatch);
-
-export default connect(mapStateToProps, mapDispatchToProps)(FunctionalSwitch);
+export default FunctionalSwitch;

@@ -5,8 +5,8 @@ import { VerticalMiddle, FlexCenter } from 'worksheet/components/Basics';
 
 const SearchInputCon = styled(VerticalMiddle)`
   width: 220px;
-  height: 32px;
-  border-radius: 32px;
+  height: 36px;
+  border-radius: 36px;
   background-color: #f5f5f5;
   padding-left: 10px;
   overflow: hidden;
@@ -42,6 +42,7 @@ export default function SearchInput(props) {
   const { clickShowInput, placeholder, value, onChange } = props;
   const inputRef = useRef();
   const [isFocus, setIsFocus] = useState();
+
   useEffect(() => {
     if (clickShowInput && isFocus && inputRef.current) {
       inputRef.current.focus();

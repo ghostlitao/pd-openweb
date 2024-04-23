@@ -1,7 +1,7 @@
 import PropTypes from 'prop-types';
 import React, { Component } from 'react';
 import { FROM } from '../../tools/config';
-import UserHead from 'src/pages/feed/components/userHead';
+import UserHead from 'src/components/userHead';
 import quickSelectUser from 'ming-ui/functions/quickSelectUser';
 import cx from 'classnames';
 import SelectUser from 'mobile/components/SelectUser';
@@ -57,20 +57,23 @@ export default class Widgets extends Component {
     if (browserIsMobile()) {
       this.setState({ showSelectUser: true });
     } else {
+      const selectRangeOptions = dealUserRange(this.props, formData);
+      const hasUserRange = Object.values(selectRangeOptions).some(i => !_.isEmpty(i));
       quickSelectUser($(event.target).closest('.addBtn')[0], {
         showMoreInvite: false,
-        selectRangeOptions: dealUserRange(this.props, formData),
+        selectRangeOptions,
         tabType,
         appId,
-        prefixAccounts: !_.includes(filterAccountIds, md.global.Account.accountId)
-          ? [
-              {
-                accountId: md.global.Account.accountId,
-                fullname: _l('我自己'),
-                avatar: md.global.Account.avatar,
-              },
-            ]
-          : [],
+        prefixAccounts:
+          !_.includes(filterAccountIds, md.global.Account.accountId) && !hasUserRange
+            ? [
+                {
+                  accountId: md.global.Account.accountId,
+                  fullname: md.global.Account.fullname,
+                  avatar: md.global.Account.avatar,
+                },
+              ]
+            : [],
         filterAccountIds,
         minHeight: 400,
         offset: {
@@ -119,23 +122,12 @@ export default class Widgets extends Component {
   }
 
   render() {
-    const { projectId, disabled, enumDefault, from, formData = [], worksheetId, controlId, appId } = this.props;
+    const { projectId, disabled, enumDefault, from, formData = [], worksheetId, controlId, appId, dataSource } = this.props;
     const { showSelectUser } = this.state;
     const value = this.getUserValue();
     const isMobile = browserIsMobile();
     return (
-      <div
-        className="customFormControlBox"
-        style={{
-          flexWrap: 'wrap',
-          minWidth: 0,
-          alignItems: 'center',
-          height: 'auto',
-          background: '#fff',
-          borderColor: '#fff',
-          padding: 0,
-        }}
-      >
+      <div className="customFormControlBox customFormControlUser">
         {value.map((item, index) => {
           return (
             <div className={cx('customFormControlTags', { selected: isMobile && !disabled })} key={index}>
@@ -145,17 +137,16 @@ export default class Widgets extends Component {
                 </div>
               ) : (
                 <UserHead
-                  projectId={_.isEmpty(getCurrentProject(projectId)) ? '' : projectId}
-                  bindBusinessCard={!isMobile}
+                  projectId={projectId}
                   className="userHead InlineBlock"
                   alwaysBindCard
                   key={index}
+                  appId={dataSource ? undefined : appId}
                   user={{
                     userHead: item.avatar,
                     accountId: item.accountId,
                   }}
                   size={26}
-                  lazy="false"
                 />
               )}
               <span className="ellipsis mLeft8" style={{ maxWidth: 200 }}>

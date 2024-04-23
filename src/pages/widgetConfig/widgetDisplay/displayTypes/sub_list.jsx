@@ -5,8 +5,13 @@ import { SYSTEM_FIELD_TO_TEXT } from 'src/pages/widgetConfig/widgetSetting/compo
 import { isEmpty } from 'lodash';
 
 export default function SubList({ data }) {
-  const { relationControls, desc = '' } = data;
-  const showControls = getShowControls(relationControls, data.showControls);
+  const { relationControls = [], desc = '' } = data;
+  const showControls = getShowControls(
+    relationControls.concat(
+      Object.keys(SYSTEM_FIELD_TO_TEXT).map(item => ({ controlId: item, controlName: SYSTEM_FIELD_TO_TEXT[item] })),
+    ),
+    data.showControls,
+  );
 
   const getWidths = () => {
     const widths = getAdvanceSetting(data, 'widths') || [];
@@ -37,7 +42,7 @@ export default function SubList({ data }) {
                         _.find(relationControls, item => item.controlId === controlId) || {};
                       return (
                         <th key={controlId} className="overflow_ellipsis" style={{ width: `${widths[index]}px` }}>
-                          {required && <span>{_l('*')}</span>}
+                          {required && <span>*</span>}
                           {controlName || SYSTEM_FIELD_TO_TEXT[controlId]}
                         </th>
                       );
@@ -57,6 +62,7 @@ export default function SubList({ data }) {
                           {(type === 34 ||
                             type === 45 ||
                             type === 49 ||
+                            type === 51 ||
                             (type === 29 && String(enumDefault) === '2' && advancedSetting.showtype === '2')) && (
                             <span className="Gray_75 unSupport">{_l('不支持此类型字段')}</span>
                           )}

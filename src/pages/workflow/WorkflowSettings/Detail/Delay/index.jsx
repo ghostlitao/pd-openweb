@@ -120,7 +120,9 @@ export default class Delay extends Component {
         <div className="mTop24 bold">{_l('日期')}</div>
         <div className="mTop10">
           <SpecificFieldsValue
+            projectId={this.props.companyId}
             processId={this.props.processId}
+            relationId={this.props.relationId}
             selectNodeId={this.props.selectNodeId}
             updateSource={this.updateSource}
             type="date"
@@ -156,7 +158,9 @@ export default class Delay extends Component {
               )}
               <div className="mTop10">
                 <SpecificFieldsValue
+                  projectId={this.props.companyId}
                   processId={this.props.processId}
+                  relationId={this.props.relationId}
                   selectNodeId={this.props.selectNodeId}
                   updateSource={obj => this.updateSource({ [key]: obj })}
                   type={key}
@@ -186,7 +190,7 @@ export default class Delay extends Component {
           bg="BGBlueAsh"
           updateSource={this.updateSource}
         />
-        <div className="flex mTop20">
+        <div className="flex">
           <ScrollView>
             <div className="workflowDetailBox">
               {data.actionId === '300' ? this.renderDelayTo() : this.renderDelayFor()}

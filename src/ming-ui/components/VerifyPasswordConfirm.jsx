@@ -1,21 +1,8 @@
-import React, { useRef } from 'react';
-import { Dialog } from 'ming-ui';
-import { Input } from 'antd';
-import styled from 'styled-components';
+import React, { useState } from 'react';
+import { Dialog, VerifyPasswordInput } from 'ming-ui';
 import { verifyPassword } from 'src/util';
 import functionWrap from 'ming-ui/components/FunctionWrap';
-import { func, number, string } from 'prop-types';
-
-const Password = styled(Input.Password)`
-  box-shadow: none !important;
-  line-height: 28px !important;
-  border-radius: 3px !important;
-  border: 1px solid #ccc !important;
-  margin-bottom: 10px;
-  &.ant-input-affix-wrapper-focused {
-    border-color: #2196f3;
-  }
-`;
+import { func, number, string, bool } from 'prop-types';
 
 export default function VerifyPasswordConfirm(props) {
   const {
@@ -23,18 +10,29 @@ export default function VerifyPasswordConfirm(props) {
     width = 480,
     title,
     description,
-    inputName = _l('当前用户密码'),
-    passwordPlaceHolder = _l('请输入密码'),
+    isRequired,
+    allowNoVerify = false,
+    closeImageValidation,
     onOk = () => {},
     onCancel,
   } = props;
-  const passwordRef = useRef();
-  function handleConfirm() {
-    const password = passwordRef.current.input.value;
+  const [password, setPassword] = useState('');
+  const [isNoneVerification, setIsNoneVerification] = useState(false);
 
-    verifyPassword(password, () => {
-      onCancel();
-      onOk();
+  function handleConfirm() {
+    if (isRequired && (!password || !password.trim())) {
+      alert(_l('请输入密码'), 3);
+      return;
+    }
+
+    verifyPassword({
+      password,
+      isNoneVerification,
+      closeImageValidation,
+      success: () => {
+        onCancel();
+        onOk(password);
+      },
     });
   }
   return (
@@ -43,18 +41,22 @@ export default function VerifyPasswordConfirm(props) {
       className="verifyPasswordConfirm"
       width={width}
       overlayClosable={false}
-      title={title}
+      title={title || _l('安全验证')}
       description={description}
       onOk={handleConfirm}
       onCancel={onCancel}
       confirm={confirmType}
     >
-      <div className="Font13 mBottom10 Bold">{inputName}</div>
-      <div style={{ height: '0px', overflow: 'hidden' }}>
-        // 用来避免浏览器将用户名塞到其它input里
-        <input type="text" />
-      </div>
-      <Password ref={passwordRef} autoComplete="new-password" placeholder={passwordPlaceHolder} />
+      <VerifyPasswordInput
+        showSubTitle={false}
+        autoFocus={true}
+        isRequired={isRequired}
+        allowNoVerify={allowNoVerify}
+        onChange={({ password, isNoneVerification }) => {
+          setPassword(password);
+          setIsNoneVerification(isNoneVerification);
+        }}
+      />
     </Dialog>
   );
 }
@@ -63,8 +65,8 @@ VerifyPasswordConfirm.propTypes = {
   width: number,
   title: string,
   description: string,
-  inputName: string,
-  passwordPlaceHolder: string,
+  isRequired: bool,
+  closeImageValidation: bool,
   onOk: func,
   onCancel: func,
 };

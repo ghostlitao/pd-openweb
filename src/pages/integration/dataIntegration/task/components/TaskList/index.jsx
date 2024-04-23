@@ -71,8 +71,11 @@ const TaskListBox = styled.div`
     .errorIcon {
       font-size: 16px;
       color: #f44336;
-      margin-left: 16px;
+      margin-left: 8px;
       cursor: pointer;
+    }
+    .warnColor {
+      color: #faad14;
     }
   }
 
@@ -93,7 +96,7 @@ const TaskListBox = styled.div`
   }
 
   .taskStatus {
-    flex: 2.5;
+    flex: 3;
     .ant-switch-disabled {
       background: #dedede !important;
       opacity: 1;
@@ -299,7 +302,7 @@ export default function TaskList({ projectId, onRefreshComponents }) {
 
   const onSearch = useCallback(
     _.debounce(value => {
-      setFetchState({ keyWords: value, loading: true });
+      setFetchState({ keyWords: value, loading: true, pageNo: 0 });
     }, 500),
     [],
   );
@@ -439,11 +442,23 @@ export default function TaskList({ projectId, onRefreshComponents }) {
             <Switch
               loading={switchLoading[item.id]}
               checkedChildren={_l('开启')}
-              unCheckedChildren={_l('关闭')}
+              unCheckedChildren={_l('关闭%11001')}
               checked={item.taskStatus === TASK_STATUS_TYPE.RUNNING}
               onChange={checked => switchTaskStatus(checked, item)}
               disabled={!!item.errorInfo}
             />
+            {item.taskStatus === TASK_STATUS_TYPE.CREATING && (
+              <div className="flexRow alignItemsCenter">
+                <LoadDiv size="small" className="mLeft8" />
+                <span className="mLeft4 ThemeColor">{_l('创建中')}</span>
+              </div>
+            )}
+            {(item.hasConfigUpdate || item.taskStatus === TASK_STATUS_TYPE.UN_PUBLIC) && !item.errorInfo && (
+              <div className="flexRow alignItemsCenter">
+                <Icon icon="info1" className="warnColor Font16 mLeft8" />
+                <span className="mLeft4 ThemeColor">{item.hasConfigUpdate ? _l('有更新未发布') : _l('未发布')}</span>
+              </div>
+            )}
             {item.errorInfo && (
               <Trigger
                 action={['hover']}
@@ -709,7 +724,7 @@ export default function TaskList({ projectId, onRefreshComponents }) {
         </div>
       </TaskListBox>
       <ScrollView className="flex" onScrollEnd={onScrollEnd}>
-        {taskList.length > 0 ? (
+        {taskList && taskList.length > 0 ? (
           <TaskListBox>
             {taskList.map((sourceItem, index) => {
               return (

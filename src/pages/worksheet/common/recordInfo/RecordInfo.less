@@ -15,8 +15,8 @@
       box-sizing: border-box;
       position: relative;
       z-index: 3;
-      height: 56px;
-      line-height: 56px;
+      height: 52px;
+      line-height: 52px;
       background-color: #fff;
       border-bottom: 1px solid #ddd;
 
@@ -49,7 +49,7 @@
       .customButtons {
         display: inline-block;
         line-height: 1;
-        margin: 10px 0px 0px 20px;
+        margin: 8px 0px 0px 20px;
       }
 
       .shareBtn {
@@ -68,18 +68,22 @@
       background: #fff;
       overflow: hidden;
       .recordInfoForm {
-        min-width: 400px;
+        min-width: 450px;
         position: relative;
         overflow: hidden;
         .isSplit {
           height: 100%;
-          .topCon,
-          .relateRecordBlockCon {
+          .topCon {
             overflow-y: auto;
             overflow-x: hidden;
-          }
-          .topCon {
             padding-bottom: 32px;
+          }
+          #newCustomTabSectionWrap {
+            overflow: hidden;
+            .customFieldsContainer {
+              overflow-y: auto;
+              overflow-x: hidden;
+            }
           }
         }
         .recordInfoFormHeader {
@@ -240,40 +244,6 @@
   }
 }
 
-.relateRecordBlock {
-  .searchIcon {
-    position: relative;
-    right: 10px;
-    z-index: 2;
-    .icon-search {
-      position: relative;
-      margin: 5px 0 0;
-    }
-    .searchInput {
-      font-size: 0px;
-      overflow: hidden;
-      background: #eaeaea;
-      height: 28px;
-      border-radius: 28px;
-      input {
-        width: 150px;
-        margin-left: 30px;
-        padding-left: 0px;
-        height: 28px;
-        line-height: 28px;
-        font-size: 12px;
-        border: none;
-        background: transparent;
-      }
-    }
-    .clearKeywords {
-      cursor: pointer;
-      margin: 5px;
-      position: absolute;
-      right: 0px;
-    }
-  }
-}
 // 自定义按钮
 .recordCustomButton.ming.Button {
   position: relative;
@@ -321,7 +291,9 @@
     bottom: 0;
     background-color: rgba(0, 0, 0, 0.1);
   }
-
+  &.transparentButton:not(:disabled):hover::before {
+    background-color: rgba(0, 0, 0, 0.02);
+  }
   &.Button--disabled {
     color: rgba(117, 117, 117, 0.5) !important;
     background-color: #eaeaea !important;
@@ -332,6 +304,11 @@
 .customButtonConfirm {
   .mui-dialog-default-title {
     line-height: 1.3em;
+  }
+}
+.customButtonConfirmDialog {
+  .mui-dialog-body {
+    overflow: initial !important;
   }
 }
 
@@ -356,7 +333,13 @@
     padding-bottom: 5px;
     border-bottom: 1px solid #e0e0e0;
     overflow: auto;
-
+    .ming.Item .Item-content .fileIcon {
+      width: 13px;
+      height: 15px;
+      position: absolute;
+      margin-top: 10px;
+      left: 16px;
+    }
     .ming.Item .Item-content .detail {
       position: absolute;
       right: 16px;

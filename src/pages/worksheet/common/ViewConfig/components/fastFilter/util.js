@@ -3,8 +3,11 @@ import { FILTER_CONDITION_TYPE } from 'src/pages/worksheet/common/WorkSheetFilte
 import { redefineComplexControl } from 'src/pages/worksheet/common/WorkSheetFilter/util';
 // 文本筛选方式
 const TEXT_TYPE = [
-  { text: _l('精准搜索'), value: FILTER_CONDITION_TYPE.EQ },
-  { text: _l('模糊搜索'), value: FILTER_CONDITION_TYPE.LIKE },
+  { text: _l('等于'), value: FILTER_CONDITION_TYPE.EQ },
+  { text: _l('包含'), value: FILTER_CONDITION_TYPE.LIKE },
+  { text: _l('同时包含'), value: FILTER_CONDITION_TYPE.TEXT_ALLCONTAIN },
+  { text: _l('开头是'), value: FILTER_CONDITION_TYPE.START },
+  { text: _l('结尾是'), value: FILTER_CONDITION_TYPE.END },
 ];
 // 关联筛选方式
 const RELA_TYPE = [
@@ -37,6 +40,9 @@ const SHOW_TYPE = [
   { text: _l('下拉框'), value: 2 },
   { text: _l('平铺'), value: 1 },
 ];
+
+export const DATE_TYPE_M = [7, 8, 9, 12, 13, 14, 15, 16, 17];
+export const DATE_TYPE_Y = [15, 16, 17];
 //时间
 export const DATE_TYPE = [
   [{ text: _l('全选'), value: 'all' }],
@@ -76,6 +82,21 @@ export const DATE_TYPE = [
     { text: _l('将来30天'), value: 33 },
   ],
 ];
+// 引导文字
+export const LIMIT = {
+  key: 'limit',
+  keys: [
+    1,
+    2, // 文本框
+    3,
+    4, // 电话号码
+    5, // 邮件地址
+    7, // 证件
+    32, // 文本组合
+    33, // 自动编号
+  ],
+  txt: '引导文字',
+};
 //多选类型字段 且 允许选择数量为多选 =>支持设置筛选方式  多选 => 人员、部门、组织角色enumDefault：1; 关联字段enumDefault: 2 ;多选字段
 export const MULTI_SELECT_FILTER_TYPE = {
   key: 'filterType',
@@ -171,7 +192,7 @@ export const NAV_SHOW_TYPE = {
     11, // 选项
     10, // 多选
     9, // 单选 平铺
-    26 //成员
+    26, //成员
   ],
   txt: '显示项',
 };
@@ -256,6 +277,7 @@ export const FAST_FILTERS_WHITELIST = [
   RELA_FILTER_TYPE,
   GROUP_FILTER_TYPE,
   MULTI_SELECT_FILTER_TYPE,
+  LIMIT,
 ];
 // 支持快速筛选的字段
 export const FASTFILTER_CONDITION_TYPE = [
@@ -301,8 +323,18 @@ export const FASTFILTER_CONDITION_TYPE = [
   48, // 组织角色
   50, // API 查询
 ];
-
-export const ADVANCEDSETTING_KEYS = ['allowscan', 'daterange', 'allowitem', 'direction'];
+//处理这些变更时，需要格式化处理fastFilter里的navfilters
+export const ADVANCEDSETTING_KEYS = [
+  'allowscan',
+  'daterange',
+  'allowitem',
+  'direction',
+  'searchtype',
+  'searchcontrol',
+  'clicksearch',
+  'limit',
+];
+export const Filter_KEYS = ['filterType'];
 
 export const getControlFormatType = (control = {}) => {
   return redefineComplexControl(control).type;
@@ -322,15 +354,28 @@ export const getSetDefault = (control = {}) => {
           [o.key]: control[o.key] || o.default,
         };
       } else {
+        let defaultValue = o.default;
+        if (DATE_RANGE.keys.includes(control.type)) {
+          defaultValue =
+            _.get(control, 'advancedSetting.showtype') === '5'
+              ? DATE_TYPE_Y
+              : _.get(control, 'advancedSetting.showtype') === '4'
+              ? DATE_TYPE_M
+              : defaultValue;
+        }
         fastFilterSet = {
           ...fastFilterSet,
           advancedSetting: {
             ...advancedSetting,
-            [o.key]: JSON.stringify(control[o.key] || o.default),
+            [o.key]: JSON.stringify(control[o.key] || defaultValue),
           },
         }; //预设时间为多选
       }
     }
   });
+  //设置了加密
+  if (!!control.encryId) {
+    fastFilterSet = { ...fastFilterSet, filterType: FILTER_CONDITION_TYPE.EQ };
+  }
   return fastFilterSet;
 };

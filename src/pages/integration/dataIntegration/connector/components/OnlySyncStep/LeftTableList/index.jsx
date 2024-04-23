@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useSetState } from 'react-use';
 import styled from 'styled-components';
-import { Icon, Modal } from 'ming-ui';
+import { Icon, Modal, Tooltip } from 'ming-ui';
 import { Select } from 'antd';
 import cx from 'classnames';
 import _ from 'lodash';
-import { DATABASE_TYPE } from '../../../../constant';
+import { DATABASE_TYPE, isValidName } from '../../../../constant';
 import SelectDataObjForm from '../../SelectDataObjForm';
 import homeAppApi from 'src/api/homeApp';
 
@@ -38,6 +38,10 @@ const LeftListWrapper = styled.div`
           text-overflow: ellipsis;
           width: 150px;
           white-space: nowrap;
+        }
+        .repeatIcon {
+          color: #f44336;
+          margin-right: 8px;
         }
         .deleteIcon {
           display: none;
@@ -107,11 +111,22 @@ const Wrapper = styled.div`
 `;
 
 export default function LeftTableList(props) {
-  const { source, setNextOrSaveDisabled, currentTab, setCurrentTab, onDelete } = props;
+  const { source, setNextOrSaveDisabled, currentTab, setCurrentTab, onDelete, submitData = [], dest } = props;
   const [tableList, setTableList] = useState([]);
   const [visible, setVisible] = useState(false);
   const [dataObj, setDataObj] = useSetState({});
   const isSourceAppType = source.type === DATABASE_TYPE.APPLICATION_WORKSHEET;
+  const isDestAppType = dest.type === DATABASE_TYPE.APPLICATION_WORKSHEET;
+
+  useEffect(() => {
+    if (source.type === DATABASE_TYPE.KAFKA) {
+      const db = (_.get(source, 'formData.hosts') || [])[0];
+      const topic = _.get(source, 'formData.extraParams.topic');
+      setTableList([{ db, tableList: [{ id: topic, name: topic }] }]);
+      setCurrentTab({ db, table: topic, tableName: topic });
+      setNextOrSaveDisabled(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (isSourceAppType && visible && !dataObj.tableOptionList) {
@@ -120,9 +135,20 @@ export default function LeftTableList(props) {
           const tableOptionList = res
             .filter(o => o.type == 0)
             .map(item => {
+              const isValidTable = isValidName(item.workSheetName);
               return {
-                label: item.workSheetName,
+                label: !isValidTable ? (
+                  <React.Fragment>
+                    {item.workSheetName}
+                    <Tooltip text={_l('名称包含特殊字符，无法同步')}>
+                      <Icon icon="info1" className="Gray_bd mLeft5 pointer" />
+                    </Tooltip>
+                  </React.Fragment>
+                ) : (
+                  item.workSheetName
+                ),
                 value: item.workSheetId,
+                workSheetName: item.workSheetName,
               };
             });
           setDataObj({ tableOptionList });
@@ -165,7 +191,8 @@ export default function LeftTableList(props) {
 
     if (dataObj.tableOptionList) {
       return dataObj.tableOptionList.map(item => {
-        return { ...item, disabled: addedTables.indexOf(item.value) !== -1 };
+        const isValidTable = isValidName(item.workSheetName);
+        return { ...item, disabled: addedTables.indexOf(item.value) !== -1 || !isValidTable };
       });
     }
 
@@ -205,6 +232,27 @@ export default function LeftTableList(props) {
     setNextOrSaveDisabled(false);
   };
 
+  const getRepeatTableNameInfo = () => {
+    const repeatInfo = [];
+    const countObj = {};
+    submitData
+      .filter(item => !!_.get(item, ['destNode', 'config', 'createTable']) && !isDestAppType)
+      .forEach(item => {
+        const sourceNodeConfig = item.sourceNode.config;
+        const destTableName = item.destNode.config.tableName;
+        if (!countObj[destTableName]) {
+          countObj[destTableName] = 1;
+        } else {
+          repeatInfo.push({
+            db: sourceNodeConfig.dbName,
+            tableName: sourceNodeConfig.tableName,
+            workSheetId: sourceNodeConfig.workSheetId,
+          });
+        }
+      });
+    return repeatInfo;
+  };
+
   return (
     <LeftListWrapper>
       <div className="titleItem mTop16">
@@ -217,11 +265,15 @@ export default function LeftTableList(props) {
       </div>
       <ul>
         {tableList.map(item => {
+          const repeatInfoArr = getRepeatTableNameInfo();
           return (
             <div key={item.db}>
               <div className="Gray_9e mTop16 mBottom10 mLeft15">{item.db}</div>
               {item.tableList &&
                 item.tableList.map(table => {
+                  const isRepeatDestName = !!repeatInfoArr.filter(r =>
+                    isSourceAppType ? r.workSheetId === table.id : r.db === item.db && r.tableName === table.name,
+                  ).length;
                   return (
                     <li
                       key={table.id}
@@ -241,18 +293,27 @@ export default function LeftTableList(props) {
                     >
                       <div className="listItem">
                         <span title={table.name}>{table.name}</span>
-                        <Icon
-                          icon="delete1"
-                          className={cx('deleteIcon', {
-                            isActive: isSourceAppType
-                              ? table.id === currentTab.table
-                              : item.db === currentTab.db && table.name === currentTab.tableName,
-                          })}
-                          onClick={e => {
-                            e.stopPropagation();
-                            onDeleteDataObj(item.db, table);
-                          }}
-                        />
+                        <div className="flexRow">
+                          {isRepeatDestName && (
+                            <Tooltip text={_l('目的地表名重复')}>
+                              <Icon icon="info1" className="repeatIcon" />
+                            </Tooltip>
+                          )}
+                          {source.type !== DATABASE_TYPE.KAFKA && (
+                            <Icon
+                              icon="delete1"
+                              className={cx('deleteIcon', {
+                                isActive: isSourceAppType
+                                  ? table.id === currentTab.table
+                                  : item.db === currentTab.db && table.name === currentTab.tableName,
+                              })}
+                              onClick={e => {
+                                e.stopPropagation();
+                                onDeleteDataObj(item.db, table);
+                              }}
+                            />
+                          )}
+                        </div>
                       </div>
                     </li>
                   );
@@ -262,10 +323,12 @@ export default function LeftTableList(props) {
         })}
       </ul>
 
-      <AddDataObjButton onClick={() => setVisible(true)}>
-        <Icon icon="add" />
-        <span>{_l('数据对象')}</span>
-      </AddDataObjButton>
+      {source.type !== DATABASE_TYPE.KAFKA && (
+        <AddDataObjButton onClick={() => setVisible(true)}>
+          <Icon icon="add" />
+          <span>{_l('数据对象')}</span>
+        </AddDataObjButton>
+      )}
 
       {visible && (
         <Modal
@@ -293,7 +356,7 @@ export default function LeftTableList(props) {
                 options={getList()}
                 value={dataObj.tables}
                 filterOption={(inputValue, option) => {
-                  return option.label.toLowerCase().includes(inputValue.toLowerCase());
+                  return option.workSheetName.toLowerCase().includes(inputValue.toLowerCase());
                 }}
                 onChange={tables => setDataObj({ tables })}
               />

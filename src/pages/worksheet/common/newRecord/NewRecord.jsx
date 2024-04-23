@@ -2,11 +2,11 @@ import React, { useState, useEffect, useRef, Fragment } from 'react';
 import PropTypes from 'prop-types';
 import cx from 'classnames';
 import { Checkbox, Modal, LoadDiv, ScrollView } from 'ming-ui';
-import { removeFromLocal } from 'worksheet/util';
+import { removeTempRecordValueFromLocal } from 'worksheet/util';
 import NewRecordContent from './NewRecordContent';
 import AdvancedSettingHandler from './AdvancedSettingHandler';
-
 import { browserIsMobile } from 'src/util';
+import { BrowserRouter } from 'react-router-dom';
 
 export const BUTTON_ACTION_TYPE = {
   CLOSE: 1,
@@ -16,13 +16,15 @@ export const BUTTON_ACTION_TYPE = {
 function NewRecord(props) {
   const {
     visible,
-    viewId,
+    appId,
+    worksheetId,
     title,
     notDialog,
     className,
     showFillNext,
     showContinueAdd = true,
     hideNewRecord,
+    onCloseDialog = () => {},
     showShare,
     advancedSetting = {},
   } = props;
@@ -31,22 +33,16 @@ function NewRecord(props) {
   const [shareVisible, setShareVisible] = useState();
   const [modalClassName] = useState(Math.random().toString().slice(2));
   const [abnormal, setAbnormal] = useState();
-  const [autoFill, setAutoFill] = useState(localStorage.getItem('new_record_autofill') === '1');
+  const [autoFill, setAutoFill] = useState(advancedSetting.autoreserve === '1');
   const [loading, setLoading] = useState();
   const continueAddVisible = showContinueAdd && advancedSetting.continueBtnVisible;
   const isEmbed = /\/embed\/view\//.test(location.pathname);
-  useEffect(() => {
-    if (autoFill) {
-      safeLocalStorageSetItem('new_record_autofill', '1');
-    } else {
-      localStorage.removeItem('new_record_autofill');
-    }
-  }, [autoFill]);
   const content = abnormal ? (
     <div className="Gray_9e TxtCenter mTop80 pTop100">{_l('该表已删除或没有权限')}</div>
   ) : (
     <NewRecordContent
       {...props}
+      maskLoading={loading}
       registerFunc={funcs => (newRecordContent.current = funcs)}
       title={advancedSetting.title || title}
       notDialog={notDialog}
@@ -68,13 +64,16 @@ function NewRecord(props) {
         </div>
       )}
       <span className="continue TxtMiddle clearfix InlineBlock Left Gray_9e">
-        {continueAddVisible && showFillNext && advancedSetting.autoFillVisible && (
-          <Checkbox
-            checked={autoFill}
-            onClick={() => setAutoFill(!autoFill)}
-            text={_l('继续创建时，保留本次提交内容')}
-          />
-        )}
+        {continueAddVisible &&
+          showFillNext &&
+          advancedSetting.autoreserve !== '1' &&
+          advancedSetting.autoFillVisible && (
+            <Checkbox
+              checked={autoFill}
+              onClick={() => setAutoFill(!autoFill)}
+              text={_l('继续创建时，保留本次提交内容')}
+            />
+          )}
       </span>
       <div className="flex" />
       {advancedSetting.closedrafts !== '1' && (
@@ -82,6 +81,10 @@ function NewRecord(props) {
           type="button"
           className="ming Button--medium Button saveAndContinueBtn ellipsis mRight12"
           onClick={() => {
+            if (window.isPublicApp) {
+              alert(_l('预览模式下，不能操作'), 3);
+              return;
+            }
             newRecordContent.current.newRecord({
               autoFill,
               rowStatus: 21,
@@ -102,7 +105,7 @@ function NewRecord(props) {
             }
             newRecordContent.current.newRecord({
               isContinue: true,
-              autoFill,
+              autoFill: autoFill && advancedSetting.autoFillVisible,
               actionType: advancedSetting.continueEndAction,
               rowStatus: 1,
             });
@@ -137,8 +140,9 @@ function NewRecord(props) {
     verticalAlign: 'bottom',
     width: browserIsMobile() ? window.innerWidth - 20 : 960,
     onCancel: () => {
+      onCloseDialog();
       hideNewRecord();
-      removeFromLocal('tempNewRecord', viewId);
+      removeTempRecordValueFromLocal('tempNewRecord', worksheetId);
     },
     footer,
     visible,
@@ -155,6 +159,9 @@ function NewRecord(props) {
           ]
         : [],
   };
+  useEffect(() => {
+    setAutoFill(advancedSetting.autoreserve === '1');
+  }, [advancedSetting.autoreserve]);
   return (
     <Fragment>
       {notDialog ? (
@@ -163,15 +170,17 @@ function NewRecord(props) {
           {footer}
         </div>
       ) : (
-        <Modal
-          {...dialogProps}
-          allowScale
-          bodyStyle={{ paddingBottom: 0 }}
-          transitionName="none"
-          maskTransitionName="none"
-        >
-          {content}
-        </Modal>
+        <BrowserRouter>
+          <Modal
+            {...dialogProps}
+            allowScale
+            bodyStyle={{ paddingBottom: 0 }}
+            transitionName="none"
+            maskTransitionName="none"
+          >
+            {content}
+          </Modal>
+        </BrowserRouter>
       )}
     </Fragment>
   );

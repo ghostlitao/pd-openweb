@@ -2,6 +2,7 @@ import userController from 'src/api/user';
 import externalPortalCotroller from 'src/api/externalPortal';
 import addressBookController from 'src/api/addressBook';
 import { wrapAjax } from 'worksheet/redux/actions/util';
+import _ from 'lodash';
 
 const getUsersByApp = wrapAjax(externalPortalCotroller.getUsersByApp);
 const getProjectContactUserListByApp = wrapAjax(userController.getProjectContactUserListByApp);
@@ -70,6 +71,9 @@ export function getUsers(args) {
         fullname: user.name,
         phone: user.mobilePhone,
       }));
+      if ((args.pageIndex || 1) !== 1) {
+        return result;
+      }
       const currentAccount = result.find(item => item.accountId === md.global.Account.accountId);
       if (!args.hidePortalCurrentUser && (args.includeSystemField || args.includeUndefinedAndMySelf)) {
         result = [
@@ -82,14 +86,9 @@ export function getUsers(args) {
           },
         ].concat(result);
       } else if (!args.keywords && currentAccount) {
-        result = [
-          {
-            ...currentAccount,
-            fullname: _l('我自己'),
-          },
-        ].concat(result);
+        result = [currentAccount].concat(result);
       }
-      return result;
+      return _.uniqBy(result, 'accountId');
     });
   } else if (args.type === 'range') {
     return getProjectContactUserListByApp({

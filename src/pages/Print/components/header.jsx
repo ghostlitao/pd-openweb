@@ -3,31 +3,20 @@ import './header.less';
 import { Icon, LoadDiv } from 'ming-ui';
 import { fromType, typeForCon } from '../config';
 import cx from 'classnames';
-import Api from 'api/homeApp';
 import _ from 'lodash';
 import html2canvas from 'html2canvas';
-import { canEditApp } from 'src/pages/worksheet/redux/actions/util.js';
+import { addBehaviorLog } from 'src/util';
 
 class Header extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
       isEdit: false,
-      isUserAdmin: false,
       exportLoading: false,
     };
   }
 
   componentWillMount() {
-    const { params } = this.props;
-    const { type, from, appId, printType } = params;
-    if (from === fromType.PRINT && type === typeForCon.NEW && appId && printType !== 'flow') {
-      Api.getAppDetail({ appId: appId }, { silent: true }).then(data => {
-        this.setState({
-          isUserAdmin: canEditApp(data.permissionType, data.isLock), //开发者|管理员
-        });
-      });
-    }
   }
 
   richTextImgHandle = () => {
@@ -134,7 +123,7 @@ class Header extends React.Component {
 
   render() {
     const { params, printData, handChange, saveTem, saveFn, downFn, showPdf } = this.props;
-    const { printId, type, from, printType, isDefault } = params;
+    const { printId, type, from, printType, isDefault, worksheetId, rowId, fileTypeNum } = params;
     const { isEdit, exportLoading, href } = this.state;
 
     return (
@@ -243,7 +232,7 @@ class Header extends React.Component {
                     </div>
                   ))}
 
-                {from === fromType.PRINT && type === typeForCon.NEW && this.state.isUserAdmin && (
+                {from === fromType.PRINT && type === typeForCon.NEW && this.props.isUserAdmin && (
                   <span
                     className="btn Gray Hand mLeft20"
                     onClick={() => {
@@ -258,6 +247,7 @@ class Header extends React.Component {
                     <div
                       className="printButton Hand InlineBlock bold mLeft20"
                       onClick={() => {
+                        addBehaviorLog('printRecord', worksheetId, { printId, rowId }); // 埋点
                         window.print();
                         return false;
                       }}
@@ -274,8 +264,8 @@ class Header extends React.Component {
                         downFn();
                       }}
                     >
-                      <i className="icon-new_word Font15 mRight10"></i>
-                      {_l('导出为word')}
+                      <i className={` Font15 mRight10 ${fileTypeNum===5 ? 'icon-new_excel' : 'icon-new_word'}`}></i>
+                      {fileTypeNum===5 ? _l('导出为excel') : _l('导出为word')}
                     </div>
                   )
                 )}

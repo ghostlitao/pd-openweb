@@ -2,6 +2,7 @@ import React, { Component, Fragment } from 'react';
 import { Icon } from 'ming-ui';
 import { Checkbox, Tooltip, Input } from 'antd';
 import cx from 'classnames';
+import { formatNumberFromInput } from 'src/util';
 import { reportTypes } from 'statistics/Charts/common';
 
 export default class XAxis extends Component {
@@ -9,8 +10,8 @@ export default class XAxis extends Component {
     super(props);
   }
   render() {
-    const { currentReport, onChangeDisplayValue } = this.props;
-    const { reportType, displaySetup } = currentReport;
+    const { currentReport, onChangeDisplayValue, onChangeStyle } = this.props;
+    const { reportType, displaySetup, style } = currentReport;
     const { xdisplay } = displaySetup;
     const isBarChart = reportType === reportTypes.BarChart && displaySetup.showChartType === 2;
     return (
@@ -18,7 +19,7 @@ export default class XAxis extends Component {
         <div className="flexRow valignWrapper mLeft0 mBottom16">
           <Checkbox
             checked={xdisplay.showDial}
-            onChange={checked => {
+            onChange={event => {
               onChangeDisplayValue('xdisplay', {
                 ...xdisplay,
                 showDial: !xdisplay.showDial,
@@ -28,8 +29,8 @@ export default class XAxis extends Component {
             {_l('显示刻度标签')}
           </Checkbox>
         </div>
-        {![reportTypes.ScatterChart].includes(reportType) && (
-          <div className="flexRow valignWrapper mBottom16">
+        {![reportTypes.ScatterChart].includes(reportType) && xdisplay.showDial && (
+          <div className="flexRow valignWrapper mBottom16 mLeft25">
             <Checkbox
               className="mLeft0"
               checked={!!displaySetup.fontStyle}
@@ -37,7 +38,7 @@ export default class XAxis extends Component {
                 onChangeDisplayValue('fontStyle', displaySetup.fontStyle ? 0 : 1);
               }}
             >
-              {_l('自动倾斜%0文字', isBarChart ? _l('Y轴') : _l('X轴'))}
+              {isBarChart ? _l('自动倾斜Y轴文字') : _l('自动倾斜X轴文字')}
             </Checkbox>
             <Tooltip
               title={_l(
@@ -50,11 +51,23 @@ export default class XAxis extends Component {
             </Tooltip>
           </div>
         )}
+        {[reportTypes.LineChart, reportTypes.BarChart].includes(reportType) && (
+          <div className="flexRow valignWrapper mLeft0 mBottom16">
+            <Checkbox
+              checked={style.showXAxisSlider}
+              onChange={event => {
+                onChangeStyle({ showXAxisSlider: event.target.checked });
+              }}
+            >
+              {_l('显示横轴滚动条')}
+            </Checkbox>
+          </div>
+        )}
         {![reportTypes.BidirectionalBarChart].includes(reportType) && (
           <div className={cx('flexRow valignWrapper mLeft0', xdisplay.showTitle ? 'mBottom8' : 'mBottom16')}>
             <Checkbox
               checked={xdisplay.showTitle}
-              onChange={checked => {
+              onChange={event => {
                 onChangeDisplayValue('xdisplay', {
                   ...xdisplay,
                   showTitle: !xdisplay.showTitle,
@@ -76,6 +89,42 @@ export default class XAxis extends Component {
               });
             }}
           />
+        )}
+        {reportTypes.ScatterChart === reportType && (
+          <Fragment>
+            <div className="mBottom16 minWrapper">
+              <div className="mBottom8">{_l('最小值')}</div>
+              <Input
+                className="chartInput"
+                placeholder={_l('自动')}
+                defaultValue={xdisplay.minValue}
+                onBlur={event => {
+                  let value = event.target.value;
+                  let count = Number(formatNumberFromInput(value));
+                  onChangeDisplayValue('xdisplay', {
+                    ...xdisplay,
+                    minValue: value ? count : value,
+                  });
+                }}
+              />
+            </div>
+            <div className="mBottom16 maxWrapper">
+              <div className="mBottom8">{_l('最大值')}</div>
+              <Input
+                className="chartInput"
+                placeholder={_l('自动')}
+                defaultValue={xdisplay.maxValue}
+                onBlur={event => {
+                  let value = event.target.value;
+                  let count = Number(formatNumberFromInput(value));
+                  onChangeDisplayValue('xdisplay', {
+                    ...xdisplay,
+                    maxValue: value ? count : value,
+                  });
+                }}
+              />
+            </div>
+          </Fragment>
         )}
       </Fragment>
     );

@@ -1,18 +1,18 @@
 import React, { Component, Fragment } from 'react';
 import cx from 'classnames';
 import dialogSelectUser from 'src/components/dialogSelectUser/dialogSelectUser';
-import { MultipleDropdown, Dropdown, TagTextarea, CityPicker, Icon, QiniuUpload } from 'ming-ui';
+import { MultipleDropdown, Dropdown, TagTextarea, Icon, QiniuUpload, CityPicker, Input } from 'ming-ui';
 import { DateTime, DateTimeRange } from 'ming-ui/components/NewDateTimePicker';
 import DialogSelectDept from 'src/components/dialogSelectDept';
 import Tag from '../Tag';
 import SelectOtherFields from '../SelectOtherFields';
-import { getIcons } from '../../../utils';
+import { getIcons, handleGlobalVariableName } from '../../../utils';
 import { previewQiniuUrl } from 'src/components/previewAttachments';
 import { TimePicker } from 'antd';
 import { FORMAT_TEXT } from '../../../enum';
 import { formatResponseData } from 'src/components/UploadFiles/utils';
 import previewAttachments from 'src/components/previewAttachments/previewAttachments';
-import { selectOrgRole } from 'src/components/DialogSelectOrgRole';
+import selectOrgRole from 'src/components/dialogSelectOrgRole';
 import moment from 'moment';
 
 export default class SingleControlValue extends Component {
@@ -21,6 +21,8 @@ export default class SingleControlValue extends Component {
     this.state = {
       moreFieldsIndex: '',
       isUploading: false,
+      search: undefined,
+      keywords: '',
     };
 
     // 缓存当前的附件的量
@@ -85,7 +87,7 @@ export default class SingleControlValue extends Component {
             flowNodeType={item.nodeTypeId}
             appType={item.nodeAppType || item.appType}
             actionId={item.nodeActionId || item.actionId}
-            nodeName={item.nodeName}
+            nodeName={handleGlobalVariableName(item.nodeId, item.sourceType, item.nodeName)}
             controlId={item.fieldValueId}
             controlName={item.fieldValueName}
             isSourceApp={item.isSourceApp}
@@ -145,13 +147,18 @@ export default class SingleControlValue extends Component {
     return (
       <SelectOtherFields
         showClear={this.props.showClear}
+        showCurrent={this.props.showCurrent}
+        disabledInterface={this.props.isBatch && item.type === 14}
         item={item}
         fieldsVisible={this.state.moreFieldsIndex === i}
+        projectId={this.props.companyId}
         processId={this.props.processId}
+        relationId={this.props.relationId}
         selectNodeId={this.props.selectNodeId}
         sourceAppId={this.props.sourceAppId}
         sourceNodeId={this.props.sourceNodeId}
         isIntegration={this.props.isIntegration}
+        filterType={this.props.filterType}
         dataSource={
           item.type === 29 ? (_.find(this.props.controls, obj => obj.controlId === item.fieldId) || {}).dataSource : ''
         }
@@ -333,7 +340,11 @@ export default class SingleControlValue extends Component {
         name: obj.nodeName,
         isSourceApp: obj.isSourceApp.toString(),
       };
-      formulaMap[obj.fieldValueId] = { type: obj.fieldValueType, name: obj.fieldValueName };
+      formulaMap[`${obj.nodeId}-${obj.fieldValueId}`] = {
+        type: obj.fieldValueType,
+        name: obj.fieldValueName,
+        sourceType: obj.sourceType,
+      };
 
       updateSource({ formulaMap }, () => {
         if (this.tagtextarea) {
@@ -382,9 +393,13 @@ export default class SingleControlValue extends Component {
     );
   };
 
+  onFetchData = _.debounce(keywords => {
+    this.setState({ keywords });
+  }, 500);
+
   render() {
     const { controls, item, i } = this.props;
-    const { isUploading } = this.state;
+    const { isUploading, search, keywords } = this.state;
     const formulaMap = _.cloneDeep(this.props.formulaMap);
     let list = [];
 
@@ -446,14 +461,14 @@ export default class SingleControlValue extends Component {
             renderTag={(tag, options) => {
               const ids = tag.split(/([a-zA-Z0-9#]{24,32})-/).filter(item => item);
               const nodeObj = formulaMap[ids[0]] || {};
-              const controlObj = formulaMap[ids[1]] || {};
+              const controlObj = formulaMap[ids.join('-')] || {};
 
               return (
                 <Tag
                   flowNodeType={nodeObj.type}
                   appType={nodeObj.appType}
                   actionId={nodeObj.actionId}
-                  nodeName={nodeObj.name || ''}
+                  nodeName={handleGlobalVariableName(ids[0], controlObj.sourceType, nodeObj.name)}
                   controlId={ids[1]}
                   controlName={controlObj.name || ''}
                   isSourceApp={nodeObj.isSourceApp === 'true'}
@@ -647,7 +662,7 @@ export default class SingleControlValue extends Component {
             <Fragment>
               <QiniuUpload
                 className="workflowFileUpload"
-                options={{ max_file_size: '50m' }}
+                options={{ max_file_size: '50m', chunk_size: '50m' }}
                 onUploaded={(up, file, response) => {
                   this.setState({ isUploading: false });
                   up.disableBrowse(false);
@@ -684,7 +699,7 @@ export default class SingleControlValue extends Component {
                     >
                       {File.isPicture('.' + ext) ? (
                         <img
-                          src={o.serverName + o.key}
+                          src={o.previewUrl ? o.previewUrl : o.serverName + o.key}
                           style={{ height: 28 }}
                           // onClick={() => this.previewAttachments(o)}
                         />
@@ -745,7 +760,7 @@ export default class SingleControlValue extends Component {
           {item.fieldValueId ? (
             this.renderSelectFieldsValue(item, i)
           ) : (
-            <div className="actionControlBox flex ThemeBorderColor3 clearBorderRadius">
+            <div className="actionControlBox flex ThemeBorderColor3 clearBorderRadius actionControlBoxClear">
               <DateTime
                 selectedValue={item.fieldValue ? moment(item.fieldValue) : null}
                 timePicker={item.type === 16}
@@ -760,39 +775,14 @@ export default class SingleControlValue extends Component {
                   <span className="Gray_bd">{_l('请选择日期')}</span>
                 )}
               </DateTime>
-            </div>
-          )}
-          {this.renderOtherFields(item, i)}
-        </div>
-      );
-    }
-
-    // 地区
-    if (item.type === 19 || item.type === 23 || item.type === 24) {
-      const level = item.type === 19 ? 1 : item.type === 23 ? 2 : 3;
-
-      return (
-        <div className="mTop8 flexRow relative">
-          {item.fieldValueId ? (
-            this.renderSelectFieldsValue(item, i)
-          ) : (
-            <div className="actionControlBox flex ThemeBorderColor3 clearBorderRadius">
-              <CityPicker
-                level={level}
-                defaultValue={item.fieldValue ? JSON.parse(item.fieldValue).value : ''}
-                placeholder={item.type === 19 ? _l('省') : item.type === 23 ? _l('省/市') : _l('省/市/县')}
-                callback={citys =>
-                  this.updateSingleControlValue(
-                    {
-                      fieldValue: JSON.stringify({
-                        id: citys[citys.length - 1].id,
-                        value: citys.map(o => o.name).join('/'),
-                      }),
-                    },
-                    i,
-                  )
-                }
-              />
+              {item.fieldValue && (
+                <Icon
+                  icon="cancel1"
+                  className="Font16 Gray_9e ThemeHoverColor3 Absolute"
+                  style={{ top: 9, right: 10 }}
+                  onClick={() => this.updateSingleControlValue({ fieldValue: '' }, i)}
+                />
+              )}
             </div>
           )}
           {this.renderOtherFields(item, i)}
@@ -830,6 +820,61 @@ export default class SingleControlValue extends Component {
                   <span className="Gray_bd">{_l('请选择日期')}</span>
                 )}
               </DateTimeRange>
+            </div>
+          )}
+          {this.renderOtherFields(item, i)}
+        </div>
+      );
+    }
+
+    // 地区
+    if (item.type === 19 || item.type === 23 || item.type === 24) {
+      const level = item.type === 19 ? 1 : item.type === 23 ? 2 : 3;
+      const cityText = safeParse(item.fieldValue || '{}').value || '';
+
+      return (
+        <div className="mTop8 flexRow relative">
+          {item.fieldValueId ? (
+            this.renderSelectFieldsValue(item, i)
+          ) : (
+            <div className="actionControlBox flex ThemeBorderColor3 clearBorderRadius actionControlBoxClear">
+              <CityPicker
+                search={keywords}
+                level={level}
+                callback={citys => {
+                  search && this.setState({ search: undefined, keywords: '' });
+                  this.updateSingleControlValue(
+                    {
+                      fieldValue: JSON.stringify({
+                        id: citys[citys.length - 1].id,
+                        value: citys[citys.length - 1].path,
+                      }),
+                    },
+                    i,
+                  );
+                }}
+              >
+                <Input
+                  className="CityPicker-input-textCon w100"
+                  placeholder={item.type === 19 ? _l('省') : item.type === 23 ? _l('省/市') : _l('省/市/县')}
+                  value={search !== undefined ? search : cityText}
+                  onChange={value => {
+                    this.setState({ search: value });
+                    this.onFetchData(value);
+                  }}
+                />
+              </CityPicker>
+              {cityText && (
+                <Icon
+                  icon="cancel1"
+                  className="Font16 Gray_9e ThemeHoverColor3 Absolute"
+                  style={{ top: 9, right: 10 }}
+                  onClick={() => {
+                    this.setState({ search: '', keywords: '' });
+                    this.updateSingleControlValue({ fieldValue: '' }, i);
+                  }}
+                />
+              )}
             </div>
           )}
           {this.renderOtherFields(item, i)}
@@ -973,7 +1018,9 @@ export default class SingleControlValue extends Component {
               border
               isAppendToBody
               placeholder={_l('选择流程中对应此工作表的节点对象')}
-              renderTitle={() => this.renderRelationField(_.find(relationControls, o => o.nodeId === item.nodeId))}
+              renderTitle={() =>
+                this.renderRelationField(_.find(relationControls, o => o.nodeId === item.nodeId) || item)
+              }
               onChange={nodeId => this.updateSingleControlValue({ nodeId }, i)}
             />
           )}
@@ -998,7 +1045,7 @@ export default class SingleControlValue extends Component {
 
     // 时间
     if (item.type === 46) {
-      const lang = getCookie('i18n_langtag') || getNavigatorLang();
+      const lang = getCookie('i18n_langtag') || md.global.Config.DefaultLang;
       const timeFormat = item.unit === '1' ? 'HH:mm' : 'HH:mm:ss';
 
       return (
@@ -1011,8 +1058,8 @@ export default class SingleControlValue extends Component {
                 className="triggerConditionTime"
                 showNow={false}
                 bordered={false}
-                allowClear={false}
                 suffixIcon={null}
+                clearIcon={<Icon icon="cancel1" className="Font16 Gray_9e ThemeHoverColor3" />}
                 inputReadOnly
                 placeholder={_l('请选择时间')}
                 format={timeFormat}

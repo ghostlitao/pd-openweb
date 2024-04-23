@@ -19,26 +19,31 @@ function changeKeyToServer(value) {
   return value;
 }
 
-export const updateSettings = value => (dispatch, getState) => {
-  const {
-    publicWorksheet: {
-      worksheetInfo: { worksheetId, projectId },
-    },
-  } = getState();
-  publicWorksheetAjax
-    .saveSetting({
-      projectId,
-      worksheetId,
-      ...value,
-    })
-    .then(data => {
-      console.log('save success');
-      dispatch({ type: 'PUBLICWORKSHEET_UPDATE_SETTINGS', value });
-    })
-    .fail(err => {
-      alert(_l('保存失败'), 3);
-    });
-};
+export const updateSettings =
+  (value, cb = isSuccess => {}) =>
+  (dispatch, getState) => {
+    const {
+      publicWorksheet: {
+        worksheetInfo: { worksheetId, projectId },
+      },
+    } = getState();
+    publicWorksheetAjax
+      .saveSetting({
+        projectId,
+        worksheetId,
+        ...value,
+      })
+      .then(data => {
+        if (data) {
+          cb(true);
+          console.log('save success');
+          dispatch({ type: 'PUBLICWORKSHEET_UPDATE_SETTINGS', value });
+        }
+      })
+      .fail(err => {
+        cb(false);
+      });
+  };
 
 function updateBaseConfig(dispatch, getState, value, cb) {
   const {
@@ -99,7 +104,7 @@ export function addWorksheetControl(controlName, cb = () => {}) {
       })
       .then(data => {
         dispatch({ type: 'PUBLICWORKSHEET_ADD_CONTROL', control: data });
-        dispatch(showControl(data));
+        dispatch(hideControl(data.controlId));
         cb(data);
       })
       .fail(err => {
@@ -118,13 +123,16 @@ export function loadPublicWorksheet({ worksheetId }) {
           controls: data.controls,
           originalControls: data.originalControls.filter(
             control =>
-              !(control.type === 29 && !_.includes([0, 1], control.enumDefault2)) &&
-              !_.includes(['caid', 'ownerid', 'ctime', 'utime'], control.controlId),
+              !(
+                (control.type === 29 && !_.includes([0, 1], control.enumDefault2)) ||
+                (control.type === 51 && _.get(control, 'advancedSetting.showtype') === '2')
+              ) && !_.includes(['caid', 'ownerid', 'ctime', 'utime'], control.controlId),
           ),
           shareId: data.shareId,
           url: data.url,
           worksheetInfo: {
             themeIndex: data.themeColor,
+            themeBgColor: data.themeBgColor,
             logoUrl: data.logo,
             coverUrl: data.cover,
             ..._.pick(data, [
@@ -140,7 +148,7 @@ export function loadPublicWorksheet({ worksheetId }) {
           },
           worksheetSettings: {
             ..._.pick(data, [
-              'fillTimes',
+              'limitWriteFrequencySetting',
               'ipControlId',
               'browserControlId',
               'deviceControlId',
@@ -152,6 +160,16 @@ export function loadPublicWorksheet({ worksheetId }) {
               'smsVerification',
               'smsVerificationFiled',
               'smsSignature',
+              'writeScope',
+              'linkSwitchTime',
+              'limitWriteTime',
+              'limitWriteCount',
+              'limitPasswordWrite',
+              'cacheDraft',
+              'cacheFieldData',
+              'weChatSetting',
+              'abilityExpand',
+              'completeNumber',
             ]),
           },
           hidedControlIds: data.hidedControlIds || [],
@@ -186,10 +204,17 @@ export const updateWorksheetVisibleType =
 
 export const hideControl = controlId => (dispatch, getState) => {
   const {
-    publicWorksheet: { hidedControlIds },
+    publicWorksheet: { hidedControlIds, controls },
   } = getState();
-  updateBaseConfig(dispatch, getState, { hidedControlIds: _.uniqBy(hidedControlIds.concat(controlId)) });
+  const newHidedControlIds = _.uniqBy(hidedControlIds.concat(controlId));
+  const newControls = controls.filter(item => !_.includes(newHidedControlIds, item.controlId));
+
+  updateBaseConfig(dispatch, getState, {
+    hidedControlIds: newHidedControlIds,
+    controls: newControls,
+  });
   dispatch({ type: 'WORKSHEET_HIDE_CONTROL', controlId });
+  dispatch({ type: 'PUBLICWORKSHEET_UPDATE_CONTROLS', controls: newControls });
 };
 
 export function showControl(control) {
@@ -233,13 +258,16 @@ export function resetControls() {
             controls: data.controls,
             originalControls: data.originalControls.filter(
               control =>
-                !(control.type === 29 && !_.includes([0, 1], control.enumDefault2)) &&
-                !_.includes(['caid', 'ownerid', 'ctime', 'utime'], control.controlId),
+                !(
+                  (control.type === 29 && !_.includes([0, 1], control.enumDefault2)) ||
+                  (control.type === 51 && _.get(control, 'advancedSetting.showtype') === '2')
+                ) && !_.includes(['caid', 'ownerid', 'ctime', 'utime'], control.controlId),
             ),
             shareId: data.shareId,
             url: data.url,
             worksheetInfo: {
               themeIndex: data.themeColor,
+              themeBgColor: data.themeBgColor,
               logoUrl: data.logo,
               coverUrl: data.cover,
               ..._.pick(data, [
@@ -254,7 +282,7 @@ export function resetControls() {
             },
             worksheetSettings: {
               ..._.pick(data, [
-                'fillTimes',
+                'limitWriteFrequencySetting',
                 'ipControlId',
                 'browserControlId',
                 'deviceControlId',
@@ -266,6 +294,16 @@ export function resetControls() {
                 'smsVerification',
                 'smsVerificationFiled',
                 'smsSignature',
+                'writeScope',
+                'linkSwitchTime',
+                'limitWriteTime',
+                'limitWriteCount',
+                'limitPasswordWrite',
+                'cacheDraft',
+                'cacheFieldData',
+                'weChatSetting',
+                'abilityExpand',
+                'completeNumber',
               ]),
             },
             hidedControlIds: data.hidedControlIds || [],

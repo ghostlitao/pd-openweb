@@ -13,8 +13,9 @@ import EditableCellCon from '../EditableCellCon';
 import renderText from './renderText';
 import { emitter, isKeyBoardInputChar } from 'worksheet/util';
 import { FROM } from './enum';
-import { browserIsMobile, accMul } from 'src/util';
+import { browserIsMobile, accMul, formatStrZero, formatNumberFromInput } from 'src/util';
 import _ from 'lodash';
+import ChildTableContext from '../ChildTable/ChildTableContext';
 
 const InputCon = styled.div`
   box-sizing: border-box
@@ -39,7 +40,7 @@ const InputCon = styled.div`
 
 const MultipleLineTip = styled.div`
   position: absolute;
-  padding: 4px;
+  padding: 2px 4px;
   bottom: 2px;
   left: 2px;
   right: 2px;
@@ -47,19 +48,6 @@ const MultipleLineTip = styled.div`
   color: #bdbdbd;
   background: #fff;
 `;
-
-function replaceNotNumber(value) {
-  return value
-    .replace(/[^-\d.]/g, '')
-    .replace(/^\./g, '')
-    .replace(/^-/, '$#$')
-    .replace(/-/g, '')
-    .replace('$#$', '-')
-    .replace(/^-\./, '-')
-    .replace('.', '$#$')
-    .replace(/\./g, '')
-    .replace('$#$', '.');
-}
 
 const Input = React.forwardRef((props, ref) => {
   const { className, onChange, ...rest } = props;
@@ -79,7 +67,16 @@ Input.propTypes = {
   onChange: PropTypes.func,
 };
 
+function getPopupContainer(popupContainer, rows) {
+  if (_.get(rows, 'length') && _.get(rows, 'length') <= 5 && popupContainer().closest('.customFieldsContainer')) {
+    return () =>
+      _.get(rows, 'length') && _.get(rows, 'length') <= 5 && popupContainer().closest('.customFieldsContainer');
+  }
+  return popupContainer;
+}
+
 export default class Text extends React.Component {
+  static contextType = ChildTableContext;
   static propTypes = {
     className: PropTypes.string,
     style: PropTypes.shape({}),
@@ -103,9 +100,19 @@ export default class Text extends React.Component {
     };
   }
 
+  tempKey = [];
+
   componentWillReceiveProps(nextProps) {
     if (nextProps.cell.value !== this.props.cell.value) {
       this.setState({ value: nextProps.cell.value });
+    }
+    // 数值类小数点自动配置，聚焦时去零
+    if (
+      nextProps.isediting !== this.props.isediting &&
+      nextProps.isediting &&
+      _.get(nextProps, 'cell.advancedSetting.dotformat') === '1'
+    ) {
+      this.setState({ value: formatStrZero(nextProps.cell.value) });
     }
   }
 
@@ -166,7 +173,7 @@ export default class Text extends React.Component {
 
   @autobind
   handleEdit(e) {
-    const { updateEditingStatus } = this.props;
+    const { updateEditingStatus, cell } = this.props;
     e.stopPropagation();
     updateEditingStatus(true, this.focus);
   }
@@ -175,6 +182,7 @@ export default class Text extends React.Component {
   handleBlur(target) {
     this.hadBlur = true;
     const { cell, error, updateCell, updateEditingStatus } = this.props;
+    this.tempKey = [];
     let { oldValue = '' } = this.state;
     let { value = '' } = this.state;
     if (this.isNumberPercent && value) {
@@ -215,7 +223,7 @@ export default class Text extends React.Component {
   handleChange(value) {
     const { cell, onValidate } = this.props;
     if (cell.type === 6 || cell.type === 8) {
-      value = replaceNotNumber(String(value));
+      value = formatNumberFromInput(String(value), false);
     }
     onValidate(value);
     this.setState({
@@ -237,7 +245,7 @@ export default class Text extends React.Component {
         }, 10);
       });
     };
-    if (e.key === 'v' && (e.ctrlKey || e.metaKey)) {
+    function handleCopyFromWindow() {
       if (window.tempCopyForSheetView) {
         const data = safeParse(window.tempCopyForSheetView);
         if (data.type === 'text') {
@@ -245,24 +253,56 @@ export default class Text extends React.Component {
         } else {
           setKeyboardValue(data.textValue);
         }
+      }
+    }
+    if (e.key === 'v' && (e.ctrlKey || e.metaKey)) {
+      if (_.isFunction(navigator.clipboard.readText)) {
+        navigator.clipboard
+          .readText()
+          .then(setKeyboardValue)
+          .catch(err => {
+            if (window.tempCopyForSheetView) {
+              handleCopyFromWindow();
+            } else {
+              alert(_l('请开启浏览器针对此页面的剪贴板读取权限'), 3);
+            }
+          });
       } else {
-        navigator.clipboard.readText().then(setKeyboardValue);
+        handleCopyFromWindow();
       }
       return;
     }
     switch (e.key) {
       default:
         (() => {
-          const value = cell.type === 6 || cell.type === 8 ? replaceNotNumber(e.key) : e.key;
-          if (!value || !isKeyBoardInputChar(e.key)) {
+          let value = e.key;
+          if (isKeyBoardInputChar(e.key)) {
+            this.tempKey.push(e.key);
+          }
+          if (!e.isInputValue && (!value || !isKeyBoardInputChar(e.key))) {
             return;
+          }
+          if (cell.type === 6 || cell.type === 8) {
+            value = formatNumberFromInput(e.key, false);
           }
           updateEditingStatus(true, () => {
             setTimeout(() => {
+              if (e.keyCode === 229) {
+                this.handleChange('');
+                return;
+              }
               const inputDom = this.input.current;
               if (inputDom) {
-                inputDom.value = value;
-                this.handleChange(value);
+                inputDom.value = e.isInputValue ? value : this.tempKey.join('');
+                this.handleChange(e.isInputValue ? value : this.tempKey.join(''));
+                if (window.cellLastKey === 'Enter') {
+                  this.handleKeydown({
+                    keyCode: 13,
+                    stopPropagation: () => {},
+                    preventDefault: () => {},
+                  });
+                  window.cellLastKey = undefined;
+                }
               }
             }, 10);
             e.stopPropagation();
@@ -277,6 +317,7 @@ export default class Text extends React.Component {
   handleKeydown(e) {
     const { tableId, cell, updateEditingStatus } = this.props;
     if (e.keyCode === 27) {
+      this.tempKey = [];
       updateEditingStatus(false);
       this.setState({
         value: this.state.oldValue,
@@ -285,9 +326,6 @@ export default class Text extends React.Component {
     } else if (e.keyCode === 13) {
       if (this.isMultipleLine && !(e.ctrlKey || e.metaKey)) {
         return;
-      } else {
-        e.preventDefault();
-        this.handleBlur();
       }
       e.preventDefault();
       this.handleBlur();
@@ -295,6 +333,7 @@ export default class Text extends React.Component {
         () =>
           emitter.emit('TRIGGER_TABLE_KEYDOWN_' + tableId, {
             keyCode: 40,
+            action: 'text_enter_to_next',
             stopPropagation: () => {},
             preventDefault: () => {},
           }),
@@ -313,10 +352,13 @@ export default class Text extends React.Component {
 
   @autobind
   handleUnMask(e) {
-    if (!this.masked) {
+    if (!this.masked || window.shareState.shareId) {
       return;
     }
     e.stopPropagation();
+    if (!this.state.forceShowFullValue) {
+      e.preventDefault();
+    }
     this.setState({ forceShowFullValue: true });
   }
   render() {
@@ -334,6 +376,7 @@ export default class Text extends React.Component {
       editable,
       onClick,
     } = this.props;
+    const { rows } = this.context || {};
     let { value, forceShowFullValue } = this.state;
     const isMobile = browserIsMobile();
     const disabledInput = cell.advancedSetting.dismanual === '1';
@@ -367,7 +410,10 @@ export default class Text extends React.Component {
     const isSafari = /^((?!chrome).)*safari.*$/.test(navigator.userAgent.toLowerCase());
     const isMacWxWork =
       /wxwork/.test(navigator.userAgent.toLowerCase()) && /applewebkit/.test(navigator.userAgent.toLowerCase());
-    const text = renderText({ ...cell, value }, { noMask: forceShowFullValue });
+    let text = renderText({ ...cell, value }, { noMask: forceShowFullValue });
+    if (text.length > 3000) {
+      text = text.slice(0, 3000);
+    }
     const editcontent = (
       <ClickAwayable
         onClickAwayExceptions={[this.editIcon && this.editIcon.current]}
@@ -396,7 +442,6 @@ export default class Text extends React.Component {
                 className="Ming stopPropagation"
                 {...editProps}
                 value={String(_.isUndefined(editProps.value) ? '' : editProps.value).replace(/\r\n|\n/g, ' ')}
-                style={{}}
                 onChange={e => this.handleChange(e.target.value)}
               />
             )}
@@ -430,7 +475,7 @@ export default class Text extends React.Component {
       <Trigger
         action={['click']}
         popup={editcontent}
-        getPopupContainer={popupContainer}
+        getPopupContainer={this.isMultipleLine ? getPopupContainer(popupContainer, rows) : popupContainer}
         popupClassName="filterTrigger"
         popupVisible={isediting}
         destroyPopupOnHide={!(navigator.userAgent.match(/[Ss]afari/) && !navigator.userAgent.match(/[Cc]hrome/))} // 不是 Safari
@@ -449,6 +494,7 @@ export default class Text extends React.Component {
             masked: this.masked && !isCard,
             empty: !value,
             maskHoverTheme: this.masked && isCard && !forceShowFullValue,
+            focusInput: cell.type === 2 && editable && canedit,
           })}
           style={style}
           iconName="hr_edit"
@@ -463,12 +509,12 @@ export default class Text extends React.Component {
                 return (
                   <span
                     className={
-                      cell.type === 32
+                      rowHeight > 34 && (cell.type === 32 || (cell.type === 2 && cell.enumDefault === 1))
                         ? cx('worksheetCellPureString nowrap', {
                             linelimit: needLineLimit,
                             ellipsis: isMobile,
                           })
-                        : ''
+                        : cx({ 'ellipsis w100 InlineBlock': isCard })
                     }
                     title={text}
                     onClick={this.handleUnMask}

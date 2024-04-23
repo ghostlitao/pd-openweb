@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import styled from 'styled-components';
 import cx from 'classnames';
-import Trigger from 'rc-trigger';
-import { MenuItemWrap } from '../style';
 import { getFeatureStatus, buriedUpgradeVersionDialog } from 'src/util';
-import { Icon, Support, LoadDiv, Menu } from 'ming-ui';
+import { VersionProductType } from 'src/util/enum';
+import { Icon, Support, LoadDiv, Tooltip, Checkbox } from 'ming-ui';
 import { useSetState } from 'react-use';
-import { CardTopWrap } from '../style';
+import { CardTopWrap, WrapBtn } from '../style';
 import flowNodeAjax from 'src/pages/workflow/api/flowNode';
 import Detail from 'src/pages/workflow/WorkflowSettings/Detail';
 import { FIELD_TYPE_LIST } from 'src/pages/workflow/WorkflowSettings/enum';
@@ -79,18 +78,9 @@ const Wrap = styled.div`
     line-height: 51px;
   }
 `;
-const WrapBtn = styled.div`
-  background: #ffffff;
-  border-radius: 18px;
-  color: #bdbdbd;
-  padding: 8px 12px;
-  margin: 0 auto;
-  &:hover {
-    color: #2196f3;
-  }
-`;
+
 function AddNode(props) {
-  const featureType = getFeatureStatus(localStorage.getItem('currentProjectId'), 8);
+  const featureType = getFeatureStatus(localStorage.getItem('currentProjectId'), VersionProductType.codeBlockNode);
   if (!props.canEdit || !featureType) {
     return '';
   }
@@ -101,7 +91,7 @@ function AddNode(props) {
         className="Hand flexRow alignItemsCenter"
         onClick={() => {
           if (featureType === '2') {
-            buriedUpgradeVersionDialog(localStorage.getItem('currentProjectId'), 8);
+            buriedUpgradeVersionDialog(localStorage.getItem('currentProjectId'), VersionProductType.codeBlockNode);
             return;
           }
           props.onAdd();
@@ -137,6 +127,36 @@ export default function Card(props) {
         setState({ node: { ...node, ...res }, loading: false });
       });
   };
+  const update = node => {
+    flowNodeAjax
+      .saveNode(
+        {
+          ..._.pick(node, [
+            'name',
+            'selectNodeId',
+            'sendContent',
+            'body',
+            'headers',
+            'method',
+            'contentType',
+            'formControls',
+            'settings',
+            'testMap',
+            'successCode',
+            'errorMap',
+            'errorMsg',
+            'executeType',
+          ]),
+          processId: info.id,
+          nodeId: node.id,
+          flowNodeType: node.typeId,
+        },
+        { isIntegration: true },
+      )
+      .then(res => {
+        setState({ node });
+      });
+  };
   if (loading) {
     return <LoadDiv />;
   }
@@ -161,23 +181,14 @@ export default function Card(props) {
     const arr = formulaValue.match(/\$[^ \r\n]+?\$/g);
     if (arr) {
       arr.forEach(obj => {
+        const data = obj
+          .replace(/\$/g, '')
+          .split(/([a-zA-Z0-9#]{24,32})-/)
+          .filter(item => item);
+        const { formulaMap = {} } = node;
         formulaValue = formulaValue.replace(
           obj,
-          `{${
-            node.formulaMap[
-              obj
-                .replace(/\$/g, '')
-                .split(/([a-zA-Z0-9#]{24,32})-/)
-                .filter(item => item)[0]
-            ].name
-          }.${
-            node.formulaMap[
-              obj
-                .replace(/\$/g, '')
-                .split(/([a-zA-Z0-9#]{24,32})-/)
-                .filter(item => item)[1]
-            ].name
-          }}`,
+          `{${(formulaMap[data[0]] || {}).name || ''}.${(formulaMap[data.join('-')] || {}).name || ''}}`,
         );
       });
     }
@@ -283,7 +294,36 @@ export default function Card(props) {
             <Icon icon={props.icon || 'parameter'} className="iconParam Font26" />
           </div>
           <div className="flex pLeft16">
-            <p className="Font17 Bold">{props.title || _l('输入参数')}</p>
+            <p className="Font17 Bold">
+              {!props.title ? (
+                _l('输入参数')
+              ) : [8].includes(props.typeId) && props.connectInfo.type === 2 ? (
+                <div className="flexRow alignItemsCenter">
+                  <div className="flex">{props.title}</div>
+                  <div className="flexRow alignItemsCenter">
+                    <Checkbox
+                      className="checkBox InlineBlock Gray_75"
+                      text={_l('使用网络代理')}
+                      checked={node.settings.useProxy}
+                      onClick={() => {
+                        update({
+                          ...node,
+                          settings: { ...node.settings, useProxy: !node.settings.useProxy },
+                        });
+                      }}
+                    />
+                    <Tooltip
+                      popupPlacement="topLeft"
+                      text={<span>{_l('安装的API，允许在卡片上修改是否使用网络代理')}</span>}
+                    >
+                      <Icon icon="info_outline" className="Gray_75 Font16 mLeft10 mTop4" />
+                    </Tooltip>
+                  </div>
+                </div>
+              ) : (
+                props.title
+              )}
+            </p>
             <p className="Font13 Gray_75 mTop4">
               <span className="TxtMiddle">
                 {props.des || _l('输入参数用于在工作表或工作流中使用 API 查询时，可以传入动态值')}

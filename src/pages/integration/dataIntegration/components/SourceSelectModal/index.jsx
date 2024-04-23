@@ -125,12 +125,11 @@ export default function SourceSelectModal({ projectId, isCreateConnector, onChan
             text: _l('云端'),
             list: list.filter(item => item.fromType === SOURCE_FROM_TYPE.CLOUD),
           },
-          //第一版不支持消息队列
-          // {
-          //   key: SOURCE_FROM_TYPE.MESSAGE_QUEUE,
-          //   text: _l('消息队列'),
-          //   list: list.filter(item => item.fromType === SOURCE_FROM_TYPE.MESSAGE_QUEUE),
-          // },
+          {
+            key: SOURCE_FROM_TYPE.MESSAGE_QUEUE,
+            text: _l('消息队列'),
+            list: list.filter(item => item.fromType === SOURCE_FROM_TYPE.MESSAGE_QUEUE),
+          },
         ];
         setDataSourceList(sourceList.filter(item => item.list.length !== 0));
       }
@@ -146,7 +145,7 @@ export default function SourceSelectModal({ projectId, isCreateConnector, onChan
   };
 
   return (
-    <Modal visible type="fixed" width={880} bodyStyle={{ padding: '32px' }} onCancel={onClose}>
+    <Modal visible type="fixed" width={900} bodyStyle={{ padding: '32px' }} onCancel={onClose}>
       <Wrapper>
         <div className="headerWrapper">
           <h5 className="Font17 Gray bold mBottom20">{_l('选择数据源类型')}</h5>

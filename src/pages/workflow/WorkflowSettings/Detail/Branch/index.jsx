@@ -20,7 +20,7 @@ export default class Branch extends Component {
     flowNode.getNodeDetail({ processId, nodeId: selectNodeId, flowNodeType: selectNodeType }).then(result => {
       this.setState({
         name: result.name,
-        data: result.conditions,
+        data: result.conditions.length ? result.conditions : this.state.data,
         controls: result.flowNodeAppDtos,
       });
     });
@@ -73,16 +73,15 @@ export default class Branch extends Component {
     return (
       <Dialog
         className="workflowDialogBox"
-        closable={false}
         overlayClosable={false}
         visible
         title={
           <div className="flexRow" style={{ height: 24 }}>
-            <span className="flex ellipsis">{name || _l('分支')}</span>
-
+            <span className="ellipsis">{name || _l('分支')}</span>
             <span className="mLeft10">
-              <Support type={1} className="workflowDialogSupport" href="https://help.mingdao.com/zh/flow41.html" />
+              <Support type={1} className="workflowDialogSupport" href="https://help.mingdao.com/flow41" />
             </span>
+            <span className="flex" />
           </div>
         }
         onCancel={closeDetail}
@@ -91,6 +90,7 @@ export default class Branch extends Component {
       >
         <TriggerCondition
           processId={this.props.processId}
+          relationId={this.props.relationId}
           selectNodeId={this.props.selectNodeId}
           isNodeHeader={true}
           controls={controls}

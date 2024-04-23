@@ -3,17 +3,16 @@ import './index.less';
 import account from 'src/api/account';
 import accountSetting from 'src/api/accountSetting';
 import accountGuideController from 'src/api/accountGuide';
-import DialogLayer from 'src/components/mdDialog/dialog';
-import ReactDom from 'react-dom';
-import bindAccount from '../bindAccount/bindAccount';
-import unBindAccount from '../bindAccount/unBindAccount';
 import { Checkbox, Select } from 'antd';
-import { LoadDiv, Tooltip } from 'ming-ui';
+import { LoadDiv, Tooltip, Dialog } from 'ming-ui';
 import EditPassword from './EditPassword';
-import InitPasswordDialog from '../bindAccount/initPasswordDialog/index';
+import { initBindAcoount } from '../components/InitBindAccountDialog';
+import { validateFunc } from '../components/ValidateInfo';
+import accountController from 'src/api/account';
 import cx from 'classnames';
 import captcha from 'src/components/captcha';
 import common from '../common';
+import { encrypt } from 'src/util';
 
 let accountList = [
   { key: 'weiXinBind', icon: 'icon-wechat', color: 'weiBindColor', label: _l('微信') },
@@ -26,6 +25,13 @@ const tipsConfig = {
     '绑定手机号作为你的登录账号。同时也是管理个人账户和使用系统服务的重要依据。为便于您以后的操作及账户安全，请您尽快绑定。',
   ),
   isTwoauthentication: _l('两步验证是在输入账号密码后，额外增加一道安全屏障（手机短信或邮箱验证码），保障您的帐号安全'),
+};
+
+const ERROR_MESSAGE = {
+  0: _l('解绑失败'),
+  5: _l('解绑失败，账号不存在'),
+  6: _l('解绑失败，密码错误'),
+  7: _l('解绑失败，邮箱和手机，请至少保留其一'),
 };
 
 const TPType = {
@@ -65,6 +71,7 @@ export default class AccountChart extends React.Component {
       showWarn: true,
       isTwoauthentication: false,
       wxQRCodeLoading: true,
+      editPasswordVisible: false,
     };
   }
 
@@ -72,7 +79,7 @@ export default class AccountChart extends React.Component {
     this.getData();
   }
 
-  getData() {
+  getData = () => {
     this.setState({ loading: true });
     $.when(this.getAccount(), this.getInfo()).then((account, info) => {
       this.setState({
@@ -91,7 +98,7 @@ export default class AccountChart extends React.Component {
         loading: false,
       });
     });
-  }
+  };
 
   getAccount() {
     return account.getAccountInfo({});
@@ -106,7 +113,7 @@ export default class AccountChart extends React.Component {
     const currentType = this.state[type] || {};
     if (!currentType.state) {
       if (type === 'weiXinBind') {
-        var url = '/qrcode.htm';
+        var url = '/qrcode';
         var wWidth = 400;
         var wHeight = 400;
         var positionObj = this.getWindowPosition(wWidth, wHeight);
@@ -119,7 +126,12 @@ export default class AccountChart extends React.Component {
         this.showNewWindow(url, wWidth, wHeight, positionObj.left, positionObj.top);
       }
     } else {
-      this.cancelBindAccount(currentType.state, type);
+      const text = type === 'weiXinBind' ? _l('微信') : 'QQ';
+      Dialog.confirm({
+        title: _l('解绑%0', text),
+        description: _l('确认解绑%0，解绑之后不能通过%1登录？', text, text),
+        onOk: () => this.cancelBindAccount(currentType.state, type),
+      });
     }
   }
 
@@ -167,10 +179,12 @@ export default class AccountChart extends React.Component {
 
   // 绑定账号（邮箱和手机）
   handleBindAccount(type) {
-    bindAccount.bindAccountEmailMobile({
-      isUpdateEmail: type === 'email',
-      accountTitle: type === 'email' ? _l('绑定邮箱') : _l('绑定手机号码'),
-      callback: function() {
+    validateFunc({
+      title: type === 'email' ? _l('绑定邮箱') : _l('绑定手机号码'),
+      type,
+      des: '您需要先绑定手机号，才能继续创建组织',
+      showStep: true,
+      callback: function () {
         location.reload();
       },
     });
@@ -183,20 +197,30 @@ export default class AccountChart extends React.Component {
       alert(_l('无法解绑，邮箱和手机，请至少保留其一'), 2);
       return;
     }
-    unBindAccount.init({
-      isUnBindEmail: type === 'email',
-      callback: function() {
-        location.reload();
+    validateFunc({
+      title: type === 'email' ? _l('解绑邮箱') : _l('解绑手机号'),
+      type,
+      callback: ({ password }) => {
+        accountController[type === 'email' ? 'unbindEmail' : 'unbindMobile']({
+          password: encrypt(password),
+        }).then(data => {
+          if (data === 1) {
+            location.reload();
+          } else {
+            alert(ERROR_MESSAGE[data], 2);
+          }
+        });
       },
     });
   }
 
   // 修改帐号
   handleChangeAccount(type) {
-    bindAccount.bindAccountEmailMobile({
-      isUpdateEmail: type === 'email',
-      accountTitle: type === 'email' ? _l('修改邮箱') : _l('修改手机号码'),
-      callback: function() {
+    validateFunc({
+      title: type === 'email' ? _l('修改邮箱') : _l('修改手机号码'),
+      type,
+      showStep: true,
+      callback: function () {
         location.reload();
       },
     });
@@ -274,30 +298,6 @@ export default class AccountChart extends React.Component {
     );
   };
 
-  //修改密码
-  handleEditPassword() {
-    const options = {
-      container: {
-        content: '',
-        yesText: null,
-        noText: null,
-        header: _l('修改密码'),
-      },
-      dialogBoxID: 'editPasswordDialogId',
-      width: '480px',
-    };
-    ReactDom.render(
-      <DialogLayer {...options}>
-        <EditPassword
-          closeDialog={() => {
-            $('#editPasswordDialogId_container,#editPasswordDialogId_mask').remove();
-          }}
-        />
-      </DialogLayer>,
-      document.createElement('div'),
-    );
-  }
-
   // 取消绑定手机或邮箱红点提示
   handleCancelRed(type) {
     accountGuideController
@@ -318,7 +318,7 @@ export default class AccountChart extends React.Component {
             .sendProjectBindEmail({
               ticket: res.ticket,
               randStr: res.randstr,
-              captchaType: md.staticglobal.getCaptchaType(),
+              captchaType: md.global.getCaptchaType(),
             })
             .then(function(data) {
               if (data) {
@@ -333,36 +333,11 @@ export default class AccountChart extends React.Component {
       { leading: true },
     );
 
-    if (md.staticglobal.getCaptchaType() === 1) {
+    if (md.global.getCaptchaType() === 1) {
       new captcha(throttled);
     } else {
       new TencentCaptcha(md.global.Config.CaptchaAppId.toString(), throttled).show();
     }
-  }
-
-  //初始化密码
-  initPassword() {
-    const options = {
-      container: {
-        content: '',
-        yesText: null,
-        noText: null,
-        header: _l('绑定手机号'),
-      },
-      dialogBoxID: 'initPasswordDialogId',
-      width: '480px',
-    };
-    ReactDom.render(
-      <DialogLayer {...options}>
-        <InitPasswordDialog
-          closeDialog={() => {
-            $('#initPasswordDialogId_container,#initPasswordDialogId_mask').remove();
-            this.getData();
-          }}
-        />
-      </DialogLayer>,
-      document.createElement('div'),
-    );
   }
 
   //提示框
@@ -402,17 +377,17 @@ export default class AccountChart extends React.Component {
   dealLoagout = () => {
     account.validateLogoffAccount().then(res => {
       if (res === 1) {
-        location.href = '/cancellation.htm';
+        location.href = '/cancellation';
       } else if (res === 20) {
-        alert(_l('您是平台唯一管理员，无法注销'));
+        alert(_l('您是平台唯一管理员，无法注销'), 2);
       } else if (res === 30) {
-        alert(_l('您尚有未退出的组织，请先至 个人中心-我的组织 退出所有组织，方可注销'));
+        alert(_l('您尚有未退出的组织，请先至 个人中心-我的组织 退出所有组织，方可注销'), 2);
       }
     });
   };
 
   render() {
-    const { email, mobilePhone, loading, isVerify, needInit, workBind = {} } = this.state;
+    const { email, mobilePhone, loading, isVerify, needInit, workBind = {}, editPasswordVisible } = this.state;
     const mobilePhoneWarnLight = md.global.Account.guideSettings.accountMobilePhone && !mobilePhone;
     const emailWarnLight = md.global.Account.guideSettings.accountEmail && (!email || !isVerify);
 
@@ -422,7 +397,7 @@ export default class AccountChart extends React.Component {
     }
 
     if (loading) {
-      return <LoadDiv />;
+      return <LoadDiv className="mTop40" />;
     }
     return (
       <div className="accountChartContainer">
@@ -455,7 +430,11 @@ export default class AccountChart extends React.Component {
                 className="Hand ThemeColor3 Hover_49 mLeft24"
                 onClick={() => {
                   if (needInit) {
-                    this.initPassword();
+                    initBindAcoount({
+                      title: _l('绑定手机号'),
+                      showFooter: false,
+                      getData: this.getData,
+                    });
                   } else {
                     this.handleBindAccount('mobile');
                   }
@@ -511,7 +490,7 @@ export default class AccountChart extends React.Component {
             </div>
             <div className="accountRowItem">
               <div className="accountLabel Gray_75">{_l('密码')}</div>
-              <span className="Hand ThemeColor3 Hover_49" onClick={() => this.handleEditPassword()}>
+              <span className="Hand ThemeColor3 Hover_49" onClick={() => this.setState({ editPasswordVisible: true })}>
                 {_l('修改')}
               </span>
             </div>
@@ -547,6 +526,15 @@ export default class AccountChart extends React.Component {
         )}
         <div className="Font17 Bold Gray mBottom40 mTop20">{_l('隐私')}</div>
         {this.joinFriend()}
+        <Dialog
+          title={_l('修改密码')}
+          showFooter={false}
+          visible={editPasswordVisible}
+          onCancel={() => this.setState({ editPasswordVisible: false })}
+          className="editPasswordDialogId"
+        >
+          <EditPassword closeDialog={() => this.setState({ editPasswordVisible: false })} />
+        </Dialog>
       </div>
     );
   }

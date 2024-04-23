@@ -5,13 +5,13 @@ import cx from 'classnames';
 import { SettingItem } from '../../styled';
 import { isFullLineControl, isHaveGap } from '../../util/widgets';
 import { WHOLE_SIZE } from '../../config/Drag';
-import { AnimationWrap } from './WidgetStyle';
+import { AnimationWrap } from '../../styled';
 
 const ARRANGE_TYPE = [
-  { text: '一列', value: 1 },
-  { text: '二列', value: 2 },
-  { text: '三列', value: 3 },
-  { text: '四列', value: 4 },
+  { text: _l('一列'), value: 1 },
+  { text: _l('二列'), value: 2 },
+  { text: _l('三列'), value: 3 },
+  { text: _l('四列'), value: 4 },
 ];
 
 export default function QuickArrange({ widgets, setWidgets }) {
@@ -88,9 +88,9 @@ export default function QuickArrange({ widgets, setWidgets }) {
   };
 
   return (
-    <SettingItem className="settingItem withSplitLine">
+    <SettingItem className="settingItem withSplitLine mTop15">
       <div className="settingItemTitle">
-        <span className='Font14'>{_l('快速排列')}</span>
+        <span className="Font14">{_l('快速排列')}</span>
         <div className="Absolute Right1 flexCenter">
           {activeColumn > 0 && (
             <div className="arrangeBtn mRight16" onClick={restore}>
@@ -105,7 +105,7 @@ export default function QuickArrange({ widgets, setWidgets }) {
               $originWidgets.current = widgets;
             }}
           >
-            {_l('应用')}
+            {_l('应用%04014')}
           </div>
         </div>
       </div>

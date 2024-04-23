@@ -20,21 +20,22 @@ export default function RowDetailModal(props) {
     allowDelete
   } = props;
   const formContent = useRef(null);
-  const type = mobileIsEdit ? (data.rowid.includes('temp') || data.rowid.includes('default')) ? 'new' : 'edit' : 'edit';
+  const rowId = data.rowid || '';
+  const type = mobileIsEdit ? (rowId.includes('temp') || rowId.includes('default')) ? 'new' : 'edit' : 'edit';
   const disabled = mobileIsEdit ? props.disabled : true;
   const content = (
     <div className="rowDetailCon flexColumn" style={{ height: '100%' }}>
       <div className={cx('header flexRow valignWrapper', type)}>
-        {type === 'new' && <div className="title Font18 Gray flex bold leftAlign ellipsis">{title}</div>}
-        {type === 'edit' && (
-          <div className="flex leftAlign">
+        <div className="title Font18 Gray flex bold leftAlign ellipsis">{type === 'new' && title}</div>
+        {['edit', 'new'].includes(type) && (
+          <div className="pRight10">
             <i
-              className={cx('headerBtn icon icon-arrow-up-border mRight8 Font18', { Gray_df: switchDisabled.prev || mobileIsEdit })}
-              onClick={() => !(switchDisabled.prev || mobileIsEdit) && onSwitch({ prev: true })}
+              className={cx('headerBtn icon icon-arrow-up-border mRight8 Font18', { Gray_df: switchDisabled.prev })}
+              onClick={() => !switchDisabled.prev && onSwitch({ prev: true })}
             ></i>
             <i
-              className={cx('headerBtn icon icon-arrow-down-border Font18', { Gray_df: switchDisabled.next || mobileIsEdit })}
-              onClick={() => !(switchDisabled.next || mobileIsEdit) && onSwitch({ next: true })}
+              className={cx('headerBtn icon icon-arrow-down-border Font18', { Gray_df: switchDisabled.next })}
+              onClick={() => !switchDisabled.next && onSwitch({ next: true })}
             ></i>
           </div>
         )}

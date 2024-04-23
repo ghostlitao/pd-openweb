@@ -1,31 +1,14 @@
 import React, { Fragment, useState, useEffect, useRef } from 'react';
-import { Switch, LoadDiv, Dialog, Icon } from 'ming-ui';
+import { LoadDiv, Dialog, Checkbox } from 'ming-ui';
 import { Button, Divider } from 'antd';
-import Trigger from 'rc-trigger';
 import EmailDialog from './components/EmailDialog';
 import MessageSettings from './components/MessageSettings';
 import emailApi from 'src/api/email';
 import smsApi from 'src/api/sms';
-import styled from 'styled-components';
+import privateSysSetting from 'src/api/privateSysSetting';
 import tencentyunIcon from '../images/tencentyunIcon.png';
 import aliyunIcon from '../images/aliyunIcon.png';
-import weixin from '../images/weixin.png';
 import _ from 'lodash';
-
-const PrivateDesc = styled.div`
-  align-items: center;
-  background: #F5F5F5;
-  padding: 6px 12px;
-  border-radius: 4px;
-  display: flex;
-  .addWeiXin {
-    font-size: 13px;
-    font-weight: bold;
-    color: #47B14B;
-    padding: 2px 10px;
-    border-radius: 24px;
-  }
-`;
 
 const Email = props => {
   const [emailDialogVisible, setEmailDialogVisible] = useState(false);
@@ -185,24 +168,6 @@ const Message = props => {
           {_l('帮助')}
         </a>
       </div>
-      <PrivateDesc className="Font13 mBottom15">
-        {_l('设置短信服务需要先购买腾讯云或阿里云的「短信服务」，如需自定义短信服务请')}
-        <Trigger
-          action={['hover']}
-          popup={<img className="card z-depth-2" style={{ width: 300 }} src={weixin} />}
-          popupAlign={{
-            offset: [0, 7],
-            points: ['tc', 'bc'],
-            overflow: { adjustX: 1, adjustY: 2 },
-          }}
-        >
-          <div className="addWeiXin pointer">
-            <Icon icon="weixin" className="mRight2" />
-            {_l('添加微信')}
-          </div>
-        </Trigger>
-        {_l('寻求技术支持')}
-      </PrivateDesc>
       {loading ? (
         <LoadDiv />
       ) : (
@@ -236,13 +201,72 @@ const Message = props => {
   );
 };
 
+const PlatformIntegration = props => {
+  const platTypes = [
+    { type: 'WorkWeixin', text: _l('企业微信') },
+    { type: 'Dingding', text: _l('钉钉') },
+    { type: 'Welink', text: _l('Welink') },
+    { type: 'Feishu', text: _l('飞书') },
+    { type: 'Weixin', text: _l('微信') },
+  ];
+  const [usePlatformInfo, setUserPlatformInfo] = useState({
+    hideWorkWeixin: md.global.SysSettings.hideWorkWeixin,
+    hideDingding: md.global.SysSettings.hideDingding,
+    hideWelink: md.global.SysSettings.hideWelink,
+    hideFeishu: md.global.SysSettings.hideFeishu,
+    hideWeixin: md.global.SysSettings.hideWeixin,
+  });
+
+  const changeCheckedIntegration = (checked, type) => {
+    privateSysSetting
+      .editSysSettings({
+        settings: {
+          [`hide${type}`]: checked,
+        },
+      })
+      .then(res => {
+        if (res) {
+          setUserPlatformInfo({
+            ...usePlatformInfo,
+            [`hide${type}`]: checked,
+          });
+          md.global.SysSettings[`hide${type}`] = checked;
+          alert(_l('修改成功'));
+        } else {
+          alert(_l('修改失败'), 2);
+        }
+      });
+  };
+
+  return (
+    <div className="privateCardWrap flexColumn">
+      <div className="Font17 bold mBottom8">{_l('第三方平台')}</div>
+      <div className="mBottom15 Gray_9e">{_l('如果你的企业不使用下列第三方平台，你可以取消勾选')}</div>
+      <div className="flexRow">
+        {platTypes.map(item => {
+          const { type, text } = item;
+
+          return (
+            <Fragment key={type}>
+              <Checkbox
+                checked={!usePlatformInfo[`hide${type}`]}
+                onClick={checked => changeCheckedIntegration(checked, type)}
+              />
+              <span className="mRight30">{text}</span>
+            </Fragment>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 export default props => {
   return (
     <Fragment>
       <Email {...props} />
       <Message {...props} />
+      <PlatformIntegration {...props} />
     </Fragment>
   );
 };
-
-

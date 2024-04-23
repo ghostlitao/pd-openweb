@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import { getLegendType, formatrChartValue, formatYaxisList, getChartColors } from './common';
+import { getLegendType, formatrChartValue, formatYaxisList, getChartColors, getStyleColor } from './common';
 import { formatSummaryName, isFormatNumber } from 'statistics/common';
 import { Dropdown, Menu } from 'antd';
 import { toFixed } from 'src/util';
@@ -123,6 +123,30 @@ const formatChartData = (data, { isAccumulate, showOptionIds = [] }, { controlId
   return result;
 };
 
+const getControlMinAndMax = (yaxisList, data) => {
+  const result = {};
+
+  const get = (id) => {
+    let values = [];
+    for (let i = 0; i < data.length; i++) {
+      values.push(data[i].value);
+    }
+    const min = _.min(values) || 0;
+    const max = _.max(values);
+    return {
+      min,
+      max,
+      center: (max + min) / 2
+    }
+  }
+
+  yaxisList.forEach(item => {
+    result[item.controlId] = get(item.controlId);
+  });
+
+  return result;
+}
+
 export default class extends Component {
   constructor(props) {
     super(props);
@@ -148,14 +172,20 @@ export default class extends Component {
   componentWillReceiveProps(nextProps) {
     const { map, displaySetup, style } = nextProps.reportData;
     const { displaySetup: oldDisplaySetup, style: oldStyle } = this.props.reportData;
+    const chartColor = _.get(nextProps, 'customPageConfig.chartColor');
+    const oldChartColor = _.get(this.props, 'customPageConfig.chartColor');
     // 显示设置
     if (
       displaySetup.showLegend !== oldDisplaySetup.showLegend ||
       displaySetup.legendType !== oldDisplaySetup.legendType ||
       displaySetup.showNumber !== oldDisplaySetup.showNumber ||
       displaySetup.magnitudeUpdateFlag !== oldDisplaySetup.magnitudeUpdateFlag ||
+      !_.isEqual(displaySetup.colorRules, oldDisplaySetup.colorRules) ||
       style.funnelShape !== oldStyle.funnelShape ||
-      style.funnelCurvature !== oldStyle.funnelCurvature
+      style.funnelCurvature !== oldStyle.funnelCurvature ||
+      style.tooltipValueType !== oldStyle.tooltipValueType ||
+      !_.isEqual(chartColor, oldChartColor) ||
+      nextProps.themeColor !== this.props.themeColor
     ) {
       const config = this.getComponentConfig(nextProps);
       this.FunnelChart.update(config);
@@ -185,10 +215,11 @@ export default class extends Component {
     const { xaxes, split, displaySetup } = this.props.reportData;
     const { contrastType } = displaySetup;
     const currentData = data.data;
-    const isNumber = isFormatNumber(xaxes.controlType);
     const param = {}
     if (xaxes.cid) {
-      param[xaxes.cid] = isNumber ? Number(currentData.id) : currentData.id;
+      const isNumber = isFormatNumber(xaxes.controlType);
+      const value = currentData.id;
+      param[xaxes.cid] = isNumber && value ? Number(value) : value;
     }
     this.setState({
       dropdownVisible: true,
@@ -216,11 +247,28 @@ export default class extends Component {
     }
   }
   getComponentConfig(props) {
-    const { map, contrastMap, displaySetup, yaxisList, xaxes, style } = props.reportData;
+    const { themeColor, projectId, customPageConfig = {}, reportData } = props;
+    const { chartColor, chartColorIndex = 1 } = customPageConfig;
+    const { map, contrastMap, displaySetup, yaxisList, xaxes } = reportData;
+    const styleConfig = reportData.style || {};
+    const style = chartColor && chartColorIndex >= (styleConfig.chartColorIndex || 0) ? { ...styleConfig, ...chartColor } : styleConfig;
     const data = formatChartData(map, displaySetup, xaxes, yaxisList);
     const { position } = getLegendType(displaySetup.legendType);
     const newYaxisList = formatYaxisList(data, yaxisList);
-    const colors = getChartColors(style);
+    const colors = getChartColors(style, themeColor, projectId);
+    const rule = _.get(displaySetup.colorRules[0], 'dataBarRule') || {};
+    const isRuleColor = !_.isEmpty(rule);
+    const controlMinAndMax = isRuleColor ? getControlMinAndMax(yaxisList, data) : {};
+    const getRuleColor = ({ name }) => {
+      const { value } = _.find(data, { name }) || {};
+      const color = getStyleColor({
+        value,
+        controlMinAndMax,
+        rule,
+        controlId: yaxisList[0].controlId
+      });
+      return color || colors[0];
+    }
 
     this.setCount(newYaxisList);
 
@@ -240,15 +288,16 @@ export default class extends Component {
           }
           const { name, value } = item;
           const { dot } = yaxisList[0] || {};
+          const labelValue = formatrChartValue(value, false, newYaxisList);
           return {
             name,
-            value: _.isNumber(value) ? value.toLocaleString('zh', { minimumFractionDigits: dot }) : '--',
+            value: _.isNumber(value) ? style.tooltipValueType ? labelValue : value.toLocaleString('zh', { minimumFractionDigits: dot }) : '--',
           };
         },
       },
       isTransposed: displaySetup.showChartType === 2,
       shape: style.funnelShape,
-      color: colors,
+      color: isRuleColor ? getRuleColor : colors,
       legend: displaySetup.showLegend
         ? {
             position: position == 'top-left' ? 'top' : position,

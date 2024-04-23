@@ -1,4 +1,5 @@
 import React from 'react';
+import ReactDOM from 'react-dom';
 import 'src/components/emotion/emotion';
 import PropTypes from 'prop-types';
 import UploadFile from 'src/components/UploadFiles';
@@ -8,8 +9,9 @@ import Star from './star';
 import ReplyTo from './replyTo';
 import CommentArea from './commentArea';
 import { SOURCE_TYPE } from '../../constants';
-import { cutStringWithHtml } from 'src/util';
+import { addBehaviorLog, cutStringWithHtml } from 'src/util';
 import xss from 'xss';
+import UserCard from 'src/components/UserCard';
 
 export default class BaseMessageComponent extends React.Component {
   static propTypes = {
@@ -54,11 +56,31 @@ export default class BaseMessageComponent extends React.Component {
     }
   }
 
+  componentDidMount() {
+    const { inboxId } = this.props;
+
+    $(`.inboxBox .messageItem-${inboxId}`)
+      .find('[data-accountid],[data-groupid]')
+      .each((i, ele) => {
+        if ($(ele).attr('bindUserCard')) return;
+        $(ele).attr('bindUserCard', true);
+        let accountId = $(ele).attr('data-accountid');
+        let groupId = $(ele).attr('data-groupid');
+        ReactDOM.render(
+          <UserCard sourceId={accountId || groupId} type={groupId ? 2 : 1}>
+            <span>{ele.innerHTML}</span>
+          </UserCard>,
+          ele,
+        );
+      });
+  }
+
   renderAvatar() {
-    const { fullname, accountId, avatar, inboxType } = this.props;
+    const { fullname, accountId, avatar, inboxType, appId } = this.props;
+
     return (
       <div className="Left">
-        <Avatar {...{ fullname, accountId, avatar, inboxType }} />
+        <Avatar {...{ fullname, accountId, avatar, inboxType, appId }} />
       </div>
     );
   }
@@ -135,7 +157,17 @@ export default class BaseMessageComponent extends React.Component {
     return (
       <div className="mTop5 comeFrom">
         {sourceId ? (
-          <a className="fromLink" target="_blank" href={fromLink} data-title={fromTitle}>
+          <a
+            className="fromLink"
+            target="_blank"
+            href={fromLink}
+            data-title={fromTitle}
+            onClick={() => {
+              const worksheetId = sourceId.split('|')[0];
+              const rowId = sourceId.split('|')[1];
+              addBehaviorLog('worksheetRecord', worksheetId, { rowId }); // 埋点
+            }}
+          >
             <span className="sourceName Font12" title={msg}>
               {msg}
             </span>
@@ -157,10 +189,10 @@ export default class BaseMessageComponent extends React.Component {
       <div className="mTop10 pBottom10">
         {sourceId ? (
           <a href={fromLink} target="_blank" className="Gray_a NoUnderline">
-            {createTime}
+            {createTimeSpan(createTime)}
           </a>
         ) : (
-          <span className="Gray_a">{createTime}</span>
+          <span className="Gray_a">{createTimeSpan(createTime)}</span>
         )}
       </div>
     );
@@ -220,7 +252,7 @@ export default class BaseMessageComponent extends React.Component {
 
   render() {
     return (
-      <div className="messageItem">
+      <div className={`messageItem messageItem-${this.props.inboxId}`}>
         {this.renderAvatar()}
         <div className="itemMain">
           <div className="msgMainContent">

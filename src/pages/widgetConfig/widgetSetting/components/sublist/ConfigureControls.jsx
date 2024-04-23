@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import styled from 'styled-components';
 import { Dropdown, Modal } from 'antd';
 import { v4 as uuidv4 } from 'uuid';
-import { Menu, MenuItem, Dialog } from 'ming-ui';
+import cx from 'classnames';
+import { Menu, MenuItem, Dialog, Support } from 'ming-ui';
 import { arrayMove, SortableContainer, SortableElement, SortableHandle } from 'react-sortable-hoc';
 import update from 'immutability-helper';
 import { useSetState } from 'react-use';
@@ -104,6 +105,10 @@ const ControlsWrap = styled.div`
   span {
     margin-left: 6px;
   }
+  &.disabled {
+    color: #bdbdbd !important;
+    cursor: not-allowed;
+  }
 `;
 const DragHandle = SortableHandle(() => <i className="icon-drag Gray_9e ThemeHoverColor3 pointer"></i>);
 
@@ -143,9 +148,11 @@ export default function ConfigureControl({ data, globalSheetInfo, controls, onCh
   const { appId } = globalSheetInfo;
   const $ref = useRef(null);
   const [activeWidgetIndex, setWidgetIndex] = useState(-1);
+  const [visible, setValue] = useState(false);
   const [{ selectCascadeDataSourceVisible }, setVisible] = useSetState({ selectCascadeDataSourceVisible: false });
   let dataSource = '';
   let controlName = '';
+  const disabledAdd = _.get(controls, 'length') >= 100;
 
   useEffect(() => {
     setWidgetIndex(-1);
@@ -174,14 +181,18 @@ export default function ConfigureControl({ data, globalSheetInfo, controls, onCh
                   type,
                   controlId: uuidv4(),
                 };
-                // 子表表单不允许再添加子表、分割线、文本识别、嵌入
-                if (_.includes([22, 34, 43, 45, 47, 49], type)) return null;
+                // 子表表单不允许再添加子表、文本识别、嵌入、查询记录
+                if (_.includes([34, 43, 45, 47, 49, 51, 52], type)) return null;
                 return (
                   <MenuItem
                     key={type}
                     className="widgetMenuItem"
                     icon={<i style={{ verticalAlign: 'text-top' }} className={`icon-${icon} icon pointer Font16`}></i>}
                     onClick={() => {
+                      if (disabledAdd) {
+                        alert(_l('最多添加50个字段'), 3);
+                        return;
+                      }
                       if (type === 35) {
                         setVisible({ selectCascadeDataSourceVisible: true });
                         return;
@@ -193,14 +204,7 @@ export default function ConfigureControl({ data, globalSheetInfo, controls, onCh
                             <Fragment>
                               <div className="intro" style={{ color: '#9e9e9e' }}>
                                 {_l('在表单中显示关联的记录。如：订单关联客户')}
-                                <span
-                                  style={{
-                                    color: '#2196f3',
-                                    marginLeft: '6px',
-                                  }}
-                                >
-                                  {_l('帮助')}
-                                </span>
+                                <Support type={3} text={_l('帮助')} href={'https://help.mingdao.com/sheet11'} />
                               </div>
                               <SelectSheetFromApp
                                 globalSheetInfo={globalSheetInfo}
@@ -315,8 +319,14 @@ export default function ConfigureControl({ data, globalSheetInfo, controls, onCh
               });
             }}
           />
-          <Dropdown trigger={['click']} overlay={SelectWidgetMenu} getPopupContainer={() => $ref.current}>
-            <ControlsWrap>
+          <Dropdown
+            trigger={['click']}
+            visible={visible}
+            overlay={SelectWidgetMenu}
+            onVisibleChange={value => setValue(value)}
+            getPopupContainer={() => $ref.current}
+          >
+            <ControlsWrap className={cx({ disabled: disabledAdd })}>
               <div className="addControl" ref={$ref}>
                 <i className="icon-plus Font16" />
                 <span>{_l('添加字段')}</span>

@@ -28,10 +28,13 @@ export default function FilterDialog(props) {
     showSubtotalTip,
     globalSheetInfo,
     globalSheetControls, //主标控件 用于 子表中的关联记录字段筛选选择范围，支持使用主表中的字段
+    hideSupport,
+    showCustom = false,
+    filterKey = 'filters',
   } = props;
 
   const { sourceControlId = '', type = '' } = data;
-  const [filters, setFilters] = useState(props.filters || getAdvanceSetting(data, 'filters'));
+  const [filters, setFilters] = useState(props.filters || getAdvanceSetting(data, [filterKey]));
 
   const relateSheetList = filterControlsFromAll(
     allControls,
@@ -116,6 +119,7 @@ export default function FilterDialog(props) {
           conditions={filters}
           filterDept={type !== 29}
           currentColumns={allControls}
+          showCustom={showCustom}
           from={fromCondition}
           filterResigned={false}
           sourceControlId={sourceControlId}
@@ -125,12 +129,14 @@ export default function FilterDialog(props) {
           }}
           globalSheetControls={globalSheetControls}
         />
-        <Support
-          type={3}
-          style={{ position: 'absolute', bottom: 27 }}
-          href={helpHref || 'https://help.mingdao.com/zh/sheet14.html'}
-          text={_l('帮助')}
-        />
+        {!hideSupport && (
+          <Support
+            type={3}
+            style={{ position: 'absolute', bottom: 27 }}
+            href={helpHref || 'https://help.mingdao.com/sheet14'}
+            text={_l('帮助')}
+          />
+        )}
       </Fragment>
     </Dialog>
   );

@@ -1,19 +1,26 @@
 import React, { Component, Fragment } from 'react';
 import PropTypes from 'prop-types';
-import { Dropdown, CityPicker, Icon } from 'ming-ui';
+import { Dropdown, Icon, Checkbox, CityPicker, Input } from 'ming-ui';
 import { DateTime } from 'ming-ui/components/NewDateTimePicker';
 import dialogSelectUser from 'src/components/dialogSelectUser/dialogSelectUser';
 import DialogSelectDept from 'src/components/dialogSelectDept';
 import cx from 'classnames';
 import TagInput from '../TagInput';
 import { CONTROLS_NAME, CONDITION_TYPE, DATE_LIST, FORMAT_TEXT } from '../../../enum';
-import { getConditionList, getConditionNumber, getFilterText } from '../../../utils';
+import {
+  getConditionList,
+  getConditionNumber,
+  getFilterText,
+  handleGlobalVariableName,
+  checkConditionAllowEmpty,
+} from '../../../utils';
 import ActionFields from '../ActionFields';
 import Tag from '../Tag';
 import SelectOtherFields from '../SelectOtherFields';
 import { Tooltip, TimePicker } from 'antd';
-import { selectOrgRole } from 'src/components/DialogSelectOrgRole';
+import selectOrgRole from 'src/components/dialogSelectOrgRole';
 import moment from 'moment';
+import _ from 'lodash';
 
 export default class TriggerCondition extends Component {
   static propTypes = {
@@ -31,6 +38,8 @@ export default class TriggerCondition extends Component {
     singleCondition: PropTypes.bool,
     isLast: PropTypes.bool,
     addConditions: PropTypes.func,
+    filterEncryptCondition: PropTypes.bool,
+    excludingDepartmentSpecialFilter: PropTypes.bool,
   };
 
   static defaultProps = {
@@ -47,6 +56,8 @@ export default class TriggerCondition extends Component {
     singleCondition: false,
     isLast: false,
     addConditions: () => {},
+    filterEncryptCondition: false,
+    excludingDepartmentSpecialFilter: false,
   };
 
   constructor(props) {
@@ -55,7 +66,10 @@ export default class TriggerCondition extends Component {
       showControlsIndex: '',
       moreFieldsIndex: '',
       controlsData: this.getFieldData(props.controls),
+      search: undefined,
+      keywords: '',
     };
+    this.cityPickerSearchRef = React.createRef();
   }
 
   componentWillReceiveProps(nextProps, nextState) {
@@ -90,6 +104,7 @@ export default class TriggerCondition extends Component {
               value: o.controlId,
               field: CONTROLS_NAME[o.type],
               text: o.controlName,
+              sourceType: o.sourceControlType,
             };
           }),
         };
@@ -125,23 +140,19 @@ export default class TriggerCondition extends Component {
    * 渲染单个条件
    */
   renderItem(item, i, j, hasOr, hasAnd) {
-    const { singleCondition, controls, isNodeHeader, openNewFilter, isLast } = this.props;
+    const {
+      singleCondition,
+      controls,
+      isNodeHeader,
+      openNewFilter,
+      isLast,
+      filterEncryptCondition,
+      excludingDepartmentSpecialFilter,
+    } = this.props;
     let controlNumber;
     let conditionData = [];
     let conditionIndex;
     let single;
-    const switchConditionId = id => {
-      switch (id) {
-        case '15':
-          return '37';
-        case '16':
-          return '38';
-        case '17':
-          return '41';
-        case '18':
-          return '39';
-      }
-    };
 
     if (isNodeHeader) {
       controls.forEach(obj => {
@@ -157,11 +168,7 @@ export default class TriggerCondition extends Component {
     const unit = _.get(single || {}, 'unit');
 
     if (item.filedId) {
-      conditionData = getConditionList(item.filedTypeId, item.enumDefault).ids.map((id, index) => {
-        if (item.conditionId === id || switchConditionId(item.conditionId) === id) {
-          controlNumber = getConditionNumber(id);
-        }
-
+      conditionData = (getConditionList(item.filedTypeId, item.enumDefault) || { ids: [] }).ids.map((id, index) => {
         if (
           (_.includes([15, 16], item.filedTypeId) || (item.filedTypeId === 38 && item.enumDefault === 2)) &&
           ((item.conditionId === '15' && id === '37') ||
@@ -177,6 +184,8 @@ export default class TriggerCondition extends Component {
           value: id,
         };
       });
+
+      controlNumber = getConditionNumber(item.conditionId);
     }
 
     // 处理老的日期条件
@@ -189,11 +198,23 @@ export default class TriggerCondition extends Component {
       });
     }
 
+    // 加密字段去除部分筛选条件
+    if (filterEncryptCondition && single && single.encryId) {
+      _.remove(conditionData, o =>
+        _.includes(['3', '4', '5', '6', '11', '12', '13', '14', '15', '16', '44', '45'], o.value),
+      );
+    }
+
+    // 过滤特殊的部门筛选条件
+    if (excludingDepartmentSpecialFilter && single && single.type === 27) {
+      _.remove(conditionData, o => _.includes(['48', '49'], o.value));
+    }
+
     return (
       <div key={i + '-' + j} className="mTop15 triggerConditionItem">
         {this.renderControls(item, i, j)}
 
-        <div className="mTop10">
+        <div className="mTop10 flexRow alignItemsCenter">
           <Dropdown
             className={cx('flowDropdown fixedHeight Width200')}
             isAppendToBody
@@ -212,6 +233,27 @@ export default class TriggerCondition extends Component {
             }
             onChange={conditionId => this.switchCondition(conditionId, i, j)}
           />
+          <div className="flex"></div>
+          {item.conditionId &&
+            openNewFilter &&
+            !_.includes(['7', '8', '31', '32'], item.conditionId) &&
+            item.conditionValues[0] &&
+            item.conditionValues[0].controlId && (
+              <Checkbox
+                text={_l('条件异常时忽略')}
+                checked={item.ignoreEmpty === 1}
+                onClick={checked => this.switchFilterCondition('ignoreEmpty', checked ? 0 : 1, i, j)}
+              />
+            )}
+
+          {item.conditionId && checkConditionAllowEmpty(item.filedTypeId, item.conditionId) && (
+            <Checkbox
+              className="mLeft15"
+              text={_l('值为空时忽略')}
+              checked={item.ignoreValueEmpty === 1}
+              onClick={checked => this.switchFilterCondition('ignoreValueEmpty', checked ? 0 : 1, i, j)}
+            />
+          )}
         </div>
         <div className="mTop10 relative flexRow">
           {this.renderItemValue(item, controlNumber, i, j, showType, unit)}
@@ -301,7 +343,7 @@ export default class TriggerCondition extends Component {
                     flowNodeType={item.nodeType}
                     appType={item.appType}
                     actionId={item.actionId}
-                    nodeName={item.nodeName}
+                    nodeName={handleGlobalVariableName(item.nodeId, item.sourceType, item.nodeName)}
                     controlId={item.filedId}
                     controlName={item.filedValue}
                   />
@@ -337,7 +379,7 @@ export default class TriggerCondition extends Component {
             noItemTips={_l('没有可用的字段')}
             condition={controlsData}
             openSearch
-            handleFieldClick={({ fieldValueId, nodeId, nodeName, nodeTypeId, appType, actionId }) => {
+            handleFieldClick={({ fieldValueId, nodeId, nodeName, nodeTypeId, appType, actionId, sourceType }) => {
               this.switchField({
                 i,
                 j,
@@ -347,6 +389,7 @@ export default class TriggerCondition extends Component {
                 nodeType: nodeTypeId,
                 appType,
                 actionId,
+                sourceType,
               });
               this.setState({ showControlsIndex: '' });
             }}
@@ -360,7 +403,17 @@ export default class TriggerCondition extends Component {
   /**
    * 切换字段
    */
-  switchField = ({ filedId, i, j, nodeId = '', nodeName = '', nodeType = -1, appType = -1, actionId = '' }) => {
+  switchField = ({
+    filedId,
+    i,
+    j,
+    nodeId = '',
+    nodeName = '',
+    nodeType = -1,
+    appType = -1,
+    actionId = '',
+    sourceType,
+  }) => {
     const data = _.cloneDeep(this.props.data);
     const { controls, updateSource, isNodeHeader, selectNodeId } = this.props;
     let single;
@@ -387,6 +440,7 @@ export default class TriggerCondition extends Component {
       enumDefault: single.enumDefault,
       conditionId: (getConditionList(single.type, single.enumDefault) || {}).defaultConditionId,
       conditionValues: [],
+      sourceType,
     };
 
     updateSource(data);
@@ -408,11 +462,16 @@ export default class TriggerCondition extends Component {
     updateSource(data);
   };
 
+  onFetchData = _.debounce(keywords => {
+    this.setState({ keywords });
+  }, 500);
+
   /**
    * 渲染单个条件的值
    */
   renderItemValue(item, controlNumber = 0, i, j, showType, unit) {
     const { isNodeHeader, projectId } = this.props;
+    const { search, keywords } = this.state;
 
     if (_.isEmpty(item)) {
       return <div className="flex triggerConditionNum triggerConditionDisabled" />;
@@ -467,6 +526,7 @@ export default class TriggerCondition extends Component {
                 type="text"
                 className="triggerConditionNum flex ThemeBorderColor3 clearBorderRadius"
                 defaultValue={conditionValues[0] ? conditionValues[0].value : ''}
+                placeholder={_.includes(['15', '16'], conditionId) ? _l('最小值') : ''}
                 onKeyUp={evt => this.clearNoNum(evt)}
                 onPaste={evt => this.clearNoNum(evt)}
                 onBlur={evt => this.clearNoNum(evt, true, i, j)}
@@ -486,6 +546,7 @@ export default class TriggerCondition extends Component {
                   type="text"
                   className="triggerConditionNum flex ThemeBorderColor3 clearBorderRadius"
                   defaultValue={conditionValues[1] ? conditionValues[1].value : ''}
+                  placeholder={_.includes(['15', '16'], conditionId) ? _l('最大值') : ''}
                   onKeyUp={evt => this.clearNoNum(evt)}
                   onPaste={evt => this.clearNoNum(evt)}
                   onBlur={evt => this.clearNoNum(evt, true, i, j, true)}
@@ -715,10 +776,13 @@ export default class TriggerCondition extends Component {
               className={cx('flex triggerConditionNum triggerConditionList ThemeBorderColor3 clearBorderRadius', {
                 pTop2: conditionValues.length,
               })}
+              onClick={() => this.cityPickerSearchRef.current.focus()}
             >
               <CityPicker
+                search={keywords}
                 level={level}
                 callback={citys => {
+                  search && this.setState({ search: '', keywords: '' });
                   this.cacheCityPickerData = citys;
                   level === citys.length && this.updateConditionValue({ value: citys, i, j });
                 }}
@@ -727,32 +791,48 @@ export default class TriggerCondition extends Component {
                   this.updateConditionValue({ value: this.cacheCityPickerData, i, j })
                 }
               >
-                {!conditionValues.length ? (
-                  <div className="Gray_bd pLeft10 pRight10">
-                    {filedTypeId === 19 ? _l('省') : filedTypeId === 23 ? _l('省/市') : _l('省/市/县')}
+                <ul className="pLeft6 tagWrap">
+                  {conditionValues.map((list, index) => {
+                    return (
+                      <li key={index} className="tagItem flexRow">
+                        <span className="tag" title={list.value.value}>
+                          {list.value.value}
+                        </span>
+                        <span
+                          className="delTag"
+                          onClick={e => {
+                            e.stopPropagation();
+                            this.cacheCityPickerData = [];
+                            this.updateConditionValue({ value: list.value.key, i, j });
+                          }}
+                        >
+                          <Icon icon="close" className="pointer" />
+                        </span>
+                      </li>
+                    );
+                  })}
+                  <div className="CityPicker-input-tagSearchBox">
+                    <Input
+                      className="CityPicker-input-textCon CityPicker-input-tagSearch"
+                      placeholder={
+                        !conditionValues.length
+                          ? item.type === 19
+                            ? _l('省')
+                            : item.type === 23
+                            ? _l('省/市')
+                            : _l('省/市/县')
+                          : ''
+                      }
+                      value={search}
+                      manualRef={this.cityPickerSearchRef}
+                      onChange={value => {
+                        this.setState({ search: value });
+                        this.onFetchData(value);
+                      }}
+                    />
+                    <label className="CityPicker-input-box_label">{search}</label>
                   </div>
-                ) : (
-                  <ul className="pLeft6 tagWrap">
-                    {conditionValues.map((list, index) => {
-                      return (
-                        <li key={index} className="tagItem flexRow">
-                          <span className="tag" title={list.value.value}>
-                            {list.value.value}
-                          </span>
-                          <span
-                            className="delTag"
-                            onClick={e => {
-                              e.stopPropagation();
-                              this.updateConditionValue({ value: list.value.key, i, j });
-                            }}
-                          >
-                            <Icon icon="close" className="pointer" />
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
+                </ul>
               </CityPicker>
             </div>
           )}
@@ -968,7 +1048,6 @@ export default class TriggerCondition extends Component {
   selectUser(evt, users, i, j, unique) {
     dialogSelectUser({
       title: _l('选择人员'),
-      showMoreInvite: false,
       SelectUserSettings: {
         filterResigned: false,
         filterAccountIds: unique ? [] : users.map(item => item.value.key),
@@ -977,6 +1056,7 @@ export default class TriggerCondition extends Component {
         unique,
         includeSystemField: true,
         filterSystemAccountId: ['user-self', 'user-sub'],
+        prefixAccountIds: [md.global.Account.accountId],
         callback: users => {
           this.updateConditionValue({ value: users, i, j, isSingle: unique });
         },
@@ -1043,7 +1123,12 @@ export default class TriggerCondition extends Component {
       filedTypeId === 33 ||
       filedTypeId === 50
     ) {
-      if (_.includes(data[i][j].conditionValues.map(obj => obj.value), value)) {
+      if (
+        _.includes(
+          data[i][j].conditionValues.map(obj => obj.value),
+          value,
+        )
+      ) {
         _.remove(data[i][j].conditionValues, obj => obj.value === value);
       } else {
         data[i][j].conditionValues.push({ value });
@@ -1076,11 +1161,12 @@ export default class TriggerCondition extends Component {
       if (typeof value === 'string') {
         _.remove(data[i][j].conditionValues, obj => obj.value.key === value);
       } else {
-        const key = value[value.length - 1].id;
+        const last = _.last(value);
+        const key = last.id;
         const isExist = _.find(data[i][j].conditionValues, obj => obj.value.key === key);
 
         if (!isExist) {
-          data[i][j].conditionValues.push({ value: { key, value: value.map(item => item.name).join('/') } });
+          data[i][j].conditionValues.push({ value: { key, value: last.path } });
         }
       }
     }
@@ -1125,6 +1211,17 @@ export default class TriggerCondition extends Component {
   };
 
   /**
+   * 切换过滤为空条件
+   */
+  switchFilterCondition = (key, value, i, j) => {
+    const data = _.cloneDeep(this.props.data);
+    const { updateSource } = this.props;
+
+    data[i][j][key] = value;
+    updateSource(data);
+  };
+
+  /**
    * 更新日期类型筛选条件的值
    */
   updateConditionDateValue = ({ value, i, j, type = 20, second = false }) => {
@@ -1139,7 +1236,7 @@ export default class TriggerCondition extends Component {
    * 更多节点的值
    */
   renderOtherFields(item, i, j, second = false) {
-    const { processId, selectNodeId, sourceAppId, isIntegration, controls } = this.props;
+    const { projectId, processId, relationId, selectNodeId, sourceAppId, isIntegration, controls } = this.props;
     const { moreFieldsIndex } = this.state;
     let dataSource = '';
 
@@ -1162,7 +1259,9 @@ export default class TriggerCondition extends Component {
         isFilter={true}
         item={Object.assign({}, item, { type: item.filedTypeId })}
         fieldsVisible={moreFieldsIndex === `${i}-${j}-${second}`}
+        projectId={projectId}
         processId={processId}
+        relationId={relationId}
         selectNodeId={selectNodeId}
         sourceAppId={sourceAppId}
         isIntegration={isIntegration}
@@ -1190,6 +1289,7 @@ export default class TriggerCondition extends Component {
     j,
     second,
     isDel,
+    sourceType,
   }) => {
     const data = _.cloneDeep(this.props.data);
     const { updateSource } = this.props;
@@ -1212,6 +1312,7 @@ export default class TriggerCondition extends Component {
         nodeId,
         nodeName,
         nodeType: nodeTypeId,
+        sourceType,
       };
     }
 
@@ -1233,7 +1334,7 @@ export default class TriggerCondition extends Component {
             flowNodeType={item.nodeType}
             appType={item.appType}
             actionId={item.actionId}
-            nodeName={item.nodeName}
+            nodeName={handleGlobalVariableName(item.nodeId, item.sourceType, item.nodeName)}
             controlId={item.controlId}
             controlName={item.controlName}
           />

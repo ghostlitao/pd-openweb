@@ -1,9 +1,9 @@
 import React, { Component, Fragment } from 'react';
 import _ from 'lodash';
 import cx from 'classnames';
-import { ScrollView, Menu, Radio, MenuItem, LoadDiv, TagTextarea } from 'ming-ui';
+import { ScrollView, Menu, Radio, MenuItem, LoadDiv, TagTextarea, Tooltip, Support } from 'ming-ui';
 import flowNode from '../../../api/flowNode';
-import { CONTROLS_NAME, NODE_TYPE } from '../../enum';
+import { CONTROLS_NAME } from '../../enum';
 import {
   Member,
   SelectUserDropDown,
@@ -12,7 +12,29 @@ import {
   DetailFooter,
   ActionFields,
   CustomTextarea,
+  TestParameter,
 } from '../components';
+import styled from 'styled-components';
+import { handleGlobalVariableName } from '../../utils';
+
+const TagBox = styled.div`
+  padding: 0 7px;
+  height: 22px;
+  background: #f5f5f5;
+  border-radius: 2px;
+  color: #9e9e9e;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  &.yellow {
+    background: #ffa340;
+    color: #fff !important;
+  }
+  &.blue {
+    background: #2196f3;
+    color: #fff !important;
+  }
+`;
 
 export default class Message extends Component {
   constructor(props) {
@@ -27,6 +49,7 @@ export default class Message extends Component {
       templateId: '',
       sign: '',
       messageContent: '',
+      type: 0,
       showSignList: false,
       fieldsVisible: false,
 
@@ -34,6 +57,9 @@ export default class Message extends Component {
       showSetTemplate: false,
       cacheTemplateContent: '',
       fieldsData: [],
+
+      showTestDialog: false,
+      testArray: [],
     };
   }
 
@@ -57,6 +83,16 @@ export default class Message extends Component {
       !_.isEmpty(this.state.data)
     ) {
       this.updateSource({ name: nextProps.selectNodeName });
+    }
+  }
+
+  componentDidUpdate(prevProps, prevState) {
+    if (
+      this.tagBox &&
+      prevState.data.messageTemplate &&
+      prevState.data.messageTemplate.messageContent !== this.state.data.messageTemplate.messageContent
+    ) {
+      this.tagBox.setValue(this.state.data.messageTemplate.messageContent.replace(/\$\(.*?\)/g, '$-$'));
     }
   }
 
@@ -126,9 +162,23 @@ export default class Message extends Component {
 
     return (
       <Fragment>
+        {md.global.Config.IsPlatformLocal && (
+          <div className="Gray_75 workflowDetailDesc">
+            <span className="TxtMiddle">
+              {_l(
+                '短信0.05元/条，自动从企业账务中心扣费。70字计一条短信，超过70字以67字每条计费。每个标点、空格、英文字母都算一个字。短信实际发送可能有10-20分钟的延时。暂不支持海外手机号。',
+              )}
+            </span>
+          </div>
+        )}
         <div className="mTop20 bold">{_l('发送给')}</div>
 
-        <Member accounts={data.accounts} updateSource={this.updateSource} />
+        <Member
+          companyId={this.props.companyId}
+          appId={this.props.relationType === 2 ? this.props.relationId : ''}
+          accounts={data.accounts}
+          updateSource={this.updateSource}
+        />
 
         <div
           className="flexRow mTop15 ThemeColor3 workflowDetailAddBtn"
@@ -200,15 +250,26 @@ export default class Message extends Component {
           <div className="pLeft16 pRight16 pTop15 pBottom20">
             <div className="bold">{_l('短信签名：')}</div>
             <div className="mTop5">{data.messageTemplate.companySignature}</div>
+
+            <div className="mTop15 bold">{_l('类型：')}</div>
+            {data.messageTemplate.type === 2
+              ? _l('营销推广')
+              : data.messageTemplate.type === 3
+              ? _l('金融交易')
+              : _l('行业通知')}
+
             <div className="mTop15 bold">{_l('内容')}</div>
             <TagTextarea
               className="flowTplContent"
               defaultValue={data.messageTemplate.messageContent.replace(/\$\(.*?\)/g, '$-$')}
+              getRef={tagBox => {
+                this.tagBox = tagBox;
+              }}
               readonly
               renderTag={(tag, options) => {
                 const ids = tag.split(/([a-zA-Z0-9#]{24,32})-/).filter(item => item);
                 const nodeObj = data.formulaMap[ids[0]] || {};
-                const controlObj = data.formulaMap[ids[1]] || {};
+                const controlObj = data.formulaMap[ids.join('-')] || {};
 
                 if (!nodeObj.name || !controlObj.name) {
                   return <span style={{ color: '#ffa340' }}>({_l('缺少字段变量')})</span>;
@@ -277,6 +338,7 @@ export default class Message extends Component {
       templateId: messageTemplate.id,
       sign: messageTemplate.companySignature,
       messageContent: messageTemplate.messageContent,
+      type: messageTemplate.type,
     });
   };
 
@@ -289,6 +351,7 @@ export default class Message extends Component {
         id: '',
         companySignature: '',
         messageContent: '',
+        type: 0,
       },
     });
   };
@@ -299,7 +362,9 @@ export default class Message extends Component {
   renderTemplateList() {
     const { data, keywords } = this.state;
     const templates = data.templates.filter(
-      item => item.companySignature.indexOf(keywords) > -1 || item.messageContent.indexOf(keywords) > -1,
+      item =>
+        item.companySignature.toLocaleLowerCase().indexOf(keywords.toLocaleLowerCase()) > -1 ||
+        item.messageContent.toLocaleLowerCase().indexOf(keywords.toLocaleLowerCase()) > -1,
     );
 
     return (
@@ -333,8 +398,14 @@ export default class Message extends Component {
                   onClick={() => this.selectTemplate(item.id, item.companySignature, item.messageContent)}
                 >
                   <Radio className="Font15" disabled />
+                  <TagBox className={cx('mRight10', { yellow: item.type === 2, blue: item.type === 3 })}>
+                    {item.type === 2 ? _l('营销推广') : item.type === 3 ? _l('金融交易') : _l('行业通知')}
+                  </TagBox>
                   <div className="alignItemsCenter workflowMessageListItem">
-                    【{item.companySignature}】{item.messageContent}
+                    {this.getTemplateListContent(
+                      `【${item.companySignature}】${item.messageContent}`,
+                      item.referenceValue,
+                    )}
                   </div>
                 </li>
               );
@@ -348,6 +419,20 @@ export default class Message extends Component {
         )}
       </Fragment>
     );
+  }
+
+  /**
+   * 获取模板列表内容
+   */
+  getTemplateListContent(content, referenceValue = {}) {
+    Object.keys(referenceValue).forEach(key => {
+      content = content.replace(
+        new RegExp(key.replace(/\$/g, '\\$').replace(/\(/g, '\\(').replace(/\)/g, '\\)'), 'g'),
+        `#{${referenceValue[key]}}`,
+      );
+    });
+
+    return content;
   }
 
   /**
@@ -372,8 +457,22 @@ export default class Message extends Component {
    * 渲染新模板
    */
   renderNewTemplate() {
-    const { data, sign, messageContent, showSignList, isSelectNewTpl } = this.state;
+    const { data, sign, messageContent, type, showSignList, isSelectNewTpl, showTestDialog, testArray } = this.state;
     const companySignatureList = data.companySignatureList.filter(key => key.indexOf(sign) > -1);
+    const MESSAGE_TYPES = [
+      { text: _l('行业通知'), value: 1, desc: _l('一般性通知。如验证码短信、通知短信、物流快递短信、订单短信') },
+      {
+        text: _l('营销推广'),
+        value: 2,
+        desc: _l('如：促销、优惠、活动报名等产品推广和品牌宣传类短信；系统将自动为此类短信末尾附加【退订】字样'),
+      },
+      {
+        text: _l('金融交易（暂不支持）'),
+        value: 3,
+        desc: _l('如：资金到账提示、支付验证码、交易提醒、催缴通知等'),
+        disabled: true,
+      },
+    ];
 
     return (
       <div className="pBottom20">
@@ -407,7 +506,7 @@ export default class Message extends Component {
             value={sign}
             onFocus={() => this.setState({ showSignList: true })}
             onBlur={() => this.setState({ showSignList: false })}
-            onChange={evt => this.setState({ sign: evt.currentTarget.value.trim() })}
+            onChange={evt => this.setState({ sign: evt.currentTarget.value.replace(/[【】]/g, '').trim() })}
           />
 
           {showSignList && (
@@ -422,22 +521,43 @@ export default class Message extends Component {
           )}
         </div>
 
+        <div className="bold mTop20">{_l('短信类型')}</div>
+        <div className="Gray_75 mTop10">
+          {_l('请谨慎选择您的短信类型，后续如果在发送时出现实际类型不符合预设类型的，可能面临模版被停用的风险')}
+        </div>
+        {MESSAGE_TYPES.map(item => (
+          <div className="mTop15" key={item.value}>
+            <Tooltip popupPlacement="top" text={item.desc}>
+              <span>
+                <Radio
+                  text={item.text}
+                  disabled={item.disabled}
+                  checked={type === item.value}
+                  onClick={() => this.setState({ type: item.value })}
+                />
+              </span>
+            </Tooltip>
+          </div>
+        ))}
+
         <div className="bold mTop20">{_l('短信内容')}</div>
         <div className="Gray_75 mTop10">
           {_l('为保证短信的稳定推送，以下内容须审核后才能使用。多于70字（含签名）的短信按67字每条计费')}
         </div>
-
         <CustomTextarea
           className="minH100"
+          projectId={this.props.companyId}
           processId={this.props.processId}
+          relationId={this.props.relationId}
           selectNodeId={this.props.selectNodeId}
           type={2}
           content={messageContent}
           formulaMap={data.formulaMap}
-          onChange={(err, value, obj) => this.setState({ messageContent: value })}
+          onChange={(err, value, obj) =>
+            this.setState({ messageContent: value.replace(/【/g, '[').replace(/】/g, ']') })
+          }
           updateSource={this.updateSource}
         />
-
         <div className="Gray_75 mTop10">
           {/*_l(
             '已输入 %0 个字（含签名），按 %1 条计费',
@@ -445,16 +565,36 @@ export default class Message extends Component {
             Math.ceil(this.statisticalWordNumber() / 70),
           )*/}
         </div>
+
         <div className="mTop30">
-          <span className="saveTplBtn ThemeBGColor3 ThemeHoverBGColor2" onClick={this.onSaveTemplate}>
+          <span
+            className="saveTplBtn ThemeBGColor3 ThemeHoverBGColor2"
+            onClick={() => {
+              const newTestArray = _.uniq(messageContent.match(/\$[^ \r\n]+?\$/g) || []);
+
+              if (!sign) {
+                alert(_l('签名不能为空'), 2);
+                return;
+              }
+
+              if (!messageContent) {
+                alert(_l('短信内容不能为空'), 2);
+                return;
+              }
+
+              // 存在动态值
+              if (newTestArray.length) {
+                this.setState({ showTestDialog: true, testArray: newTestArray });
+                return;
+              }
+
+              this.onSaveTemplate();
+            }}
+          >
             {_l('提交审核')}
           </span>
         </div>
         <div className="mTop20 Gray_75 workflowDetailDesc">
-          <div>
-            <span className="mRight10">•</span>
-            {_l('短信必须审核通过后才能启用流程')}
-          </div>
           <div>
             <span className="mRight10">•</span>
             {_l('审核时间约为1小时，非工作时间提交审核会延长')}
@@ -464,6 +604,20 @@ export default class Message extends Component {
             {_l('我们会把审核通过的短信模板同步到「工作流 > 短信模板」')}
           </div>
         </div>
+
+        {showTestDialog && (
+          <TestParameter
+            title={_l('设置参考值')}
+            description={_l('这些是您短信模板中使用到的动态值，请给出范例数据用于人工审核时验证您的短信类型')}
+            onOk={this.onSaveTemplate}
+            onClose={() => this.setState({ showTestDialog: false })}
+            testArray={testArray}
+            formulaMap={data.formulaMap}
+            testMap={data.referenceValue || {}}
+            isRequired
+            previewContent={`【${sign}】${messageContent}`}
+          />
+        )}
       </div>
     );
   }
@@ -481,18 +635,8 @@ export default class Message extends Component {
   /**
    * 保存短信模板
    */
-  onSaveTemplate = () => {
-    const { sign, messageContent, templateId, saveRequest } = this.state;
-
-    if (!sign) {
-      alert(_l('签名不能为空'), 2);
-      return;
-    }
-
-    if (!messageContent) {
-      alert(_l('短信内容不能为空'), 2);
-      return;
-    }
+  onSaveTemplate = referenceValue => {
+    const { sign, messageContent, type, templateId, saveRequest } = this.state;
 
     if (saveRequest) {
       return;
@@ -505,7 +649,9 @@ export default class Message extends Component {
         nodeId: this.props.selectNodeId,
         companySignature: sign,
         messageContent,
+        type,
         templateId,
+        referenceValue,
       })
       .then(result => {
         const data = _.cloneDeep(this.state.data);
@@ -514,6 +660,7 @@ export default class Message extends Component {
         data.messageTemplate.companySignature = result.companySignature;
         data.messageTemplate.messageContent = result.messageContent;
         data.messageTemplate.status = result.status;
+        data.messageTemplate.type = result.type;
         data.formulaMap = Object.assign({}, data.formulaMap, result.formulaMap);
 
         this.setState({
@@ -521,12 +668,13 @@ export default class Message extends Component {
           addNewTemplate: false,
           sign: '',
           messageContent: '',
+          type: 0,
           templateId: '',
           saveRequest: false,
         });
       });
 
-    this.setState({ saveRequest: true });
+    this.setState({ saveRequest: true, showTestDialog: false });
   };
 
   /**
@@ -574,7 +722,7 @@ export default class Message extends Component {
                 .split(/([a-zA-Z0-9#]{24,32})-/)
                 .filter(item => item);
               const nodeObj = data.formulaMap[ids[0]] || {};
-              const controlObj = data.formulaMap[ids[1]] || {};
+              const controlObj = data.formulaMap[ids.join('-')] || {};
 
               if (!nodeObj.name || !controlObj.name) {
                 return (
@@ -593,7 +741,7 @@ export default class Message extends Component {
                   flowNodeType={nodeObj.type}
                   appType={nodeObj.appType}
                   actionId={nodeObj.actionId}
-                  nodeName={nodeObj.name}
+                  nodeName={handleGlobalVariableName(ids[0], controlObj.sourceType, nodeObj.name)}
                   controlName={controlObj.name}
                   onClick={() => this.insertFields(tag)}
                 />
@@ -618,7 +766,7 @@ export default class Message extends Component {
               }) => {
                 const formulaMap = _.cloneDeep(data.formulaMap);
                 formulaMap[nodeId] = { type: nodeTypeId, appType, actionId, name: nodeName };
-                formulaMap[fieldValueId] = { type: fieldValueType, name: fieldValueName };
+                formulaMap[`${nodeId}-${fieldValueId}`] = { type: fieldValueType, name: fieldValueName };
 
                 this.mapData[this.currentMapId] = `$${nodeId}-${fieldValueId}$`;
                 this.setState({ fieldsVisible: false });
@@ -714,7 +862,7 @@ export default class Message extends Component {
           bg="BGBlue"
           updateSource={this.updateSource}
         />
-        <div className="flex mTop20">
+        <div className="flex">
           <ScrollView>
             <div className="workflowDetailBox">
               {!addNewTemplate && !showSetTemplate && this.renderContent()}

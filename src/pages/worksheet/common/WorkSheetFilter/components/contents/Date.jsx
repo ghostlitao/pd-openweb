@@ -57,7 +57,7 @@ export default function Date(props) {
         <div className="dateInputCon customDate">
           <MdAntDateRangePicker
             disabled={disabled}
-            defaultValue={minValue && maxValue ? [moment(minValue), moment(maxValue)] : []}
+            value={minValue && maxValue ? [moment(minValue), moment(maxValue)] : []}
             showTime={timeFormat ? { format: timeFormat } : false}
             picker={getPicker(showType)}
             format={showValueFormat}
@@ -118,7 +118,7 @@ export default function Date(props) {
           {dateRange === 18 && (
             <div className="customDate dateInputCon mTop10">
               <DatePicker
-                {...control}
+                {...{ ...control, advancedSetting: { ...control.advancedSetting, min: '', max: '' } }}
                 value={value && moment(value)}
                 dropdownClassName="scrollInTable"
                 onChange={date => {

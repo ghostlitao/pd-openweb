@@ -48,13 +48,10 @@ export default class SelectUsersFromApp extends Component {
 
     ajaxRequest.getManagerApps({ projectId: this.props.companyId }).then(result => {
       result = result.map(({ appId, appName }) => {
-        if (selectAppId === appId) {
-          appName += _l('（本应用）');
-        }
-
         return {
           value: appId,
-          text: appName,
+          text: selectAppId === appId ? appName + _l('（本应用）') : appName,
+          label: appName,
         };
       });
 
@@ -89,7 +86,7 @@ export default class SelectUsersFromApp extends Component {
    */
   onOk = () => {
     const { selectAppId, selectRoleIds, appList, roles } = this.state;
-    const appName = appList.find(item => item.value === selectAppId).text;
+    const appName = appList.find(item => item.value === selectAppId).label;
     const rolesList = selectRoleIds.map(roleId => {
       const singleRole = roles.find(item => item.value === roleId);
       return {
@@ -122,6 +119,7 @@ export default class SelectUsersFromApp extends Component {
             <Dropdown
               isAppendToBody
               border
+              openSearch
               className="w100"
               placeholder={_l('请选择')}
               noData={_l('没有可选的应用')}
@@ -145,6 +143,8 @@ export default class SelectUsersFromApp extends Component {
               label={label.length ? label.join('、') : _l('选择角色')}
               multipleLevel={false}
               multipleHideDropdownNav
+              filter
+              filterHint={_l('搜索')}
               onChange={(evt, ids) => this.setState({ selectRoleIds: multiChoose ? ids : [ids] })}
             />
           </div>
@@ -165,7 +165,13 @@ export default class SelectUsersFromApp extends Component {
     const { appList } = this.state;
 
     return (
-      <Dialog className="selectUserFromAppDialog" visible title={_l('选择应用下角色')} footer={null} onCancel={this.props.onCancel}>
+      <Dialog
+        className="selectUserFromAppDialog"
+        visible
+        title={_l('选择应用下角色')}
+        footer={null}
+        onCancel={this.props.onCancel}
+      >
         {appList === null ? <LoadDiv /> : this.renderContent()}
       </Dialog>
     );

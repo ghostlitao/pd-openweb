@@ -1,25 +1,23 @@
-﻿import UploadFiles from 'src/components/UploadFiles';
+import UploadFiles from 'src/components/UploadFiles';
 import React from 'react';
 import ReactDom from 'react-dom';
 import './css/createCalendar.less';
-import 'src/components/mdBusinessCard/mdBusinessCard';
 import quickSelectUser from 'ming-ui/functions/quickSelectUser';
 import ajaxRequest from 'src/api/calendar';
 import timezone from './timezone';
 import SelectTimezone from './component/SelectTimezone';
-import RegExp from 'src/util/expression';
 import { htmlEncodeReg, htmlDecodeReg } from 'src/util';
-import doT from '@mdfe/dot';
+import doT from 'dot';
 import taskHtml from './tpl/createCalendar.html';
-import 'src/components/mdDialog/dialog';
 import 'src/components/mdDatePicker/mdDatePicker';
 import '@mdfe/timepicker';
-import 'src/components/select/select';
-import 'src/components/textboxList/textboxList';
 import 'src/components/autoTextarea/autoTextarea';
 import '@mdfe/jquery-plupload';
 import createShare from 'src/components/createShare/createShare';
 import moment from 'moment';
+import _ from 'lodash';
+import UserCard from 'src/components/UserCard';
+import { Dialog, Dropdown, Tooltip } from 'ming-ui';
 
 var CreateCalendar = function (opts) {
   var _this = this;
@@ -42,7 +40,6 @@ var CreateCalendar = function (opts) {
     isShowHoverMember: false,
     timer: '',
     timezone: -moment().utcOffset(),
-    dialog: null,
     isAttachComplete: true,
     calendarMembers: null,
     defaultAttachmentData: [],
@@ -91,38 +88,36 @@ $.extend(CreateCalendar.prototype, {
     var settings = this.settings;
 
     // 阻止重复按键导致多个创建框的生成
-    if ($('#' + settings.frameid).length > 0) {
+    if ($('.' + settings.frameid).length > 0) {
       return;
     }
-
     // 创建弹出层
-    settings.dialog = $.DialogLayer({
-      dialogBoxID: settings.frameid,
-      className: 'createCalendar_container',
-      callback: function () {
-        // 每次删除所有名片层
-        $("[id^='messageDiv_']").remove();
-        // mdDatePicker 移除
+    Dialog.confirm({
+      dialogClasses: `${settings.frameid} createCalendar_container`,
+      title: _l('创建日程'),
+      width: 570,
+      noFooter: true,
+      onOk: () => {
+        _this.send();
         $('#txtBeginDate, #txtEndDate, #txtOverDate').mdDatePicker('destroy');
       },
-      container: {
-        header: _l('创建日程'),
-        yesText: '',
-        noText: '',
-        yesFn: function () {
-          return _this.send();
-        },
+      onCancel: () => {
+        $('#txtBeginDate, #txtEndDate, #txtOverDate').mdDatePicker('destroy');
       },
-      width: 570,
-      readyFn: function () {
-        _this.eventInit();
-        settings.dialog.dialogCenter();
-        $('#txtCalendarName').focus();
+      handleClose: () => {
+        // mdDatePicker 移除
+        $('#txtBeginDate, #txtEndDate, #txtOverDate').mdDatePicker('destroy');
+        $('.createCalendar_container').parent().remove();
       },
-      isSameClose: false,
+      children: (
+        <div
+          className="dialogContent"
+          dangerouslySetInnerHTML={{ __html: doT.template(taskHtml)(Object.assign({}, settings, { moment })) }}
+        ></div>
+      ),
     });
-
-    settings.dialog.content(doT.template(taskHtml)(Object.assign({}, settings, { moment })));
+    _this.eventInit();
+    $('#txtCalendarName').focus();
   },
 
   // 事件初始化
@@ -132,9 +127,6 @@ $.extend(CreateCalendar.prototype, {
 
     // 分类事件
     _this.initCategoryEvent();
-
-    // 绑定名片层
-    _this.showCalendarMessageFun();
 
     // 时间事件
     _this.initDateEvent();
@@ -202,7 +194,7 @@ $.extend(CreateCalendar.prototype, {
     // 回车创建
     $('#txtCalendarName').on('keypress', function (event) {
       if (event.keyCode === 13) {
-        $('#' + settings.frameid)
+        $('.' + settings.frameid)
           .find('#calendarSubmitBtn')
           .click();
       }
@@ -281,7 +273,6 @@ $.extend(CreateCalendar.prototype, {
 
     $('#txtBeginDatebox span, #txtEndDatebox span').on('click', function (event) {
       $(this).siblings('input').click();
-      console.log(111);
     });
 
     // 开始日期
@@ -457,48 +448,43 @@ $.extend(CreateCalendar.prototype, {
   // 初始化提醒事件
   initRemindEvent: function () {
     var allDay = this.settings.AllDay;
-    // 提醒
-    $('#remindSelectCreate').MDSelect({
-      dataArr: [
-        {
-          name: _l('分钟'),
-          id: '1',
-        },
-        {
-          name: _l('小时'),
-          id: '2',
-        },
-        {
-          name: _l('天'),
-          id: '3',
-        },
-        {
-          name: _l('无'),
-          id: '0',
-        },
-      ],
-      zIndex: 1002,
-      defualtSelectedValue: allDay ? '2' : '1',
-      onChange: function (value, text) {
-        var $remindText = $('#remindTextCreate');
-        var $remindBox = $('#remindTextLableCreate');
-        var $telRemid = $('.telRemindLabel');
-        if (value == 0) {
-          $remindBox.hide();
-          $remindText.hide();
-          $telRemid.addClass('Hidden').removeClass('InlineBlock');
-        } else {
-          if (value === '1') {
-            $remindText.val('15');
+
+    $('#remindSelectCreate').val(allDay ? '2' : '1');
+
+    ReactDom.render(
+      <Dropdown
+        data={[
+          { text: _l('分钟'), value: '1' },
+          { text: _l('小时'), value: '2' },
+          { text: _l('天'), value: '3' },
+          { text: _l('无'), value: '0' },
+        ]}
+        defaultValue={allDay ? '2' : '1'}
+        onChange={value => {
+          var $remindText = $('#remindTextCreate');
+          var $remindBox = $('#remindTextLableCreate');
+          var $telRemid = $('.telRemindLabel');
+
+          if (value == 0) {
+            $remindBox.hide();
+            $remindText.hide();
+            $telRemid.addClass('Hidden').removeClass('InlineBlock');
           } else {
-            $remindText.val('1');
+            if (value === '1') {
+              $remindText.val('15');
+            } else {
+              $remindText.val('1');
+            }
+            $remindText.show().focus();
+            $remindBox.show();
+            $telRemid.removeClass('Hidden').addClass('InlineBlock');
           }
-          $remindText.show().focus();
-          $remindBox.show();
-          $telRemid.removeClass('Hidden').addClass('InlineBlock');
-        }
-      },
-    });
+
+          $('#remindSelectCreate').val(value);
+        }}
+      />,
+      document.getElementById('remindSelectCreateBox'),
+    );
 
     $('.telRemindLabel')
       .find('label')
@@ -539,62 +525,53 @@ $.extend(CreateCalendar.prototype, {
   // 初始化重复事件
   initRepeatEvent: function () {
     // 重复类型
-    $('#tab_repeatType').MDSelect({
-      dataArr: [
-        {
-          name: _l('每天'),
-          id: '0',
-        },
-        {
-          name: _l('每周'),
-          id: '1',
-        },
-        {
-          name: _l('每月'),
-          id: '2',
-        },
-        {
-          name: _l('每年'),
-          id: '3',
-        },
-      ],
-      defualtSelectedValue: $('#tab_repeatType').val(),
-      width: '70',
-      lineHeight: '24',
-      zIndex: 100,
-      onChange: function (value) {
-        if (value == 1) {
-          $('#repeatTypeGroup').show();
-        } else {
-          $('#repeatTypeGroup').hide();
-        }
+    ReactDom.render(
+      <Dropdown
+        data={[
+          { text: _l('每天'), value: '0' },
+          { text: _l('每周'), value: '1' },
+          { text: _l('每月'), value: '2' },
+          { text: _l('每年'), value: '3' },
+        ]}
+        defaultValue={$('.repeatDialogConfirm #tab_repeatType').val()}
+        isAppendToBody
+        onChange={value => {
+          if (value == 1) {
+            $('.repeatDialogConfirm #repeatTypeGroup').show();
+          } else {
+            $('.repeatDialogConfirm #repeatTypeGroup').hide();
+          }
 
-        var $repeatTypeLabel = $('#createRepeatTypeLabel');
-        switch (parseInt(value, 10)) {
-          case 0:
-            $repeatTypeLabel.text(_l('天'));
-            break;
-          case 1:
-            $repeatTypeLabel.text(_l('周'));
-            break;
-          case 2:
-            $repeatTypeLabel.text(_l('月'));
-            break;
-          case 3:
-            $repeatTypeLabel.text(_l('年'));
-            break;
-          default:
-            break;
-        }
-        $('#tab_repeatType').siblings('.customSelect').find('.txtBox').attr('itemvalue', value);
-        CreateCalendar.methods.repeatResult();
-      },
-    });
+          var $repeatTypeLabel = $('.repeatDialogConfirm #createRepeatTypeLabel');
+          switch (parseInt(value, 10)) {
+            case 0:
+              $repeatTypeLabel.text(_l('天'));
+              break;
+            case 1:
+              $repeatTypeLabel.text(_l('周'));
+              break;
+            case 2:
+              $repeatTypeLabel.text(_l('月'));
+              break;
+            case 3:
+              $repeatTypeLabel.text(_l('年'));
+              break;
+            default:
+              break;
+          }
+
+          $('.repeatDialogConfirm #tab_repeatType').val(value);
+          $('.repeatDialogConfirm #tab_repeatType').siblings('.customSelect').find('.txtBox').attr('itemvalue', value);
+          CreateCalendar.methods.repeatResult();
+        }}
+      />,
+      $('.repeatDialogConfirm #tab_repeatTypeBox')[0],
+    );
 
     // 重复次数
-    $('#repetitionFrequency')
+    $('.repeatDialogConfirm #repetitionFrequency')
       .keyup(function () {
-        if (!RegExp.isNum($(this).val())) {
+        if (!_.isNumber(parseInt($(this).val())) || _.isNaN($(this).val())) {
           if (!$(this).val().trim()) {
             return;
           }
@@ -615,7 +592,7 @@ $.extend(CreateCalendar.prototype, {
         $(this).attr({ defaultValue: value, value: value });
       })
       .blur(function () {
-        if (!RegExp.isNum($(this).val())) {
+        if (!_.isNumber(parseInt($(this).val())) || _.isNaN($(this).val())) {
           $(this).attr('value', $(this).attr('defaultValue'));
         }
         if (parseInt($(this).val(), 10) === 0) {
@@ -625,60 +602,55 @@ $.extend(CreateCalendar.prototype, {
       });
 
     // 点击按钮
-    $('#repeatTypeGroup .repeatTypeGroupBtn').on('click', function () {
+    $('.repeatDialogConfirm #repeatTypeGroup .repeatTypeGroupBtn').on('click', function () {
       $(this).toggleClass('ThemeBGColor3');
       CreateCalendar.methods.repeatResult();
     });
 
     // 结束类型
-    $('#tab_repeatTime').MDSelect({
-      dataArr: [
-        {
-          name: _l('永不'),
-          id: '0',
-        },
-        {
-          name: _l('次数'),
-          id: '1',
-        },
-        {
-          name: _l('日期'),
-          id: '2',
-        },
-      ],
-      defualtSelectedValue: $('#tab_repeatTime').val(),
-      width: '70',
-      lineHeight: '24',
-      onChange: function (value) {
-        switch (parseInt(value, 10)) {
-          case 0:
-            $('#overCount').hide();
-            $('#overTime').hide();
-            break;
-          case 1:
-            $('#overTime').hide();
-            $('#overCount').show();
-            break;
-          case 2:
-            $('#overCount').hide();
-            $('#overTime').show();
-            break;
-          default:
-            break;
-        }
+    ReactDom.render(
+      <Dropdown
+        data={[
+          { text: _l('永不'), value: '0' },
+          { text: _l('次数'), value: '1' },
+          { text: _l('日期'), value: '2' },
+        ]}
+        defaultValue={$('.repeatDialogConfirm #tab_repeatTime').val()}
+        isAppendToBody
+        onChange={value => {
+          switch (parseInt(value, 10)) {
+            case 0:
+              $('.repeatDialogConfirm #overCount').hide();
+              $('.repeatDialogConfirm #overTime').hide();
+              break;
+            case 1:
+              $('.repeatDialogConfirm #overTime').hide();
+              $('.repeatDialogConfirm #overCount').show();
+              break;
+            case 2:
+              $('.repeatDialogConfirm #overCount').hide();
+              $('.repeatDialogConfirm #overTime').show();
+              break;
+            default:
+              break;
+          }
 
-        $('#tab_repeatTime').siblings('.customSelect').find('.txtBox').attr('itemvalue', value);
-        CreateCalendar.methods.repeatResult();
-      },
-    });
+          $('.repeatDialogConfirm #tab_repeatTime').val(value);
+          $('.repeatDialogConfirm #tab_repeatTime').siblings('.customSelect').find('.txtBox').attr('itemvalue', value);
+          CreateCalendar.methods.repeatResult();
+        }}
+      />,
+      $('.repeatDialogConfirm #tab_repeatTimeBox')[0],
+    );
 
     // 重复结束次数
-    $('#txtOverCount')
+    $('.repeatDialogConfirm #txtOverCount')
       .keyup(function () {
-        if (!RegExp.isNum($(this).val())) {
-          if (!$(this).val().trim()) {
-            return;
-          }
+        if (!$(this).val().trim()) {
+          return;
+        }
+
+        if (!_.isNumber(parseInt($(this).val(), 10)) || _.isNaN(parseInt($(this).val(), 10))) {
           $(this).attr('value', $(this).attr('defaultValue'));
           return false;
         }
@@ -696,7 +668,7 @@ $.extend(CreateCalendar.prototype, {
         $(this).attr({ defaultValue: value, value: value });
       })
       .blur(function () {
-        if (!RegExp.isNum($(this).val())) {
+        if (!_.isNumber(parseInt($(this).val(), 10)) || _.isNaN(parseInt($(this).val(), 10))) {
           $(this).attr('value', $(this).attr('defaultValue'));
         }
         if (parseInt($(this).val(), 10) === 0) {
@@ -706,7 +678,7 @@ $.extend(CreateCalendar.prototype, {
       });
 
     // 重复结束日期
-    $('#txtOverDate')
+    $('.repeatDialogConfirm #txtOverDate')
       .removeClass('hasDatepicker')
       .mdDatePicker({
         dialogStyle: {
@@ -722,7 +694,7 @@ $.extend(CreateCalendar.prototype, {
       });
 
     // 设置最小时间
-    $('#txtOverDate').mdDatePicker('setMinDate', $('#txtBeginDate').mdDatePicker('getDate'));
+    $('.repeatDialogConfirm #txtOverDate').mdDatePicker('setMinDate', $('#txtBeginDate').mdDatePicker('getDate'));
 
     CreateCalendar.methods.repeatResult();
   },
@@ -730,31 +702,32 @@ $.extend(CreateCalendar.prototype, {
   // 初始化更改重复事件
   initUpdateRepeat: function ($el) {
     var _this = this;
-    var $repeatDialogMain = $.DialogLayer({
-      dialogBoxID: 'repeatDialogMain',
-      className: 'createCalendar_container',
-      container: {
-        header: _l('重复'),
-        yesText: _l('确定'),
-        content: $('#repeatDialog').html(),
-        yesFn: function () {
-          $('#repeatContent').removeClass('Hidden').find('.chekboxIcon').addClass('checked');
-          if ($el) {
-            $el.remove();
-          }
-        },
-      },
+
+    Dialog.confirm({
+      dialogClasses: 'repeatDialogConfirm createCalendar_container',
+      title: _l('重复'),
       width: 570,
-      isSameClose: false,
-      readyFn: function () {
-        $('#repeatDialog').html('');
-        _this.initRepeatEvent();
+      okText: _l('确定'),
+      children: <div className="dialogContent" dangerouslySetInnerHTML={{ __html: $('#repeatDialog').html() }}></div>,
+      onOk: () => {
+        $('#repeatContent').removeClass('Hidden').find('.chekboxIcon').addClass('checked');
+        if ($el) {
+          $el.remove();
+        }
+        $('.repeatDialogConfirm .customSelect').remove();
+        $('#repeatDialog.Hidden').html('');
+        $('#repeatDialog.Hidden').html($('.repeatDialogConfirm .dialogContent').html());
       },
-      callback: function () {
-        $('#repeatDialogMain .customSelect').remove();
-        $('#repeatDialog').html($('#repeatDialogMain .dialogContent').html());
+      onCancel: () => {
+        $('.repeatDialogConfirm .customSelect').remove();
+      },
+      handleClose: () => {
+        $('.repeatDialogConfirm .customSelect').remove();
+        $('.repeatDialogConfirm').parent().remove();
       },
     });
+
+    _this.initRepeatEvent();
   },
 
   // 初始化成员事件
@@ -768,8 +741,13 @@ $.extend(CreateCalendar.prototype, {
 
     // hover移除成员
     $('#addCalendarMembers').on('click', '.imgMemberBox .removeMember', function (event) {
-      $('#imgMemberMessage_' + $(this).parent().attr('data-id')).remove();
-      $(this).parent().remove();
+      const parentEle = $(this).parents('.imgMemberBox');
+      let removeAccountId = parentEle.attr('data-id');
+      $('.imgMemberMessage_' + removeAccountId) &&
+        $('.imgMemberMessage_' + removeAccountId)
+          .parents('div[style]')
+          .remove();
+      parentEle.remove();
       event.stopPropagation();
     });
 
@@ -795,7 +773,7 @@ $.extend(CreateCalendar.prototype, {
         var existsIds = [];
         var updateMemberFun = function (users) {
           if (users.length === 1 && md.global.Account.accountId === users[0].accountId) {
-            alert('不能添加自己');
+            alert(_l('不能添加自己'));
             return;
           }
           CreateCalendar.methods.insertMembers(users);
@@ -818,6 +796,7 @@ $.extend(CreateCalendar.prototype, {
           fromType: 5,
           zIndex: 1111,
           filterAccountIds: existsIds,
+          isDynamic: true,
           SelectUserSettings: {
             filterAccountIds: existsIds,
             projectId: settings.ProjectID,
@@ -828,69 +807,9 @@ $.extend(CreateCalendar.prototype, {
           selectCb: function (users) {
             updateMemberFun(users);
           },
-          ChooseInviteSettings: {
-            callback: function (users, callbackInviteResult) {
-              if (typeof callbackInviteResult === 'function') {
-                callbackInviteResult({ status: 1 });
-              }
-              updateMemberFun(users);
-            },
-          },
         });
       },
     });
-  },
-
-  // 绑定名片层
-  showCalendarMessageFun: function () {
-    $('#' + this.settings.frameid).on(
-      {
-        mouseover: function (event) {
-          var $that = $(this);
-          var accountId = $that.attr('data-id');
-          var account = $that.attr('data-account');
-          var userName = $that.attr('data-name');
-          if (!$that.data('hasbusinesscard')) {
-            var avatar = $that.find('.createMember').attr('src');
-            var email = RegExp.isEmail(account) ? account : '';
-            var mobile = !email ? account : '';
-            var status = accountId ? 1 : 3;
-            $that.mdBusinessCard({
-              id: 'imgMemberMessage',
-              noRequestData: !accountId,
-              accountId: accountId || new Date().getTime(),
-              data: {
-                avatar: avatar,
-                userName: userName,
-                accountId: email || mobile,
-                status: status,
-                email: email || '',
-                mobilePhone: mobile || '',
-              },
-              readyFn: function (settings) {
-                accountId = settings.accountId;
-                email = settings.data.email;
-                mobile = settings.data.mobilePhone;
-                var $imgMemberBox;
-                if (typeof accountId === 'string') {
-                  // 判断是不是时间戳,时间戳则为老用户
-                  $imgMemberBox = $(".imgMemberBox[data-id='" + accountId + "']");
-                } else {
-                  $imgMemberBox = $(".imgMemberBox[data-account='" + (email || mobile) + "']");
-                }
-                var busyContainer =
-                  '<div class="hoverMemberContainer Hidden">' + '<div class="hoverMember">' + '</div>' + '</div>';
-                $('#imgMemberMessage_' + accountId).append(busyContainer);
-                CreateCalendar.methods.checkUserBusyState($imgMemberBox);
-                CreateCalendar.methods.getUserBusyHeight($imgMemberBox);
-              },
-            });
-            $that.data('hasbusinesscard', true).mouseenter();
-          }
-        },
-      },
-      '.imgMemberBox',
-    );
   },
 
   // 初始化附件事件
@@ -984,27 +903,9 @@ CreateCalendar.methods = {
       });
 
       if (!isExistes) {
-        memberList +=
-          '<span class="imgMemberBox" data-id="' +
-          (users[i].accountId || '') +
-          '" data-account="' +
-          (users[i].account || '') +
-          '" data-name="' +
-          (htmlEncodeReg(users[i].fullname) || '') +
-          '">';
-        memberList += '<span class="removeMember circle "><i class="icon-delete Icon"></i></span>';
-        memberList += '<span class="busyIcon pointer"></span>';
-        memberList +=
-          '<img class="createMember circle imgWidth" data-id="' +
-          (users[i].accountId || '') +
-          '"data-account="' +
-          (users[i].account || '') +
-          '" data-name="' +
-          (htmlEncodeReg(users[i].fullname) || '') +
-          '" src="' +
-          users[i].avatar +
-          '" />';
-        memberList += '</span>';
+        memberList += `<span class="imgMemberBox noInsert" data-id="${users[i].accountId || ''}" data-account="${
+          users[i].account || ''
+        }" data-name="${htmlEncodeReg(users[i].fullname) || ''}"></span>`;
       }
     }
     var $memberList = $(memberList);
@@ -1012,6 +913,35 @@ CreateCalendar.methods = {
       CreateCalendar.methods.checkUserBusyState($(elem));
     });
     $('.createAddMember').before($memberList);
+    $('.createAddMemberBox')
+      .find('.imgMemberBox.noInsert')
+      .each((i, ele) => {
+        const user = users[i];
+        $(ele).removeClass('noInsert');
+
+        ReactDom.render(
+          <span>
+            <UserCard className={`imgMemberMessage_${user.accountId}`} sourceId={user.accountId}>
+              <span>
+                <span className="removeMember circle ">
+                  <i className="icon-delete Icon"></i>
+                </span>
+                <img
+                  className="createMember circle imgWidth"
+                  src={user.avatar}
+                  data-account={user.account}
+                  data-id={user.accountId || ''}
+                  data-name={htmlEncodeReg(user.fullname) || ''}
+                />
+              </span>
+            </UserCard>
+            <span className="busyIconWrap">
+              <span className="busyIcon pointer"></span>
+            </span>
+          </span>,
+          ele,
+        );
+      });
   },
   // 从文本中提取时间
   getDate: function (msg) {
@@ -1145,10 +1075,10 @@ CreateCalendar.methods = {
   repeatResult: function () {
     var settings = CreateCalendar.settings;
     // 重复日程
-    var type = parseInt($('#tab_repeatType').val(), 10);
-    var recurType = parseInt($('#tab_repeatTime').val(), 10);
-    var day = $('#repetitionFrequency').val();
-    var count = $('#txtOverCount').val();
+    var type = parseInt($('.repeatDialogConfirm #tab_repeatType').val(), 10);
+    var recurType = parseInt($('.repeatDialogConfirm #tab_repeatTime').val(), 10);
+    var day = $('.repeatDialogConfirm #repetitionFrequency').val();
+    var count = $('.repeatDialogConfirm #txtOverCount').val();
     var messages = '';
     var weekDay = [];
     var weekDayArray = [0, 1, 2, 3, 4, 5, 6].map(function (item) {
@@ -1163,15 +1093,15 @@ CreateCalendar.methods = {
       // 每周
       messages += _l('每') + (day == 1 ? '' : ' ' + day + ' ') + _l('周') + ' ';
 
-      for (var i = 0; i < $('#repeatTypeGroup .ThemeBGColor3').length; i++) {
-        weeks = $('#repeatTypeGroup .ThemeBGColor3').eq(i).attr('index');
+      for (var i = 0; i < $('.repeatDialogConfirm #repeatTypeGroup .ThemeBGColor3').length; i++) {
+        weeks = $('.repeatDialogConfirm #repeatTypeGroup .ThemeBGColor3').eq(i).attr('index');
         weeks = weeks == 7 ? 0 : weeks;
         weekDay.push(weeks);
       }
 
       // 无选中 取今天
-      if ($('#repeatTypeGroup .ThemeBGColor3').length === 0) {
-        weeks = $('#repeatTypeGroup .today').attr('index');
+      if ($('.repeatDialogConfirm #repeatTypeGroup .ThemeBGColor3').length === 0) {
+        weeks = $('.repeatDialogConfirm #repeatTypeGroup .today').attr('index');
         weeks = weeks == 7 ? 0 : weeks;
         weekDay.push(weeks);
       }
@@ -1208,7 +1138,8 @@ CreateCalendar.methods = {
     if (recurType == 1) {
       messages += '，' + _l('共 %0 次', count);
     } else if (recurType == 2) {
-      messages += '，' + _l('截止到 %0', moment($('#txtOverDate').val()).format(_l('YYYY年MM月DD日')));
+      var day = moment($('#txtOverDate').val()).format(_l('YYYY年MM月DD日'));
+      messages += '，' + _l('截止到 %0', day);
     }
 
     $('#repeatReault,#existRepeatContent .repeatResultText').text(messages);
@@ -1240,7 +1171,7 @@ CreateCalendar.methods = {
         }
       })
       .fail(function () {
-        alert('操作失败，请稍后再试', 3);
+        alert(_l('操作失败，请稍后再试'), 3);
       });
   },
 
@@ -1264,7 +1195,12 @@ CreateCalendar.methods = {
     var start = selectedDate.start;
     var end = selectedDate.end;
     var accountId = $elem.attr('data-id');
-    var $imgMemberMessage = $('#imgMemberMessage_' + accountId);
+    var $imgMemberMessage = $('.imgMemberMessage_' + accountId);
+    const getFormatText = (date, format) => {
+      var currentYear = moment(new Date()).years();
+      let formatString = moment(date).years() === currentYear ? format.replace('YYYY-', '') : format;
+      return formatString;
+    };
 
     // 外部成员不进行检查
     if (!accountId) {
@@ -1282,80 +1218,79 @@ CreateCalendar.methods = {
           var data = source.data;
           if (data.isBusy) {
             $elem.attr('busy', 'busy').addClass('imgMemberBusy');
-            // 如果没有名片层则不填充数据
-            if ($imgMemberMessage.length === 0) return;
 
-            var top = $elem.offset().top;
-            var left = $elem.offset().left;
-            var tooltip =
-              '<div style="color: #de2c00">' +
-              '他的日程与您创建的日程有冲突' +
-              '</div>' +
-              '<div class="memberCalendars"></div>' +
-              '<div class="loobCalendars">' +
-              '<a class="lookAllCalendars" href="javascript:void(0);">查看他的空闲时间 ></a>' +
-              '</div>';
-            $imgMemberMessage.find('.hoverMember').html(tooltip);
-            // 查看他的日程
-            $imgMemberMessage.find('.lookAllCalendars').on('click', function () {
-              var tartDate = $('#txtBeginDate').val();
-              var queryUrl = 'userID=' + accountId + '&date=' + start + '&view=agendaWeek';
-              window.open('/apps/calendar/home?' + queryUrl);
-            });
-
-            var memberCalendar = '';
-            var calendarTime = '';
             var calendars = data.calendars;
-            var calendarCount = calendars.length;
-            var calendar;
-            for (var i = 0; i < calendarCount; i++) {
-              calendar = calendars[i];
-              if (calendar.allDay == 'true') {
-                calendarTime =
-                  moment(calendar.startTime).format('YYYY-MM-DD') +
-                  ' - ' +
-                  moment(calendar.endTime).format('YYYY-MM-DD') +
-                  ' (全天)';
-              } else {
-                calendarTime =
-                  moment(calendar.startTime).format('YYYY-MM-DD HH:mm') +
-                  ' - ' +
-                  moment(calendar.endTime).format('YYYY-MM-DD HH:mm');
-              }
-              memberCalendar += '<div>';
-              memberCalendar += '<span class="memberCalendarTime">' + calendarTime + '</span>';
-              memberCalendar +=
-                '<span class="memberCalendarName overflow_ellipsis"><a class="overflow_ellipsis" target="_blank" href="/apps/calendar/detail_' +
-                calendar.calendarID +
-                '">' +
-                htmlEncodeReg(calendar.calendarName) +
-                '</a></span>';
-              memberCalendar += '</div>';
-            }
-            $imgMemberMessage.find('.memberCalendars').html(memberCalendar);
-            $imgMemberMessage.find('.cardContentBox').css('min-height', '154px'); // 名片和冲突层等高
-            $imgMemberMessage.find('.hoverMemberContainer').show();
+            ReactDom.render(
+              <Tooltip
+                placement="bottom"
+                themeColor="white"
+                tooltipStyle={{
+                  width: 280,
+                }}
+                text={
+                  <div className="memberBusyCalendarsWrap">
+                    <div
+                      style={{
+                        color: '#de2c00',
+                      }}
+                      className="mBottom5"
+                    >
+                      {_l('他的日程与您创建的日程有冲突')}
+                    </div>
+                    <div className="memberCalendars mBottom20">
+                      {calendars.map(calendar => {
+                        var calendarTime = '';
+                        if (calendar.allDay == 'true') {
+                          calendarTime =
+                            moment(calendar.startTime).format(getFormatText(calendar.startTime, 'YYYY-MM-DD')) +
+                            ' - ' +
+                            moment(calendar.endTime).format(getFormatText(calendar.endTime, 'YYYY-MM-DD')) +
+                            _l(' (全天)');
+                        } else {
+                          calendarTime =
+                            moment(calendar.startTime).format(getFormatText(calendar.startTime, 'YYYY-MM-DD HH:mm')) +
+                            ' - ' +
+                            moment(calendar.endTime).format(getFormatText(calendar.endTime, 'YYYY-MM-DD HH:mm'));
+                        }
+
+                        return (
+                          <div className="memberCalendarItem">
+                            <div className="memberCalendarTime Gray_9e">{calendarTime}</div>
+                            <div className="memberCalendarName overflow_ellipsis">
+                              <a
+                                className="overflow_ellipsis"
+                                target="_blank"
+                                href={`/apps/calendar/detail_${calendar.calendarID}`}
+                              >
+                                {htmlEncodeReg(calendar.calendarName)}
+                              </a>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="loobCalendars">
+                      <a
+                        className="lookAllCalendars"
+                        target="_blank"
+                        href={`/apps/calendar/home?userID=${accountId}&date=${start}&view=agendaWeek`}
+                      >
+                        {_l('查看他的空闲时间 >')}
+                      </a>
+                    </div>
+                  </div>
+                }
+              >
+                <span className="busyIcon pointer"></span>
+              </Tooltip>,
+              $elem.find('.busyIconWrap')[0],
+            );
           } else {
             $imgMemberMessage.find('.hoverMemberContainer').hide();
             $elem.attr('busy', '').removeClass('imgMemberBusy');
           }
         }
       });
-  },
-
-  // 调整日程冲突层的高度
-  getUserBusyHeight: function ($elem) {
-    var accountId = $elem.attr('data-id');
-    var $imgMemberMessage = $('#imgMemberMessage_' + accountId);
-    var height = $imgMemberMessage.find('.cardContentBox').height();
-    $imgMemberMessage.find('.hoverMember').css('height', height);
-    // 如果超出范围就出现在左边
-    if ($imgMemberMessage && $imgMemberMessage.offset() && $imgMemberMessage.offset().left + 500 > $(window).width()) {
-      $imgMemberMessage.find('.hoverMemberContainer').css({
-        left: 'auto',
-        right: 240,
-      });
-    }
   },
 
   // 获取日程时间
@@ -1463,10 +1398,10 @@ CreateCalendar.methods = {
   yesSelCalendar: function (data) {
     createShare({
       linkURL: md.global.Config.WebUrl + 'apps/calendar/detail_' + data.calendarID,
-      content: '日程创建成功',
+      content: _l('日程创建成功'),
       isCalendar: true,
       calendarOpt: {
-        title: '分享日程',
+        title: _l('分享日程'),
         openURL: md.global.Config.WebUrl + 'm/detail/calendar/',
         isAdmin: true,
         keyStatus: true,
@@ -1488,7 +1423,7 @@ CreateCalendar.methods = {
 
     // 附件是否上传完成
     if (!settings.isAttachComplete) {
-      alert('文件上传中，请稍等', 3);
+      alert(_l('文件上传中，请稍等'), 3);
       $submitBtn.removeAttr('disabled');
       return false;
     }
@@ -1497,7 +1432,7 @@ CreateCalendar.methods = {
 
     // 日程名称是否为空
     if (eventName === '') {
-      alert('请输入日程名称', 3);
+      alert(_l('请输入日程标题'), 3);
       $('#txtCalendarName').focus();
       $submitBtn.removeAttr('disabled');
       return false;
@@ -1535,7 +1470,7 @@ CreateCalendar.methods = {
 
     if (!moment(end).isAfter(moment(start))) {
       $('#calendarSubmitBtn').removeAttr('disabled');
-      alert('开始时间不能小于结束时间', 3);
+      alert(_l('开始时间不能小于结束时间'), 3);
       return false;
     }
 
@@ -1645,17 +1580,17 @@ CreateCalendar.methods = {
           source.data.startDate = start;
           source.data.endDate = end;
           source.data.isRecur = isRecur;
-          settings.dialog.closeDialog();
+          $('.createCalendar_container').parent().remove();
 
           if ($.isFunction(settings.callback)) {
             settings.callback(source.data);
           }
         } else if (source.code === 9) {
-          alert('邀请短信发送数量已达最大限制，请移除外部用户创建日程');
+          alert(_l('邀请短信发送数量已达最大限制，请移除外部用户创建日程'));
         }
       })
       .fail(function () {
-        alert('操作失败，请稍后再试', 2);
+        alert(_l('操作失败，请稍后再试'), 2);
       });
   },
 };

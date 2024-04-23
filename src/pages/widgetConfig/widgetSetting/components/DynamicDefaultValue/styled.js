@@ -19,6 +19,17 @@ export const DynamicValueInputWrap = styled(FlexCenter)`
     line-height: 27px !important;
     margin-left: 3px !important;
   }
+  .richInputText {
+    width: calc(100% - 36px);
+    border-radius: 3px 0 0 3px !important;
+    border: 1px solid #dddddd;
+    &.editorNull {
+      padding: 0px !important;
+    }
+    .ck-content {
+      padding: 0 12px !important;
+    }
+  }
   .tagInputarea {
     .tagInputareaIuput {
       border-radius: 3px 0 0 3px;
@@ -80,12 +91,10 @@ export const DynamicValueInputWrap = styled(FlexCenter)`
       cursor: pointer;
     }
   }
-  .selectOtherFieldContainer {
-    div:nth-child(2) {
-      top: ${props => (props.triggerStyle ? '100% !important' : '0px')};
-      .rc-trigger-popup {
-        ${props => (props.triggerStyle ? 'top: 0px !important' : '')}
-      }
+  & > div:nth-child(3) {
+    ${props => (props.triggerStyle ? 'top: 100% !important' : '')}
+    .rc-trigger-popup {
+      ${props => (props.triggerStyle ? 'top: 0px !important' : '')}
     }
   }
 `;
@@ -350,17 +359,39 @@ export const SearchWorksheetWrap = styled.div`
       }
     }
   }
-  .addFilterCondition {
-    margin: 0px !important;
-  }
-  .addFilterCondition span {
+  .addFilterIcon span {
     color: #2196f3;
     display: inline-block;
     padding: 8px;
+    font-weight: bold;
     &:hover {
       color: #1780d3;
       background: #f5f5f5;
       border-radius: 3px;
+    }
+  }
+  .searchWorksheetFilter {
+    & > div > div > div:last-child {
+      margin: 0 !important;
+      .addFilterCondition {
+        i,
+        span {
+          color: #2196f3;
+        }
+        display: inline-block;
+        padding: 8px;
+        & > div > div {
+          margin-right: 0 !important;
+        }
+        &:hover {
+          i,
+          span {
+            color: #1780d3;
+          }
+          background: #f5f5f5;
+          border-radius: 3px;
+        }
+      }
     }
   }
   .conditionRelationBox {
@@ -419,6 +450,11 @@ export const SearchWorksheetWrap = styled.div`
       .conditionValue {
         flex: 1;
         min-width: 0;
+        .optionCheckbox {
+          word-break: break-all;
+          display: inline-block;
+          line-height: 26px;
+        }
       }
     }
     .worksheetFilterDateCondition {

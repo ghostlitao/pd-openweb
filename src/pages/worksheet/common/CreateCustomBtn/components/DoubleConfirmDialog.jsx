@@ -2,6 +2,7 @@ import React from 'react';
 import { Dialog, Icon, Checkbox } from 'ming-ui';
 import styled from 'styled-components';
 import _ from 'lodash';
+import OpinionTemplate from 'src/pages/workflow/WorkflowSettings/Detail/Approval/OpinionTemplate.jsx';
 const Wrap = styled.div`
   .line {
     border-top: 1px solid #eaeaea;
@@ -24,20 +25,28 @@ const Wrap = styled.div`
   .bold400 {
     font-weight: 400;
   }
+  .remarkWrap {
+    background: #f8f8f8;
+    border-radius: 3px 3px 3px 3px;
+    border: 1px solid #dddddd;
+    line-height: 36px;
+    padding: 0 12px;
+  }
 `;
 
 class DoubleConfirmDialog extends React.Component {
   constructor(props) {
     super(props);
-    const { info } = props;
+    const { info = {} } = props;
     this.state = {
       doubleConfirm: info.doubleConfirm || {
-        confirmMsg: _l('你确认对记录执行此操作吗？'),
+        confirmMsg: _l('你确认执行此操作吗？'),
         cancelName: _l('取消'),
         sureName: _l('确认'),
       },
       advancedSetting: info.advancedSetting,
       visible: props.visible,
+      showApprovalTemplate: false,
     };
   }
 
@@ -46,7 +55,7 @@ class DoubleConfirmDialog extends React.Component {
       const { info } = nextProps;
       this.state = {
         doubleConfirm: info.doubleConfirm || {
-          confirmMsg: _l('你确认对记录执行此操作吗？'),
+          confirmMsg: _l('你确认执行此操作吗？'),
           cancelName: _l('取消'),
           sureName: _l('确认'),
         },
@@ -56,7 +65,7 @@ class DoubleConfirmDialog extends React.Component {
   }
 
   render() {
-    const { advancedSetting = {} } = this.state;
+    const { advancedSetting = {}, showApprovalTemplate } = this.state;
     const { cloneInfo } = this.props;
     const {
       confirmcontent = '',
@@ -64,6 +73,8 @@ class DoubleConfirmDialog extends React.Component {
       remarkname = '',
       remarkhint = '',
       remarkrequired = '',
+      remarktype = '',
+      remarkoptions = '[]',
     } = advancedSetting;
     return (
       <Dialog
@@ -76,29 +87,29 @@ class DoubleConfirmDialog extends React.Component {
           this.props.onCancel();
         }}
         onOk={() => {
+          console.log(advancedSetting);
           const { doubleConfirm = {} } = this.state;
           const { confirmMsg = '', sureName = '', cancelName = '' } = doubleConfirm;
           this.props.onChange({
             doubleConfirm: {
               confirmMsg:
-                confirmMsg.trim() || _.get(cloneInfo, 'doubleConfirm.confirmMsg') || '你确认对记录执行此操作吗？',
-              sureName: sureName.trim() || _.get(cloneInfo, 'doubleConfirm.sureName') || '确认',
-              cancelName: cancelName.trim() || _.get(cloneInfo, 'doubleConfirm.cancelName') || '取消',
+                confirmMsg.trim() || _.get(cloneInfo, 'doubleConfirm.confirmMsg') || _l('你确认执行此操作吗？'),
+              sureName: sureName.trim() || _.get(cloneInfo, 'doubleConfirm.sureName') || _l('确认'),
+              cancelName: cancelName.trim() || _.get(cloneInfo, 'doubleConfirm.cancelName') || _l('取消'),
             },
             advancedSetting: {
               ...advancedSetting,
-              remarkname: remarkname.trim() || _.get(cloneInfo, 'advancedSetting.remarkname') || '备注',
+              remarkname: remarkname.trim() || _.get(cloneInfo, 'advancedSetting.remarkname') || _l('操作原因'),
             },
           });
         }}
         visible={this.props.visible}
       >
         <Wrap>
-          <p className="Bold">{_l('提示信息')}</p>
-          <p className="mTop24 bold400">{_l('标题')}</p>
+          <p className="Bold">{_l('标题')}</p>
           <input
             className="mTop10"
-            value={this.state.doubleConfirm.confirmMsg}
+            value={_.get(this.state, 'doubleConfirm.confirmMsg')}
             onChange={event => {
               this.setState({
                 doubleConfirm: {
@@ -108,7 +119,7 @@ class DoubleConfirmDialog extends React.Component {
               });
             }}
           />
-          <p className="mTop24 bold400">{_l('详细内容')}</p>
+          <p className="mTop24 bold">{_l('说明')}</p>
           <input
             className="mTop10"
             value={confirmcontent}
@@ -121,12 +132,10 @@ class DoubleConfirmDialog extends React.Component {
               });
             }}
           />
-          <div className="line"></div>
-          <p className="Bold">{_l('按钮文案')}</p>
           <div className="flexRow btnTxt alignItemsCenter mTop10">
             <span className="bold400">{_l('确认按钮')}</span>
             <input
-              value={this.state.doubleConfirm.sureName}
+              value={_.get(this.state, 'doubleConfirm.sureName')}
               onChange={event => {
                 this.setState({
                   doubleConfirm: {
@@ -140,7 +149,7 @@ class DoubleConfirmDialog extends React.Component {
           <div className="flexRow btnTxt alignItemsCenter mTop10">
             <span className="bold400">{_l('取消按钮')}</span>
             <input
-              value={this.state.doubleConfirm.cancelName}
+              value={_.get(this.state, 'doubleConfirm.cancelName')}
               onChange={event => {
                 this.setState({
                   doubleConfirm: {
@@ -153,7 +162,7 @@ class DoubleConfirmDialog extends React.Component {
           </div>
           <div className="line"></div>
           <p className="Bold">{_l('填写备注')}</p>
-          <p className="Gray_75 mTop16">{_l('开启后，用户可以在二次确认层中对按钮操作进行备注。')}</p>
+          <p className="Gray_75 mTop16">{_l('启用后，用户需要对操作进行备注说明')}</p>
           <Icon
             icon={enableremark === '1' ? 'ic_toggle_on' : 'ic_toggle_off'}
             className="switchIcon Font50 Hand"
@@ -196,11 +205,12 @@ class DoubleConfirmDialog extends React.Component {
                   }}
                 />
               </div>
+
               <div className="flexRow btnTxt alignItemsCenter mTop10">
                 <span></span>
                 <Checkbox
                   className="checkBox InlineBlock flex"
-                  text={<span>{_l('设为必填项')}</span>}
+                  text={<span>{_l('必填')}</span>}
                   checked={remarkrequired === '1'}
                   onClick={() => {
                     this.setState({
@@ -212,7 +222,62 @@ class DoubleConfirmDialog extends React.Component {
                   }}
                 />
               </div>
+
+              <div className="flexRow btnTxt alignItemsCenter mTop10">
+                <span></span>
+                <Checkbox
+                  className="checkBox InlineBlock flex"
+                  text={<span>{_l('设置模板')}</span>}
+                  checked={!!safeParse(remarkoptions).template}
+                  onClick={() => {
+                    this.setState({
+                      advancedSetting: {
+                        ...advancedSetting,
+                        remarkoptions: !!safeParse(remarkoptions).template ? '' : JSON.stringify({ template: [] }),
+                      },
+                      showApprovalTemplate: !safeParse(remarkoptions).template,
+                    });
+                  }}
+                />
+              </div>
+              {!!safeParse(remarkoptions).template && (
+                <div className="flexRow btnTxt alignItemsCenter mTop10">
+                  <span></span>
+                  <div
+                    className="remarkWrap flex flexRow"
+                    onClick={() => {
+                      this.setState({
+                        showApprovalTemplate: true,
+                      });
+                    }}
+                  >
+                    <div className="flex">
+                      <span className="ho">{_l('已设置')}</span>
+                      {remarktype !== '1' && ` (${_l('允许用户修改')})`}
+                    </div>
+                    <Icon icon={'edit'} className="Gray_9e Hand LineHeight36 ThemeHoverColor3" />
+                  </div>
+                </div>
+              )}
             </React.Fragment>
+          )}
+          {showApprovalTemplate && (
+            <OpinionTemplate
+              title={_l('备注模版')}
+              description={_l('预置常用项作为模板，帮助操作人快捷填写')}
+              keys={[{ key: 'template', text: _l('模板') }]}
+              opinionTemplate={{ opinions: safeParse(remarkoptions), inputType: remarktype === '1' ? 2 : 1 }}
+              onSave={data => {
+                this.setState({
+                  advancedSetting: {
+                    ...advancedSetting,
+                    remarktype: data.inputType === 1 ? '' : '1',
+                    remarkoptions: JSON.stringify(data.opinions),
+                  },
+                });
+              }}
+              onClose={() => this.setState({ showApprovalTemplate: false })}
+            />
           )}
         </Wrap>
       </Dialog>

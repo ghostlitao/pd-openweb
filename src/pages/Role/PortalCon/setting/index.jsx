@@ -199,7 +199,7 @@ class PortalSetting extends React.Component {
     let mdSign = getStrBytesLength(
       ((_.get(md, ['global', 'Account', 'projects']) || []).find(o => o.projectId === projectId) || {}).companyName,
     );
-    const {
+    let {
       pageTitle = '',
       smsSignature = mdSign,
       allowUserType,
@@ -212,6 +212,7 @@ class PortalSetting extends React.Component {
       appId,
       customizeName,
     } = portalSetModel;
+    smsSignature = smsSignature.replace(/\s*/g, ''); //去掉签名中的空格
     if (!customizeName) {
       return alert(_l('请输入外部门户名称'), 3);
     }
@@ -227,6 +228,18 @@ class PortalSetting extends React.Component {
     if (getStringBytes(smsSignature) > 16) {
       return alert(_l('短信签名最多只能16个字节'), 3);
     }
+    if (
+      _.get(portalSetModel, 'registerInfo.enable') &&
+      !_.get(portalSetModel, 'registerInfo.startTime') &&
+      !_.get(portalSetModel, 'registerInfo.endTime')
+    ) {
+      return alert(_l('已开启外部用户注册开始/停止时间，但未选择开始/停止时间'), 3);
+    }
+
+    if (controlTemplate.controls.filter(l => !l.controlName).length !== 0) {
+      return alert(_l('用户列表信息名称不能为空'), 3);
+    }
+
     if (!noClose) {
       this.setState({
         saveLoading: true,
@@ -246,6 +259,7 @@ class PortalSetting extends React.Component {
             'customizeName',
             'exAccountDiscussEnum',
             'allowExAccountDiscuss',
+            'approved',
             'loginMode',
             'registerMode',
             'subscribeWXOfficial',
@@ -253,6 +267,11 @@ class PortalSetting extends React.Component {
             'approvedEmail',
             'refusedEmail',
             'inviteEmail',
+            'twoAuthenticationEnabled',
+            'registerInfo',
+            'watermark',
+            'internalControls',
+            'externalControls',
           ]),
           epDiscussWorkFlow,
           appId,
@@ -368,6 +387,9 @@ class PortalSetting extends React.Component {
                 }}
                 className={cx('saveBtn Hand', { disable: this.state.name === '' || this.state.saveLoading })}
                 onClick={() => {
+                  if(this.state.name === '' || this.state.saveLoading){
+                    return
+                  }
                   this.editPortal();
                 }}
               >

@@ -115,6 +115,12 @@ export default class RelateRecordDropdown extends React.Component {
     if (nextProps.flag !== this.props.flag) {
       this.setState({ addedIds: [], deletedIds: [] });
     }
+    if (
+      _.get(nextProps, 'control.advancedSetting.searchcontrol') !==
+      _.get(this.props, 'control.advancedSetting.searchcontrol')
+    ) {
+      this.initSearchControl(nextProps);
+    }
   }
 
   cell = React.createRef();
@@ -204,6 +210,12 @@ export default class RelateRecordDropdown extends React.Component {
 
   @autobind
   openPopup() {
+    if (!this.cell.current) {
+      this.setState({
+        listvisible: true,
+      });
+      return;
+    }
     const cellToTop = this.cell.current.getBoundingClientRect().top;
     let isTop = window.innerHeight - this.cell.current.clientHeight - cellToTop < 360;
     this.setState({
@@ -293,6 +305,9 @@ export default class RelateRecordDropdown extends React.Component {
     } else if (e.key === 'Enter') {
       this.list.current.handleEnter();
     } else if (e.key === 'Backspace') {
+      if (_.get(this, 'inputRef.current.value')) {
+        return;
+      }
       const needDelete = selected.slice(-1)[0];
       if (needDelete && control.enumDefault !== 1) {
         this.handleDelete(needDelete);
@@ -351,7 +366,7 @@ export default class RelateRecordDropdown extends React.Component {
             {selected[0].rowid ? getTitleTextFromRelateControl(control, selected[0]) : _l('关联当前%0', entityName)}
           </span>
         )}
-        {((_.isEmpty(staticRecords) && canSelect && active) || isQuickFilter) && (
+        {((_.isEmpty(staticRecords) && canSelect) || isQuickFilter) && active && (
           <AutoWidthInput
             mountRef={ref => (this.inputRef = ref)}
             value={keywords}
@@ -454,7 +469,7 @@ export default class RelateRecordDropdown extends React.Component {
             ]
           ),
         )}
-        {((this.canSelect && active) || isQuickFilter) && (
+        {(this.canSelect || isQuickFilter) && active && (
           <AutoWidthInput
             mountRef={ref => (this.inputRef = ref)}
             value={keywords}
@@ -482,8 +497,17 @@ export default class RelateRecordDropdown extends React.Component {
   }
 
   renderPopup({ disabledManualWrite }) {
-    const { multiple, control, formData, insheet, disableNewRecord, prefixRecords, staticRecords, onVisibleChange } =
-      this.props;
+    const {
+      isQuickFilter,
+      multiple,
+      control,
+      formData,
+      insheet,
+      disableNewRecord,
+      prefixRecords,
+      staticRecords,
+      onVisibleChange,
+    } = this.props;
     const formDataArray = typeof formData === 'function' ? formData() : formData;
     const { keywords, selected, listvisible, newrecordVisible, renderToTop, cellToTop, activeIndex } = this.state;
     const xOffset = this.isMobile ? 0 : this.getXOffset();
@@ -497,7 +521,7 @@ export default class RelateRecordDropdown extends React.Component {
         className="scrollInTable"
         style={!this.isMobile ? {} : { position: 'relative', marginLeft: -20 }}
       >
-        {insheet && this.renderSelected(true)}
+        {(insheet || isQuickFilter) && this.renderSelected(true)}
         {disabledManualWrite && (
           <OnlyScanTip>
             {!insheet && !!selected.length && (
@@ -511,8 +535,10 @@ export default class RelateRecordDropdown extends React.Component {
         {listvisible && !disabledManualWrite && (
           <RelateRecordList
             ref={this.list}
+            isQuickFilter={isQuickFilter}
             activeIndex={activeIndex}
             keyWords={keywords}
+            searchControl={this.searchControl}
             control={control}
             formData={formDataArray}
             prefixRecords={prefixRecords}
@@ -521,7 +547,7 @@ export default class RelateRecordDropdown extends React.Component {
             style={{
               ...(renderToTop
                 ? {
-                    bottom: this.cell.current.clientHeight + (insheet ? 0 : 3),
+                    bottom: (_.get(this, 'cell.current.clientHeight') || 0) + (insheet ? 0 : 3),
                   }
                 : {
                     top: '100%',
@@ -541,6 +567,7 @@ export default class RelateRecordDropdown extends React.Component {
               'coverCid',
               'showControls',
               'showCoverAndControls',
+              'fastSearchControlArgs',
             ])}
             isMobile={this.isMobile}
             selectedIds={selected.map(r => r.rowid)}
@@ -575,12 +602,12 @@ export default class RelateRecordDropdown extends React.Component {
     } = this.props;
     const { selected, keywords, listvisible } = this.state;
     let content;
-    if (_.isFunction(renderSelected)) {
+    if (_.isFunction(renderSelected) && !(isQuickFilter && listvisible)) {
       content = renderSelected(selected);
     } else if (multiple && !isQuickFilter) {
       content = this.renderMultipe();
     } else {
-      content = this.renderSingle();
+      content = _.isArray(selected) && selected.length > 1 ? this.renderMultipe() : this.renderSingle();
     }
     return (
       <div
@@ -623,7 +650,9 @@ export default class RelateRecordDropdown extends React.Component {
 
   render() {
     const {
+      from,
       insheet,
+      popupOffset,
       zIndex,
       isediting,
       control = {},
@@ -632,6 +661,7 @@ export default class RelateRecordDropdown extends React.Component {
       disabled,
       dataSource,
       enumDefault2,
+      isQuickFilter,
       popupContainer,
       onVisibleChange,
     } = this.props;
@@ -653,11 +683,11 @@ export default class RelateRecordDropdown extends React.Component {
             }
             onVisibleChange(visilbe);
           }}
-          popupClassName="relateRecordDropdownPopup filterTrigger"
+          popupClassName={cx('relateRecordDropdownPopup filterTrigger', { isQuickFilter })}
           getPopupContainer={popupContainer || (() => document.body)}
           popupAlign={{
             points: insheet || isTop ? ['tl', 'tl'] : ['tl', 'bl'],
-            offset: [0, 0],
+            offset: popupOffset || [0, 0],
             overflow: {
               adjustX: !this.isMobile,
             },
@@ -666,7 +696,11 @@ export default class RelateRecordDropdown extends React.Component {
           destroyPopupOnHide
           popup={popup}
         >
-          {!insheet || !isediting ? this.renderSelected() : <div style={selectedStyle} ref={this.cell} />}
+          {(!insheet || !isediting) && (!isQuickFilter || !listvisible) ? (
+            this.renderSelected()
+          ) : (
+            <div style={selectedStyle} ref={this.cell} />
+          )}
         </Trigger>
         {newrecordVisible && !disabledManualWrite && (
           <NewRecord
@@ -677,7 +711,7 @@ export default class RelateRecordDropdown extends React.Component {
             addType={2}
             defaultFormDataEditable
             defaultFormData={
-              checkIsTextControl(this.searchControl.type) && keywords
+              this.searchControl && checkIsTextControl(this.searchControl.type) && keywords
                 ? {
                     [this.searchControl.controlId]: keywords,
                   }
@@ -691,7 +725,7 @@ export default class RelateRecordDropdown extends React.Component {
             onAdd={record => this.handleItemClick(record)}
           />
         )}
-        {previewRecord && (
+        {from !== FROM.PUBLIC_ADD && previewRecord && (
           <RecordInfoWrapper
             visible
             viewId={_.get(control, 'advancedSetting.openview') || control.viewId}
@@ -707,9 +741,7 @@ export default class RelateRecordDropdown extends React.Component {
               if (rowIds[0]) {
                 this.setState({
                   selected: selected.map(item =>
-                    _.find(selected, r => r.rowid === rowIds[0])
-                      ? { ...item, ..._.omit(updatedRow, ['allowdelete', 'allowedit']) }
-                      : item,
+                    item.rowid === rowIds[0] ? { ...item, ..._.omit(updatedRow, ['allowdelete', 'allowedit']) } : item,
                   ),
                 });
               }

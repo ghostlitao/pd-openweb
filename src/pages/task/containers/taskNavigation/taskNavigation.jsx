@@ -1,4 +1,5 @@
-﻿import React, { Component } from 'react';
+import React, { Component, useEffect, useState } from 'react';
+import ReactDOM from 'react-dom';
 import './taskNavigation.less';
 import ajaxRequest from 'src/api/taskCenter';
 import {
@@ -11,7 +12,7 @@ import {
   setStateToStorage,
 } from '../../utils/utils';
 import { connect } from 'react-redux';
-import doT from '@mdfe/dot';
+import doT from 'dot';
 import singleFolderComm from './tpl/singleFolderComm.html';
 import singleFolder from './tpl/singleFolder.html';
 import topFolder from './tpl/topFolder.html';
@@ -24,13 +25,10 @@ import {
   updateFolderArchivedState,
   updateTopFolderList,
 } from '../../redux/actions';
-import 'src/components/mdBusinessCard/mdBusinessCard';
 import config from '../../config/config';
-import { expireDialogAsync } from 'src/components/common/function';
+import { expireDialogAsync } from 'src/util';
 import CopyFolder from '../../components/copyFolder/copyFolder';
 import cx from 'classnames';
-import mdAutocomplete from 'src/components/mdAutocomplete/mdAutocomplete';
-import searchData from './tpl/searchData.html';
 import {
   createFolder,
   updateFolderTop,
@@ -41,6 +39,10 @@ import {
 } from '../../utils/taskComm';
 import { navigateTo } from 'src/router/navigateTo';
 import _ from 'lodash';
+import UserHead from 'src/components/userHead';
+import Trigger from 'rc-trigger';
+import { LoadDiv as MingUiLoadDiv } from 'ming-ui';
+import styled from 'styled-components';
 
 const taskNavigationSettings = {
   globalEvent: null,
@@ -50,6 +52,254 @@ const taskNavigationSettings = {
   pointGapX: 0,
   pointGapY: 0,
 };
+
+const SearchFolderCon = styled.ul`
+  width: 360px;
+  max-height: 400px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.13), 0 2px 6px rgba(0, 0, 0, 0.1);
+  -webkit-box-shadow: 0 4px 20px rgba(0, 0, 0, 0.13), 0 2px 6px rgba(0, 0, 0, 0.1);
+  background: #fff;
+  padding: 6px 0;
+  overflow-y: scroll;
+  li {
+    cursor: pointer;
+    height: 40px;
+    line-height: 40px;
+    overflow: hidden;
+    padding-left: 15px;
+    padding-right: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    .icon {
+      color: #ccc;
+      display: inline-block;
+      font-size: 14px;
+      margin-right: 8px;
+    }
+    &.selected {
+      background-color: #0091ea;
+      color: #fff;
+    }
+  }
+`;
+
+function SearchFolder(props) {
+  const { onSelect, filterUserId } = props;
+  const [options, setOptions] = useState([]);
+  const [visible, setVisible] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState({ folders: [], labels: [] });
+  const [search, setSearch] = useState('');
+  const [highlight, setHighlight] = useState({
+    id: 0,
+    data: {},
+  });
+
+  document.onkeydown = e => {
+    handleKeyDown(e);
+  };
+
+  useEffect(() => {
+    if (visible) return;
+    setHighlight({
+      id: 0,
+      data: {},
+    });
+  }, [visible]);
+
+  const searchFetch = (value = '') => {
+    setLoading(true);
+    setSearch(value.trim());
+    ajaxRequest
+      .searchFolderList({
+        keywords: value.trim(),
+        otherAccountID: filterUserId,
+        pageIndex: 1,
+      })
+      .then(res => {
+        setLoading(false);
+        setData({
+          folders: (res.data || {}).folders || [],
+          labels: (res.data || {}).labels || [],
+        });
+        setVisible(true);
+      });
+  };
+
+  const handleKeyDown = e => {
+    if (!visible) return;
+
+    switch (e.keyCode) {
+      case 13:
+        if (highlight.id === 0) {
+          onSelect({
+            type: 'task',
+            searchText: search,
+          });
+        } else {
+          onSelect(highlight.data);
+        }
+        setVisible(false);
+        return;
+      case 38: //up
+      case 40: //down
+        let item = {};
+        if (highlight.id === 0) {
+          if (e.keyCode === 38 || (!data.folders[0] && !data.labels[0])) return;
+          item = data.folders.concat(data.labels)[0];
+        } else {
+          let last = _.last(data.folders.concat(data.labels));
+          if (e.keyCode === 40 && [last.folderID, last.categoryID].includes(highlight.id)) return;
+          let list = data.folders.concat(data.labels);
+          let index = _.findIndex(list, l => (l.folderID || l.categoryID) === highlight.id);
+          if (index === 0 && e.keyCode === 38) {
+            setHighlight({
+              id: 0,
+              data: {},
+            });
+            return;
+          }
+          item = list[e.keyCode === 38 ? index - 1 : index + 1];
+        }
+        setHighlight({
+          id: item.folderID || item.categoryID,
+          data: {
+            ...item,
+            type: item.folderID ? 'folder' : 'category',
+            text: item.folderName || item.categoryName,
+            searchText: search,
+          },
+        });
+        return;
+    }
+  };
+
+  const handleSearch = _.debounce(searchFetch, 500);
+
+  return (
+    <Trigger
+      zIndex={10}
+      popup={
+        <SearchFolderCon>
+          {loading ? (
+            <MingUiLoadDiv size="middle" />
+          ) : (
+            <React.Fragment>
+              <li
+                className={cx('searchTask', { selected: highlight.id === 0 })}
+                data-type="task"
+                onClick={() => {
+                  onSelect({
+                    type: 'task',
+                    searchText: search,
+                  });
+                  setVisible(false);
+                }}
+                onMouseOver={() => {
+                  if (highlight.id === 0) return;
+                  setHighlight({
+                    id: 0,
+                    data: {},
+                  });
+                }}
+              >
+                <span className="icon-search icon" title={_l('搜索')}></span>
+                {_l('搜索和“%0”相关的任务>', search)}
+              </li>
+              {data.folders.map(folder => (
+                <li
+                  className={cx('searchFolders', { selected: highlight.id === folder.folderID })}
+                  data-type="folder"
+                  data-id={folder.folderID}
+                  onClick={() => {
+                    onSelect({
+                      ...folder,
+                      type: 'folder',
+                      text: folder.folderName,
+                      searchText: search,
+                    });
+                    setVisible(false);
+                  }}
+                  onMouseOver={() => {
+                    if (highlight.id === folder.folderID) return;
+                    setHighlight({
+                      id: folder.folderID,
+                      data: {
+                        ...folder,
+                        type: 'folder',
+                        text: folder.folderName,
+                        searchText: search,
+                      },
+                    });
+                  }}
+                >
+                  <i className="icon-project-new icon"></i>
+                  {folder.folderName}
+                </li>
+              ))}
+              {data.labels.map(label => (
+                <li
+                  className={cx('searchCategorys', { selected: highlight.id === label.categoryID })}
+                  data-type="category"
+                  data-id={label.categoryID}
+                  onClick={() => {
+                    onSelect({
+                      ...folder,
+                      type: 'category',
+                      text: label.categoryName,
+                      searchText: search,
+                    });
+                    setVisible(false);
+                  }}
+                  onMouseOver={() => {
+                    if (highlight.id === label.categoryID) return;
+                    setHighlight({
+                      id: label.categoryID,
+                      data: {
+                        ...folder,
+                        type: 'category',
+                        text: label.categoryName,
+                        searchText: search,
+                      },
+                    });
+                  }}
+                >
+                  <i className="icon-task-label"></i>
+                  {label.categoryName}
+                </li>
+              ))}
+            </React.Fragment>
+          )}
+        </SearchFolderCon>
+      }
+      popupStyle={{ width: 374 }}
+      popupVisible={visible}
+      onPopupVisibleChange={visible => {
+        if (visible && data.folders.length === 0 && data.labels.length === 0) return;
+        setVisible(visible);
+      }}
+      action={['click']}
+      popupAlign={{
+        points: ['tr', 'br'],
+        offset: [0, 5],
+        overflow: { adjustX: true, adjustY: true },
+      }}
+    >
+      <div className="folderSearch boderRadAll_5 ThemeBorderColor8">
+        <span className="icon-search btnFolderSearch ThemeColor9 Font17" />
+        <input
+          type="text"
+          id="leftSearchTaskOrFolder"
+          className="txtSearch boxSizing ThemeColor10"
+          placeholder={_l('搜索')}
+          onChange={e => {
+            handleSearch(e.target.value);
+          }}
+        />
+      </div>
+    </Trigger>
+  );
+}
 
 class TaskNavigation extends Component {
   constructor(props) {
@@ -81,6 +331,26 @@ class TaskNavigation extends Component {
         this.getTaskNavAll();
       }, 0);
     }
+  }
+
+  renderFolderAvatar() {
+    $('#taskNavigator .folderCharge').each((i, ele) => {
+      const $ele = $(ele);
+      if ($ele.data('hasbusinesscard')) return;
+
+      $ele.data('hasbusinesscard', true);
+      ReactDOM.render(
+        <UserHead
+          className="circle"
+          user={{
+            userHead: $ele.data('src'),
+            accountId: $ele.data('id'),
+          }}
+          size={24}
+        />,
+        ele,
+      );
+    });
   }
 
   /**
@@ -146,41 +416,6 @@ class TaskNavigation extends Component {
       },
       blur() {
         $(this).closest('.folderSearch').removeClass('ThemeBorderColor3').addClass('ThemeBorderColor8');
-      },
-    });
-
-    // 搜索组件
-    mdAutocomplete({
-      element: 'leftSearchTaskOrFolder',
-      appendTo: '#taskNavigator .folderSearch',
-      source: ajaxRequest,
-      op: 'searchFolderList',
-      minLength: 1,
-      data: {
-        keywords: '',
-        otherAccountID: that.props.taskConfig.filterUserId,
-      },
-      autoUlStyle: {
-        x: 0,
-        y: 20,
-        width: 360,
-        height: 400,
-      },
-      clearStyle: {
-        color: 'rgba(255,255,255,.3)',
-        x: 40,
-        y: 9,
-      },
-      beforeSearch(data) {
-        data.keywords = $.trim($search.val());
-      },
-      select($this) {
-        that.searchSelect($this);
-      },
-      vdsIgnore: true,
-      render(data, callback) {
-        data.keywords = $.trim($search.val());
-        callback(doT.template(searchData)(data));
       },
     });
 
@@ -256,25 +491,6 @@ class TaskNavigation extends Component {
     $taskNavigator.on('click', '.createNew', () => {
       that.setState({ showFolderTemplate: true });
     });
-
-    // hover出用户层
-    $taskNavigator.on(
-      {
-        mouseover() {
-          const $this = $(this);
-          const accountId = $this.data('id');
-
-          if (!$this.data('hasbusinesscard')) {
-            $this.mdBusinessCard({
-              accountId,
-              secretType: 1,
-            });
-            $this.data('hasbusinesscard', true).mouseenter();
-          }
-        },
-      },
-      '.folderCharge',
-    );
 
     // 网络名称点击隐藏和显示项目列表
     $taskNavigator.on('click', '.networkFolderList .allFolders', function () {
@@ -609,6 +825,7 @@ class TaskNavigation extends Component {
             if (that.props.taskConfig.folderId === folderId) {
               that.props.dispatch(updateFolderTopState(!istop));
             }
+            that.renderFolderAvatar();
           };
           const archivedCallback = () => {
             if (that.props.taskConfig.folderId === folderId) {
@@ -970,6 +1187,7 @@ class TaskNavigation extends Component {
       .removeClass('ThemeBGColor8')
       .eq(0)
       .addClass('ThemeBGColor8');
+    this.renderFolderAvatar();
     if ($el.length) {
       $('.navContent').scrollTop($el.offset().top - 300);
     }
@@ -1130,6 +1348,7 @@ class TaskNavigation extends Component {
       data.folderFileList.folderId = folderId;
       // 数据
       const allFolders = doT.template(projectFolderTpl)(data.folderFileList);
+      this.renderFolderAvatar();
       $('.networkFolderList[data-projectid=' + projectId + ']')
         .find('.folderList')
         .prepend(allFolders);
@@ -1151,6 +1370,7 @@ class TaskNavigation extends Component {
         .removeClass('ThemeBGColor8')
         .eq(0)
         .addClass('ThemeBGColor8'); // 选中
+      this.renderFolderAvatar();
     }
   }
 
@@ -1165,6 +1385,7 @@ class TaskNavigation extends Component {
     // 数据
     const allFolders = doT.template(singleFolderTpl)(source.folderList);
     $el.html(allFolders);
+    this.renderFolderAvatar();
   }
 
   /**
@@ -1173,6 +1394,7 @@ class TaskNavigation extends Component {
   createFolderCallback = settings => {
     this.setState({ showFolderTemplate: false, showCopyFolder: false });
     createFolder(settings);
+    this.renderFolderAvatar();
   };
 
   /**
@@ -1732,15 +1954,15 @@ class TaskNavigation extends Component {
    * 搜索选中
    */
   searchSelect($this) {
-    const type = $this.data('type') || 'task';
-    const searchText = $.trim($('#leftSearchTaskOrFolder').val());
+    const type = $this.type || 'task';
+    const searchText = $this.searchText;
 
     // 相当于清空
     if (searchText === '') {
       return;
     }
 
-    const folderId = type === 'folder' ? $this.data('id') : '';
+    const folderId = $this.folderID || '';
     const taskFilter = type !== 'folder' ? 6 : '';
     const lastMyProjectId = this.props.taskConfig.filterUserId ? this.props.taskConfig.lastMyProjectId : 'all';
     const filterSettings = {
@@ -1751,7 +1973,7 @@ class TaskNavigation extends Component {
     };
 
     if (type === 'category') {
-      filterSettings.tags.push($this.data('id'));
+      filterSettings.tags.push($this.categoryID);
     }
 
     this.props.dispatch(
@@ -1760,7 +1982,7 @@ class TaskNavigation extends Component {
         listStatus: folderId ? getFolderState().listStatus : -1,
         folderId,
         taskFilter,
-        keyWords: type === 'task' ? searchText : $this.text(),
+        keyWords: type === 'task' ? searchText : $this.text,
         searchKeyWords: type === 'task' ? searchText : '',
         lastMyProjectId,
         filterSettings,
@@ -1918,15 +2140,10 @@ class TaskNavigation extends Component {
           </div>
         </div>
         <div className="folderSearchBox boxSizing">
-          <div className="folderSearch boderRadAll_5 ThemeBorderColor8">
-            <span className="icon-search btnFolderSearch ThemeColor9 Font17" />
-            <input
-              type="text"
-              id="leftSearchTaskOrFolder"
-              className="txtSearch boxSizing ThemeColor10"
-              placeholder={_l('搜索')}
-            />
-          </div>
+          <SearchFolder
+            filterUserId={this.props.taskConfig.filterUserId}
+            onSelect={param => this.searchSelect(param)}
+          />
         </div>
 
         {this.renderNavMenu()}

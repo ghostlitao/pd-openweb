@@ -4,7 +4,11 @@ import Trigger from 'rc-trigger';
 import styled from 'styled-components';
 import ExistSourceModal from 'src/pages/integration/dataIntegration/components/ExistSourceModal';
 import autoSize from 'ming-ui/decorators/autoSize';
+import { Icon } from 'ming-ui';
 import _ from 'lodash';
+import { DATABASE_TYPE } from 'src/pages/integration/dataIntegration/constant.js';
+import { getNodeName } from 'src/pages/integration/dataIntegration/TaskCon/TaskCanvas/util.js';
+
 const Wrap = styled.div`
   .addSource {
     background: #ffffff;
@@ -61,8 +65,8 @@ const PopupWrap = styled.div(
 //新增源|目的地
 
 function AddSourceOrDest(props) {
-  const { onUpdate, node = {} } = props;
-  const { nodeType = '', name = '', description = '' } = node;
+  const { onUpdate, node = {}, onUpdateFlowDatasources, flowData } = props;
+  const { nodeType = '' } = node;
   const {
     dbName = '',
     dsType,
@@ -84,23 +88,21 @@ function AddSourceOrDest(props) {
           onClick={() => {
             onUpdate({
               ...node,
-              name: '表格',
               nodeConfig: {
                 ...(node.nodeConfig || {}),
                 config: {
                   ...(_.get(node, 'nodeConfig.config') || {}),
-                  dsType: 'MING_DAO_YUN',
+                  dsType: DATABASE_TYPE.APPLICATION_WORKSHEET,
                   dbName: '',
                   tableName: '',
                   schema: '',
-                  className: 'mingdaoyun',
+                  className: 'table',
                   iconBgColor: '#E8F4FE',
                   workSheetId: '',
                   appId: '',
                 },
               },
             });
-
             setState({
               visible: false,
             });
@@ -133,7 +135,7 @@ function AddSourceOrDest(props) {
         popup={renderPopup()}
         getPopupContainer={() => document.body}
         onPopupVisibleChange={visible => {
-          // setState({ visible }); 暂时不开放
+          props.canEdit && setState({ visible });
         }}
         popupAlign={{
           points: ['tl', 'bl'],
@@ -157,11 +159,23 @@ function AddSourceOrDest(props) {
               </svg>
             </div>
             <div className="flex mLeft8">
-              <div className="name Bold">{name}</div>
-              {/* 明道云工作表显示表名称  dsType === 'MING_DAO_YUN' ? tableName : ？？？？？？ */}
+              <div className="name Bold flexRow alignItemsCenter">
+                {getNodeName(flowData, node)}
+                {dsType !== DATABASE_TYPE.APPLICATION_WORKSHEET && (
+                  <Icon
+                    icon="task-new-detail"
+                    className="mLeft10 Font12 ThemeColor3 ThemeHoverColor2 Hand"
+                    onClick={e => {
+                      e.stopPropagation();
+                      const infoTxt = nodeType === 'SOURCE_TABLE' ? 'datasourceId' : 'dataDestId';
+                      window.open(`/integration/sourceDetail/${(_.get(node, 'nodeConfig.config') || {})[infoTxt]}`); //数据源落地页地址
+                    }}
+                  />
+                )}
+              </div>
               <div className="des Gray_9e">{tableName}</div>
             </div>
-            <i className="icon icon-expand_more Font20 Hand" />
+            {props.canEdit && <i className="icon icon-expand_more Font20 Hand Block" />}
           </div>
         )}
       </Trigger>
@@ -176,24 +190,46 @@ function AddSourceOrDest(props) {
           }}
           setConnectorConfigData={data => {
             const infoTxt = nodeType === 'SOURCE_TABLE' ? 'source' : 'dest';
-            const { className, id, iconBgColor, type, name } = data[infoTxt];
+            const { className, id, iconBgColor, type, sourceName, formData } = data[infoTxt];
+            onUpdateFlowDatasources({ ...data[infoTxt], name: sourceName });
+            let param = {};
+            if (nodeType !== 'SOURCE_TABLE') {
+              param = {
+                dataDestId: id,
+              };
+            } else {
+              param = {
+                datasourceId: id,
+              };
+              if (className === 'kafka') {
+                param.dbName = _.get(formData, 'extraParams.topic');
+                param.tableName = _.get(formData, 'extraParams.topic');
+              }
+            }
+            let config = {
+              ...(_.get(node, 'nodeConfig.config') || {}),
+              dbName: '',
+              tableName: '',
+              dsType: type,
+              schema: '',
+              className,
+              iconBgColor,
+              workSheetId: '',
+              appId: '',
+              sourceName,
+              ...param,
+            };
+            if ('SOURCE_TABLE' === nodeType) {
+              config = { ...config, fields: [] };
+            } else {
+              config = { ...config, fieldsMapping: [] };
+            }
             onUpdate({
               ...node,
-              name,
               nodeConfig: {
                 ...(node.nodeConfig || {}),
-                config: {
-                  ...(_.get(node, 'nodeConfig.config') || {}),
-                  datasourceId: id,
-                  dsType: type,
-                  dbName: '',
-                  tableName: '',
-                  schema: '',
-                  className,
-                  iconBgColor,
-                  worksheetId: '',
-                  appId: '',
-                },
+                config,
+                fields: [],
               },
             });
           }}

@@ -15,6 +15,7 @@ import { VIEW_DISPLAY_TYPE } from 'src/pages/worksheet/constants/enum';
 import MoreOverlay from './MoreOverlay';
 import charts from '../Charts';
 import { browserIsMobile, getAppFeaturesPath } from 'src/util';
+import { fillUrl } from 'src/router/navigateTo';
 import './Card.less';
 import _ from 'lodash';
 
@@ -39,7 +40,7 @@ class Card extends Component {
       sheetVisible: false,
       activeData: undefined
     }
-    this.isPublicShare = location.href.includes('public/page') || window.shareAuthor || window.share;
+    this.isPublicShare = window.shareAuthor || _.get(window, 'shareState.shareId');
   }
   componentDidMount() {
     this.getData(this.props);
@@ -55,39 +56,40 @@ class Card extends Component {
   }
   initInterval = () => {
     clearInterval(this.timer);
-    const { report, needRefresh = true } = this.props;
-    const { refreshReportInterval } = md.global.SysSettings;
-    if (!needRefresh) return;
+    const { report, customPageConfig = {} } = this.props;
+    const { refresh } = customPageConfig;
+    if (!refresh) return;
     this.timer = setInterval(() => {
-      this.getData(this.props);
+      this.getData(this.props, false, true);
       if (isCheckLogin) {
         isCheckLogin = false;
         login.checkLogin({}).then(data => {
           isCheckLogin = data;
         });
       }
-    }, refreshReportInterval * 1000);
-  };
-
+    }, refresh * 1000);
+  }
   abortRequest = () => {
     if (this.request && this.request.state() === 'pending' && this.request.abort) {
       this.request.abort();
     }
   }
-  getData = (props, reload = false) => {
-    const { needTimingRefresh, report, filters, filtersGroup } = props || this.props;
+  getData = (props, reload = false, refresh = false) => {
+    const { needTimingRefresh, needRefresh = true, report, filters, filtersGroup, pageId } = props || this.props;
     const shareAuthor = window.shareAuthor;
     const headersConfig = {
       share: shareAuthor,
     };
+    const printFilter = location.href.includes('printPivotTable') && JSON.parse(sessionStorage.getItem(`printFilter-${report.id}`));
     this.setState({ loading: true });
     this.abortRequest();
-    this.request = reportApi.getData(
+    this.request = reportApi[refresh ? 'refreshData' : 'getData'](
       {
         reportId: report.id,
+        pageId,
         version: '6.5',
         reload,
-        filters: [filters, filtersGroup].filter(_ => _)
+        filters: printFilter ? printFilter : [filters, filtersGroup].filter(_ => _)
       },
       {
         fireImmediately: true,
@@ -101,7 +103,7 @@ class Card extends Component {
       });
       this.props.onLoad(result);
     });
-    needTimingRefresh && this.initInterval();
+    needTimingRefresh && needRefresh && this.initInterval();
   }
   handleOperateClick = ({ settingVisible, sheetVisible = false, activeData }) => {
     this.setState({
@@ -113,10 +115,10 @@ class Card extends Component {
     });
   }
   handleOpenChartDialog = (data) => {
-    const { report, filtersGroup = [] } = this.props;
+    const { report, filters, filtersGroup } = this.props;
     const { reportData } = this.state;
     const { appId, filter, style, country } = reportData;
-    const { filterRangeId, rangeType, rangeValue, dynamicFilter } = filter;
+    const { filterRangeId, rangeType, rangeValue, dynamicFilter, today = false, customRangeValue } = filter;
     const { drillParticleSizeType } = country || {};
     const viewDataType = style ? (style.viewDataType || 1) : 1;
     if (viewDataType === 2 && filter.viewId && [VIEW_DISPLAY_TYPE.sheet].includes(filter.viewType.toString())) {
@@ -127,13 +129,15 @@ class Card extends Component {
         rangeType,
         rangeValue,
         dynamicFilter,
+        today,
+        customRangeValue,
         particleSizeType: drillParticleSizeType,
-        filters: [filtersGroup],
+        filters: [filters, filtersGroup].filter(_ => _),
         isPersonal: true,
         reportId: report.id
       }).then(result => {
         if (result.id) {
-          window.open(`/worksheet/${appId}/view/${filter.viewId}?chartId=${result.id}&${getAppFeaturesPath()}`);
+          window.open(fillUrl(`/worksheet/${appId}/view/${filter.viewId}?chartId=${result.id}&${getAppFeaturesPath()}`));
         }
       });
     } else {
@@ -145,7 +149,7 @@ class Card extends Component {
     }
   }
   renderChart() {
-    const { report, mobileCount, layoutType, sourceType } = this.props;
+    const { projectId, report, mobileCount, mobileFontSize, layoutType, sourceType, themeColor, customPageConfig = {} } = this.props;
     const { id } = report;
     const { loading, reportData } = this.state;
     const { reportType } = reportData;
@@ -153,13 +157,17 @@ class Card extends Component {
     return (
       <ErrorBoundary>
         <Chart
+          projectId={projectId}
           loading={loading}
           isThumbnail={true}
           isViewOriginalData={!this.isPublicShare}
           onOpenChartDialog={this.handleOpenChartDialog}
           mobileCount={mobileCount}
+          mobileFontSize={mobileFontSize}
           layoutType={layoutType}
           sourceType={sourceType}
+          customPageConfig={customPageConfig}
+          themeColor={themeColor}
           reportData={{
             ...reportData,
             reportId: id
@@ -207,26 +215,33 @@ class Card extends Component {
               <Loading />
             </div>
           )}
-          {reportData.status ? this.renderContent() : <Abnormal />}
+          {reportData.status > 0 ? this.renderContent() : <Abnormal status={reportData.status} />}
         </Fragment>
       );
     } else {
       return (
         <div className="content flexColumn">
-          {loading ? <Loading /> : reportData.status ? this.renderContent() : <Abnormal />}
+          {loading ? <Loading /> : reportData.status > 0 ? this.renderContent() : <Abnormal status={reportData.status} />}
         </div>
       );
     }
   }
   render() {
     const { dialogVisible, reportData, settingVisible, scopeVisible, sheetVisible, activeData } = this.state;
-    const { report, appId, ownerId, roleType, sourceType, needEnlarge, needRefresh = true, worksheetId, filters, filtersGroup, className, onRemove, isCharge, permissionType, isLock } = this.props;
-    const permissions = sourceType ? false : ownerId || isCharge;
+    const { showTitle = true } = reportData.displaySetup || {};
+    const { report, appId, pageId, ownerId, roleType, sourceType, needEnlarge, needRefresh = true, worksheetId, filters, filtersGroup, className, onRemove, isCharge, permissionType, isLock, customPageConfig = {}, themeColor } = this.props;
+    const permissions = sourceType ? permissionType > 0 : ownerId || isCharge;
     const isSheetView = ![reportTypes.PivotTable, reportTypes.NumberChart].includes(reportData.reportType);
+
     return (
-      <div className={cx(`statisticsCard statisticsCard-${report.id} statisticsCard-${reportData.reportType}`, className)}>
+      <div
+        className={cx(`statisticsCard statisticsCard-${report.id} statisticsCard-${reportData.reportType}`, className, {
+          hideChartHeader: !showTitle,
+          hideNumberChartName: !showTitle,
+        })}
+      >
         <div className="header">
-          {permissions && (
+          {(sourceType ? false : permissions) && (
             <span data-tip={_l('拖拽')} className="iconItem dragWrap Gray_9e">
               <Icon icon="drag" />
             </span>
@@ -243,29 +258,29 @@ class Card extends Component {
             )}
           </div>
           <div className="operateIconWrap valignWrapper Relative">
-            {needEnlarge && isSheetView && !!reportData.status && (
+            {needEnlarge && !this.isPublicShare && (sourceType ? reportData.status > 0 : true) && (
               <span
                 className="iconItem Gray_9e"
-                data-tip={_l('以表格显示')}
+                data-tip={_l('筛选')}
                 onClick={() => {
                   this.setState({
                     dialogVisible: true,
-                    sheetVisible: true,
+                    sheetVisible: false,
                     settingVisible: false,
-                    scopeVisible: false,
+                    scopeVisible: true,
                     activeData: undefined
                   });
                 }}
               >
-                <Icon icon="table" />
+                <Icon className="Font20" icon="filter" />
               </span>
             )}
-            {needRefresh && !!reportData.status && (
+            {needRefresh && reportData.status > 0 && (
               <span onClick={() => this.getData(this.props, true)} data-tip={_l('刷新')} className="iconItem Gray_9e freshDataIconWrap">
                 <Icon className="Font20" icon="refresh1" />
               </span>
             )}
-            {needEnlarge && !!reportData.status && (
+            {needEnlarge && reportData.status > 0 && (
               <span
                 className="iconItem Gray_9e"
                 data-tip={_l('放大')}
@@ -279,18 +294,19 @@ class Card extends Component {
                 <Icon icon="task-new-fullscreen" />
               </span>
             )}
-            {needEnlarge && !this.isPublicShare && (sourceType ? !!reportData.status : true) && (
+            {needEnlarge && !this.isPublicShare && (sourceType ? reportData.status > 0 : true) && (
               <MoreOverlay
                 className="iconItem Gray_9e Font20"
-                permissions={sourceType ? null : permissions}
+                themeColor={themeColor}
+                permissions={permissions}
                 permissionType={permissionType}
                 isLock={isLock}
                 isCharge={isCharge}
                 reportStatus={reportData.reportType}
                 reportType={reportData.reportType}
                 filter={reportData.filter}
-                isMove={permissions}
-                onRemove={(permissions && sourceType !== 1) ? onRemove : null}
+                isMove={sourceType ? false : permissions && isCharge}
+                onRemove={sourceType ? false : (permissions && onRemove)}
                 exportData={{
                   filters,
                   filtersGroup
@@ -303,21 +319,21 @@ class Card extends Component {
                 ownerId={ownerId}
                 appId={appId}
                 worksheetId={sourceType ? worksheetId : null}
-                onOpenSetting={permissions ? () => {
+                onOpenSetting={(sourceType !== 2 && sourceType ? isCharge : permissions) ? () => {
                   this.handleOperateClick({
                     settingVisible: true,
                     activeData: undefined
                   });
                 } : null}
-                onOpenFilter={() => {
+                onSheetView={isSheetView ? () => {
                   this.setState({
                     dialogVisible: true,
-                    sheetVisible: false,
+                    sheetVisible: true,
                     settingVisible: false,
-                    scopeVisible: true,
+                    scopeVisible: false,
                     activeData: undefined
                   });
-                }}
+                } : null}
               />
             )}
           </div>
@@ -331,6 +347,9 @@ class Card extends Component {
               name: reportData.name,
               desc: reportData.desc
             }}
+            pageId={pageId}
+            customPageConfig={customPageConfig}
+            themeColor={themeColor}
             activeData={activeData}
             worksheetId={reportData.appId}
             settingVisible={settingVisible}
@@ -380,4 +399,3 @@ function SingleCard(props, ref) {
 }
 
 export default forwardRef(SingleCard);
-

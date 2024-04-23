@@ -1,26 +1,39 @@
-import React, { useState } from 'react';
+import React, { Fragment, useState } from 'react';
 import PropTypes from 'prop-types';
 import styled from 'styled-components';
 import _ from 'lodash';
+import { validate } from 'uuid';
+import { CardButton } from '../Basics';
 import { previewQiniuUrl } from 'src/components/previewAttachments';
 import { browserIsMobile } from 'src/util';
 import { getTitleTextFromRelateControl } from 'src/components/newCustomFields/tools/utils';
 import CardCellControls from './CardCellControls';
+import { FROM } from 'src/components/newCustomFields/tools/config';
 
 const Con = styled.div`
   display: inline-flex;
   flex-direction: row;
-  margin: 0 10px 14px 0;
+  margin: ${({ isMobile }) => (isMobile ? '0 0 10px 0' : '0 14px 14px 0')};
   position: relative;
   border-radius: 3px;
   background-color: #fff;
   box-shadow: rgba(0, 0, 0, 0.12) 0px 1px 4px 0px, rgba(0, 0, 0, 0.12) 0px 0px 2px 0px;
   &:hover {
-    ${({ canView }) =>
-      canView ? 'box-shadow: rgba(0, 0, 0, 0.12) 0px 4px 12px 0px, rgba(0, 0, 0, 0.12) 0px 0px 2px 0px;' : ''}
+    ${({ canView, isMobile }) =>
+      canView && !isMobile
+        ? 'box-shadow: rgba(0, 0, 0, 0.12) 0px 4px 12px 0px, rgba(0, 0, 0, 0.12) 0px 0px 2px 0px;'
+        : ''}
   }
-  &:hover .icon-minus-square {
-    display: inline-block;
+  .operateButton {
+    position: absolute;
+    display: flex;
+    top: -11px;
+    right: -11px;
+    visibility: hidden;
+    z-index: 2;
+  }
+  &:hover .operateButton {
+    visibility: visible;
   }
   &:last-child {
     margin-bottom: 0px;
@@ -42,30 +55,6 @@ const Title = styled.div`
   color: #333;
 `;
 
-const DeleteButton = styled.span`
-  position: absolute;
-  top: -10px;
-  right: -10px;
-  font-size: 20px;
-  color: #757575;
-  line-height: 1em;
-  overflow: hidden;
-  .icon-minus-square {
-    display: none;
-    cursor: pointer;
-    position: relative;
-  }
-  &::before {
-    content: ' ';
-    position: absolute;
-    width: 10px;
-    height: 10px;
-    background: #fff;
-    left: 5px;
-    top: 5px;
-  }
-`;
-
 const ControlCon = styled.div`
   flex: 1;
   padding: 12px 16px;
@@ -81,20 +70,23 @@ function click(func) {
 
 export default function RecordCoverCard(props) {
   const {
+    from,
     disabled,
     style = {},
     width,
     controls,
     data,
     cover,
+    allowReplaceRecord,
     onClick,
     onDelete,
     projectId,
     viewId,
     allowlink,
-    sourceEntityName,
+    sourceEntityName = '',
     parentControl,
     isCharge,
+    onReplaceRecord = () => {},
   } = props;
   const coverSize = 50 + 28 * controls.slice(0, 3).length;
   const isMobile = browserIsMobile();
@@ -106,7 +98,7 @@ export default function RecordCoverCard(props) {
     _.get(titleControl, 'advancedSetting.isdecrypt') === '1';
   const title =
     props.title ||
-    (data.rowid
+    (data.rowid && validate(data.rowid)
       ? getTitleTextFromRelateControl(parentControl, data, { noMask: forceShowFullValue })
       : _l('关联当前%0', sourceEntityName));
   return (
@@ -115,11 +107,24 @@ export default function RecordCoverCard(props) {
       style={{ ...style, ...(width ? { width } : {}) }}
       className={!disabled && allowlink !== '0' && 'Hand'}
       canView={allowlink !== '0'}
+      isMobile={isMobile}
     >
       {!disabled && (
-        <DeleteButton onClick={click(onDelete)}>
-          <i className="icon icon-minus-square" style={isMobile ? { display: 'inline-block' } : {}}></i>
-        </DeleteButton>
+        <div className="operateButton">
+          {allowReplaceRecord && (
+            <CardButton
+              className="mRight8 tip-bottom"
+              style={isMobile ? { visibility: 'visible' } : {}}
+              onClick={click(onReplaceRecord)}
+              data-tip={_l('重新选择')}
+            >
+              <i className="icon icon-swap_horiz"></i>
+            </CardButton>
+          )}
+          <CardButton className="red" style={isMobile ? { visibility: 'visible' } : {}} onClick={click(onDelete)}>
+            <i className="icon icon-close"></i>
+          </CardButton>
+        </div>
       )}
       <ControlCon
         style={{
@@ -140,9 +145,11 @@ export default function RecordCoverCard(props) {
           )}
         </Title>
         <CardCellControls
+          parentControl={parentControl}
           width={width}
           controls={controls}
           data={data}
+          worksheetId={parentControl.dataSource}
           projectId={projectId}
           viewId={viewId}
           isCharge={isCharge}
@@ -162,7 +169,10 @@ export default function RecordCoverCard(props) {
           }}
           onClick={e => {
             e.stopPropagation();
-            previewQiniuUrl(cover.replace(/\?(.*)/, ''), { disableDownload: true });
+            previewQiniuUrl(cover.replace(/\|imageView2\/1\/w\/\d+\/h\/\d+/, ''), {
+              disableDownload: true,
+              ext: (cover.match(/\.(jpg|jpeg|png|gif|bmp)(\?|$)/i) || '')[1] || 'png',
+            });
           }}
         />
       )}

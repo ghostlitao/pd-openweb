@@ -1,5 +1,5 @@
 import React, { Component, Fragment } from 'react';
-import { ScrollView, LoadDiv, Radio, Dropdown, Checkbox, Tooltip, Icon } from 'ming-ui';
+import { ScrollView, LoadDiv, Radio, Dropdown, Checkbox, Tooltip, Icon, Dialog } from 'ming-ui';
 import flowNode from '../../../api/flowNode';
 import {
   SelectNodeObject,
@@ -14,6 +14,21 @@ import {
 } from '../components';
 import { APP_TYPE, METHODS_TYPE } from '../../enum';
 import _ from 'lodash';
+import styled from 'styled-components';
+import { checkJSON } from '../../utils';
+
+const GenerateJSONBox = styled.textarea`
+  padding: 12px;
+  border-radius: 4px;
+  height: 340px;
+  overflow: auto;
+  width: 100%;
+  border: 1px solid #ddd;
+  resize: none;
+  &:focus {
+    border-color: #2196f3;
+  }
+`;
 
 export default class WebHook extends Component {
   constructor(props) {
@@ -270,7 +285,12 @@ export default class WebHook extends Component {
                 {_l('请求时间 %0, 状态码 %1，耗时 %2 秒', data.requestDate, data.statusCode, data.requestTime / 1000)}
               </div>
             )}
-            <div className="mTop15 bold">{_l('响应 Body')}</div>
+            <div className="mTop15 flexRow">
+              <div className="bold flex">{_l('响应 Body')}</div>
+              <div className="ThemeColor3 ThemeHoverColor2 pointer" onClick={this.generateFromJSON}>
+                {_l('从 JSON 导入响应示例')}
+              </div>
+            </div>
             <ParameterList controls={data.controls.filter(item => item.enumDefault === 0)} />
             <div className="mTop15 bold">{_l('响应 Header')}</div>
             <ParameterList controls={data.controls.filter(item => item.enumDefault === 1)} hideControlType />
@@ -314,7 +334,7 @@ export default class WebHook extends Component {
 
     return (
       <Fragment>
-        <div className="Font13 bold mTop20">{_l('Body')}</div>
+        <div className="Font13 bold mTop20">Body</div>
         <div className="flexRow mTop15">
           {contentTypes.map((item, i) => {
             return (
@@ -342,7 +362,10 @@ export default class WebHook extends Component {
                 {item.value === 2 && _.includes([2, 3], data.contentType) && (
                   <Dropdown
                     style={{ marginLeft: -15 }}
-                    data={[{ text: 'Text', value: 3 }, { text: 'JSON', value: 2 }]}
+                    data={[
+                      { text: 'Text', value: 3 },
+                      { text: 'JSON', value: 2 },
+                    ]}
                     value={data.contentType}
                     onChange={value => this.updateSource({ contentType: value })}
                   />
@@ -359,7 +382,9 @@ export default class WebHook extends Component {
         {_.includes([1, 4, 5], data.contentType) && (
           <KeyPairs
             key={this.props.selectNodeId}
+            projectId={this.props.companyId}
             processId={this.props.processId}
+            relationId={this.props.relationId}
             selectNodeId={this.props.selectNodeId}
             isIntegration={this.props.isIntegration}
             source={data.formControls}
@@ -375,7 +400,9 @@ export default class WebHook extends Component {
         {_.includes([2, 3], data.contentType) && (
           <CustomTextarea
             className="minH100"
+            projectId={this.props.companyId}
             processId={this.props.processId}
+            relationId={this.props.relationId}
             selectNodeId={this.props.selectNodeId}
             isIntegration={this.props.isIntegration}
             type={2}
@@ -432,7 +459,9 @@ export default class WebHook extends Component {
           />
           <div className="flex" style={{ minWidth: 0 }}>
             <CustomTextarea
+              projectId={this.props.companyId}
               processId={this.props.processId}
+              relationId={this.props.relationId}
               selectNodeId={this.props.selectNodeId}
               isIntegration={this.props.isIntegration}
               type={2}
@@ -456,10 +485,12 @@ export default class WebHook extends Component {
 
     return (
       <Fragment>
-        <div className="Font13 bold mTop20">{_l('Headers')}</div>
+        <div className="Font13 bold mTop20">Headers</div>
         <KeyPairs
           key={this.props.selectNodeId}
+          projectId={this.props.companyId}
           processId={this.props.processId}
+          relationId={this.props.relationId}
           selectNodeId={this.props.selectNodeId}
           isIntegration={this.props.isIntegration}
           source={data.headers}
@@ -504,7 +535,7 @@ export default class WebHook extends Component {
   /**
    * 发送
    */
-  send = (testMap = {}) => {
+  send = (testMap = {}, json) => {
     const { processId, selectNodeId, isIntegration } = this.props;
     const { data, sendRequest } = this.state;
     const { headers, body, sendContent, method, formControls, contentType, settings } = data;
@@ -527,11 +558,20 @@ export default class WebHook extends Component {
           nodeId: selectNodeId,
           method,
           url: this.formatParameters(sendContent, testMap),
-          headers: this.formatParameters(headers.filter(item => item.name), testMap, true),
+          headers: this.formatParameters(
+            headers.filter(item => item.name),
+            testMap,
+            true,
+          ),
           body: this.formatParameters(body, testMap),
-          formControls: this.formatParameters(formControls.filter(item => item.name), testMap, true),
+          formControls: this.formatParameters(
+            formControls.filter(item => item.name),
+            testMap,
+            true,
+          ),
           contentType,
           settings,
+          json,
         },
         { isIntegration },
       )
@@ -594,6 +634,7 @@ export default class WebHook extends Component {
             <div className="mTop10 flexRow alignItemsCenter">
               <div style={{ width: 120 }}>
                 <SpecificFieldsValue
+                  projectId={this.props.companyId}
                   processId={this.props.processId}
                   selectNodeId={this.props.selectNodeId}
                   updateSource={({ fieldValue }) =>
@@ -606,12 +647,12 @@ export default class WebHook extends Component {
                   }
                   type="number"
                   min={5}
-                  max={90}
+                  max={120}
                   hasOtherField={false}
                   data={{ fieldValue: data.settings.timeout }}
                 />
               </div>
-              <div className="mLeft10">{_l('秒')}（5 ~ 90）</div>
+              <div className="mLeft10">{_l('秒')}（5 ~ 120）</div>
 
               <Checkbox
                 style={{ marginLeft: 80 }}
@@ -711,6 +752,33 @@ export default class WebHook extends Component {
     this.setState({ errorMsgArray });
   }
 
+  /**
+   * 从JSON导入响应示例
+   */
+  generateFromJSON = () => {
+    const { data } = this.state;
+
+    Dialog.confirm({
+      width: 640,
+      title: _l('从 JSON 导入响应示例'),
+      description: <GenerateJSONBox id="generateJSON">{data.json}</GenerateJSONBox>,
+      onOk: () => {
+        return new Promise((resolve, reject) => {
+          const json = document.getElementById('generateJSON').value.trim();
+
+          if (!json.trim() || checkJSON(json)) {
+            this.updateSource({ json });
+            this.send({}, json);
+            resolve();
+          } else {
+            alert(_l('JSON格式有错误'), 2);
+            reject(true);
+          }
+        });
+      },
+    });
+  };
+
   render() {
     const { data } = this.state;
 
@@ -727,7 +795,7 @@ export default class WebHook extends Component {
           bg="BGBlueAsh"
           updateSource={this.updateSource}
         />
-        <div className="flex mTop20">
+        <div className="flex">
           <ScrollView>
             <div className="workflowDetailBox">
               {_.includes([APP_TYPE.SHEET, APP_TYPE.CUSTOM_ACTION], data.appType) && this.renderDefaultSource()}

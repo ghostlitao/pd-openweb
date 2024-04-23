@@ -6,12 +6,14 @@ import SvgIcon from 'src/components/SvgIcon';
 import WorkSheetItem, { convertColor } from './WorkSheetItem';
 import MoreOperation from './MoreOperation';
 import Drag from './Drag';
+import { getTranslateInfo } from 'src/util';
 
 export default function WorkSheetGroup(props) {
   const { appItem, ...otherProps } = props;
   const { sheetListVisible, isCharge, activeSheetId, appPkg } = otherProps;
-  const { workSheetId, workSheetName, icon, iconUrl, status, layerIndex, items = [] } = appItem;
-  const { iconColor, viewHideNavi, currentPcNaviStyle, themeType } = appPkg;
+  const { workSheetId, icon, iconUrl, status, layerIndex, items = [] } = appItem;
+  const { id, iconColor, viewHideNavi, currentPcNaviStyle, themeType } = appPkg;
+  const workSheetName = getTranslateInfo(id, workSheetId).name || appItem.workSheetName;
   const childrenOpenKey = `${workSheetId}-open`;
   const isOperation = appPkg.permissionType === 2;
   const childrenItems = (isCharge || isOperation) && viewHideNavi ? items : items.filter(item => item.status === 1 && !item.navigateHide);
@@ -117,7 +119,10 @@ export default function WorkSheetGroup(props) {
               {workSheetName}
             </span>
             {status === 2 && (
-              <Tooltip popupPlacement="bottom" text={<span>{_l('仅系统角色可见（包含管理员、运营者、开发者）')}</span>}>
+              <Tooltip
+                popupPlacement="right"
+                text={<span>{_l('仅系统角色在导航中可见（包含管理员、运营者、开发者），应用项权限依然遵循角色权限原则')}</span>
+              }>
                 <Icon className="Font16 mRight10" icon="visibility_off" style={{ color: currentPcNaviStyle === 1 && themeType === 'theme' ? '#FCD8D3' : '#ee6f09' }} />
               </Tooltip>
             )}
@@ -136,7 +141,7 @@ export default function WorkSheetGroup(props) {
         {sheetListVisible && (
           <div
             className={cx('groupItems overflowHidden', { hide: isDrag })}
-            style={{ height: childrenVisible ? (childrenItems.length ? childrenItems.length * 46 + 1 : 0) : 0 }}
+            style={{ height: childrenVisible ? (childrenItems.length ? childrenItems.length * 44 + 1 : 0) : 0 }}
           >
             {renderGroupItems()}
           </div>

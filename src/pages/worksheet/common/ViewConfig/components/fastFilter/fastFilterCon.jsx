@@ -54,7 +54,7 @@ const Wrap = styled.div`
     .cover {
       padding-top: 60px;
       img {
-        height: 212px;
+        width: 100%;
         display: block;
       }
     }
@@ -97,10 +97,10 @@ const SortHandle = SortableHandle(() => <Icon className="mRight10 Font16 mLeft7 
 
 const Item = SortableElement(({ name, type, controlId, onEdit, onDelete, isErr, showOtherField }) => {
   return (
-    <div className="customItemForFastFilter mBottom10" style={{}}>
+    <div className="customItemForFastFilter mBottom10">
       <SortHandle />
       <span
-        className={cx('con', { Red: isErr || showOtherField })}
+        className={cx('con overflow_ellipsis alignItemsCenter', { Red: isErr || showOtherField })}
         onClick={() => {
           if (isErr || showOtherField || !onEdit) {
             return;
@@ -210,7 +210,7 @@ export default function FastFilterCon(params) {
         )}
         onAdd={onAdd}
         style={{
-          width: '360px',
+          width: '440px',
         }}
         offset={[0, 0]}
         classNamePopup="addControlDrop"

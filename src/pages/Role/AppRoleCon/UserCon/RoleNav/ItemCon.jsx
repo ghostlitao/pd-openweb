@@ -2,18 +2,28 @@ import React from 'react';
 import cx from 'classnames';
 import _ from 'lodash';
 import DropOption from 'src/pages/Role/PortalCon/components/DropOption';
-import { Dialog, Tooltip } from 'ming-ui';
+import { Dialog, Tooltip, Icon } from 'ming-ui';
 import { navigateTo } from 'src/router/navigateTo';
-import { sysRoleType, adminType } from 'src/pages/Role/config.js';
+import { sysRoleType, ICON_ROLE_TYPE } from 'src/pages/Role/config.js';
 import { APP_ROLE_TYPE } from 'src/pages/worksheet/constants/enum';
 
 export default class ItemCon extends React.Component {
   render() {
-    const { setRoleId, SetAppRolePagingModel, setSelectedIds, isOwner, appId, appDetail, canEditApp } = this.props;
+    const {
+      setRoleId,
+      SetAppRolePagingModel,
+      setSelectedIds,
+      isOwner,
+      appId,
+      appDetail,
+      canEditApp,
+      selectDebugRole = [],
+    } = this.props;
     const { data, roleId } = this.props;
+
     let optList = [];
     //离开自己所在的角色
-    if (data.isMyRole && !(isOwner && data.roleType === APP_ROLE_TYPE.ADMIN_ROLE)) {
+    if (data.isMyRole && !(isOwner && data.roleType === APP_ROLE_TYPE.ADMIN_ROLE) && !selectDebugRole.length) {
       //拥有者不能离开管理员角色
       optList = [
         ...optList,
@@ -24,20 +34,30 @@ export default class ItemCon extends React.Component {
       ];
     }
     //编辑自己有权限的自定义角色
-    if (canEditApp && !sysRoleType.includes(data.roleType)) {
-      optList = [
-        ...optList,
-        {
-          value: 1,
-          text: _l('编辑角色权限'),
-          showLine: data.isMyRole,
-        },
-        {
-          value: 2,
-          type: 'err',
-          text: _l('删除'),
-        },
-      ];
+    if (canEditApp) {
+      if (!sysRoleType.includes(data.roleType)) {
+        optList = [
+          ...optList,
+          {
+            value: 1,
+            text: _l('编辑角色'),
+            showLine: data.isMyRole,
+          },
+          {
+            value: 2,
+            type: 'err',
+            text: _l('删除'),
+          },
+        ];
+      } else {
+        optList = [
+          ...optList,
+          {
+            value: 1,
+            text: _l('查看角色'),
+          },
+        ];
+      }
     }
     return (
       <li
@@ -46,6 +66,7 @@ export default class ItemCon extends React.Component {
           Relative: roleId !== data.roleId,
         })}
         onClick={() => {
+          this.props.setQuickTag({ roleId: data.roleId, tab: 'user' });
           this.props.onChange({
             roleId: data.roleId,
           });
@@ -60,6 +81,7 @@ export default class ItemCon extends React.Component {
           title={data.name}
         >
           {roleId !== data.roleId && data.isMyRole && <span className="isMyRole mRight3 InlineBlock TxtMiddle" />}
+          {ICON_ROLE_TYPE[data.roleType] && <Icon icon={ICON_ROLE_TYPE[data.roleType]} className="Font16 mRight6" />}
           {data.name}
         </span>
 
@@ -68,7 +90,7 @@ export default class ItemCon extends React.Component {
             <DropOption
               dataList={optList}
               showHeader={() => {
-                if (!data.isMyRole) {
+                if (!data.isMyRole || sysRoleType.includes(data.roleType)) {
                   return null;
                 }
                 return (

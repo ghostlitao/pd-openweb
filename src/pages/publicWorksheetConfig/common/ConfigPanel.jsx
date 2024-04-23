@@ -4,15 +4,14 @@ import { autobind } from 'core-decorators';
 import { bindActionCreators } from 'redux';
 import { connect } from 'react-redux';
 import styled from 'styled-components';
-import { Button, ScrollView, Dialog } from 'ming-ui';
-import Skeleton from 'src/router/Application/Skeleton';
+import { Button, ScrollView, Dialog, Switch, Skeleton } from 'ming-ui';
 import * as actions from '../redux/actions';
-import { Hr, H1, H2, Tip75, Tip9e, TipBlock } from 'worksheet/components/Basics';
+import { Hr, H2, Tip9e, TipBlock } from 'worksheet/components/Basics';
 import ShareUrl from 'worksheet/components/ShareUrl';
-import HidedControls from '../components/HidedControls';
+import ControlList from '../components/ControlList';
 import PublicConfig from './PublicConfig';
 import { VISIBLE_TYPE } from '../enum';
-import { getDisabledControls } from '../utils';
+import { getDisabledControls, renderLimitInfo, isDisplayPromptText } from '../utils';
 import _ from 'lodash';
 
 const BackBtn = styled.span`
@@ -32,6 +31,29 @@ const BackBtn = styled.span`
     background: #d6edff;
   }
 `;
+
+const ShareUrlContainer = styled.div`
+  .customShareUrl > :nth-last-child(1) {
+    margin-top: 10px;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .customShareUrl {
+    .text {
+      line-height: initial;
+    }
+  }
+`;
+
+const PublishUrlContainer = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  .publishUrlSwitch {
+    transform: scale(0.8) translate(6px);
+  }
+`;
+
 class ConfigPanel extends React.Component {
   static propTypes = {
     worksheetInfo: PropTypes.shape({}),
@@ -40,6 +62,7 @@ class ConfigPanel extends React.Component {
     hidedControlIds: PropTypes.arrayOf(PropTypes.string),
     originalControls: PropTypes.arrayOf(PropTypes.shape({})),
     showControl: PropTypes.func,
+    onHideControl: PropTypes.func,
     updateWorksheetVisibleType: PropTypes.func,
     resetControls: PropTypes.func,
     onCloseConfig: PropTypes.func,
@@ -80,7 +103,11 @@ class ConfigPanel extends React.Component {
       shareUrl,
       hidedControlIds,
       showControl,
+      onHideControl,
       onCloseConfig,
+      refreshShareUrl,
+      enabled,
+      onSwitchChange,
     } = this.props;
     const { publicConfigVisible } = this.state;
     const disabledControlIds = getDisabledControls(originalControls, worksheetSettings);
@@ -95,14 +122,48 @@ class ConfigPanel extends React.Component {
       <div className="publicWorksheetConfigPanel">
         <div className="publicConfig flexColumn">
           <BackBtn onClick={onCloseConfig}>{_l('完成')}</BackBtn>
-          <H2 className="InlineBlock" style={{ fontSize: 16 }}>
-            {_l('设置公开链接')}
-          </H2>
+          <PublishUrlContainer>
+            <H2 className="InlineBlock" style={{ fontSize: 16 }}>
+              {_l('公开链接')}
+            </H2>
+            <Switch
+              className="publishUrlSwitch"
+              checked={enabled}
+              onClick={() => {
+                onSwitchChange();
+                onCloseConfig();
+              }}
+            />
+          </PublishUrlContainer>
+
           {worksheetInfo.visibleType === VISIBLE_TYPE.PUBLIC && (
             <React.Fragment>
-              <ShareUrl style={{ margin: '10px 0' }} showPreview={false} url={shareUrl} />
-              <Button fullWidth className="mTop6" onClick={() => this.setState({ publicConfigVisible: true })}>
-                <i className="icon icon-10_12_paper_plane Font18 mRight8"></i>
+              {isDisplayPromptText(worksheetSettings) && (
+                <div className="promptText flexColumn">{renderLimitInfo(worksheetSettings)}</div>
+              )}
+              <ShareUrlContainer>
+                <ShareUrl
+                  theme="light"
+                  className="customShareUrl"
+                  style={{ margin: '16px 0', flexDirection: 'column' }}
+                  showPreview={false}
+                  url={shareUrl}
+                  showCompletely={{ copy: true, qr: true }}
+                  refreshShareUrl={refreshShareUrl}
+                  customBtns={[
+                    {
+                      tip: _l('打开'),
+                      icon: 'launch',
+                      text: _l('打开'),
+                      showCompletely: true,
+                      onClick: () => window.open(shareUrl),
+                    },
+                  ]}
+                />
+              </ShareUrlContainer>
+
+              <Button fullWidth className="mTop8" onClick={() => this.setState({ publicConfigVisible: true })}>
+                <i className="icon icon-send Font16 mRight10"></i>
                 {_l('发布设置')}
               </Button>
             </React.Fragment>
@@ -111,18 +172,18 @@ class ConfigPanel extends React.Component {
           <Hr style={{ margin: '20px -20px 0' }} />
           <div>
             <H2 className="mBottom10 Left" style={{ color: '#757575', fontSize: '14px' }}>
-              {_l('字段')}
+              {_l('显示的字段')}
             </H2>
             <span className="Right mTop16" onClick={this.resetControls} data-tip={_l('重置公开表单字段')}>
-              <i className="icon icon-refresh Gray_9e Font16 Hand"></i>
+              <i className="icon icon-refresh1 Gray_9e Font16 Hand"></i>
             </span>
           </div>
           <Tip9e className="tip mBottom10">
             {_l('人员、部门、组织角色、自由连接、扩展值的文本字段不能用于公开表单，原表单内的以上字段将被自动隐藏。')}
           </Tip9e>
-          {!hidedControls.length && !disabledControls.length && (
+          {/* {!hidedControls.length && !disabledControls.length && (
             <TipBlock> {_l('点击右侧表单中字段上的隐藏按钮，被隐藏的字段将放置在这里')} </TipBlock>
-          )}
+          )} */}
           <div className="flex" style={{ margin: '0 -20px', padding: '0 0 32px' }}>
             <ScrollView>
               {loading && (
@@ -137,7 +198,13 @@ class ConfigPanel extends React.Component {
               )}
               <div style={{ padding: '0 25px 0 20px' }}>
                 {/* { !!disabledControls.length && <HidedControls controls={disabledControls} disabled /> } */}
-                {!!hidedControls.length && <HidedControls controls={hidedControls} onAdd={showControl} />}
+                <ControlList
+                  controls={originalControls}
+                  hidedControls={hidedControls}
+                  disabledControls={disabledControls}
+                  onAdd={showControl}
+                  onHide={onHideControl}
+                />
               </div>
             </ScrollView>
           </div>

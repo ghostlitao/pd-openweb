@@ -7,8 +7,9 @@ import { browserIsMobile } from 'src/util';
 import OtherInput from '../Checkbox/OtherInput';
 import { getCheckAndOther } from '../../tools/utils';
 import _ from 'lodash';
+import autoSize from 'ming-ui/decorators/autoSize';
 
-export default class Widgets extends Component {
+class Widgets extends Component {
   static propTypes = {
     from: PropTypes.number,
     disabled: PropTypes.bool,
@@ -16,6 +17,17 @@ export default class Widgets extends Component {
     value: PropTypes.string,
     enumDefault2: PropTypes.number,
     onChange: PropTypes.func,
+  };
+
+  getItemWidth = displayOptions => {
+    const { width = '200', direction = '2' } = this.props.advancedSetting || {};
+    let itemWidth = 100;
+    const boxWidth = this.props.width;
+    if (boxWidth && direction === '0') {
+      const num = Math.floor(boxWidth / Number(width)) || 1;
+      itemWidth = 100 / (num > displayOptions.length ? displayOptions.length : num);
+    }
+    return `${itemWidth}%`;
   };
 
   /**
@@ -51,56 +63,80 @@ export default class Widgets extends Component {
 
   render() {
     const { disabled, advancedSetting, className, vertical, options, value } = this.props;
-    const { direction } = advancedSetting || {};
+    const { direction = '2', width = '200' } = advancedSetting || {};
     const { checkIds } = getCheckAndOther(value);
+    const displayOptions = options.filter(
+      item => !item.isDeleted && ((disabled && _.includes(checkIds, item.key)) || !disabled),
+    );
     return (
       <div
         className={cx(
           'customFormControlBox formBoxNoBorder',
           { controlDisabled: disabled },
           { groupColumn: direction === '1' || browserIsMobile() },
+          { groupRow: direction === '2' && !browserIsMobile() },
         )}
         style={{ height: 'auto' }}
       >
         <div className={`ming RadioGroup2 ${className || ''}`}>
-          <div className={cx('RadioGroupCon', { flexColumn: vertical })}>
-            {options
-              .filter(item => !item.isDeleted && ((disabled && _.includes(checkIds, item.key)) || !disabled))
-              .map((item, index) => {
-                return browserIsMobile() && disabled && item.key === 'other' ? (
-                  <div className="flexColumn">
-                    <Radio
-                      key={index}
-                      disabled={disabled}
-                      text={this.renderList(item, checkIds)}
-                      value={item.key}
-                      checked={_.includes(checkIds, item.key)}
-                      title={item.value}
-                      onClick={this.onChange}
-                    />
-                  </div>
-                ) : (
-                  <div className="flexColumn">
-                    <Radio
-                      key={index}
-                      disabled={disabled}
-                      text={this.renderList(item, checkIds)}
-                      value={item.key}
-                      checked={_.includes(checkIds, item.key)}
-                      title={item.value}
-                      onClick={this.onChange}
-                    />
-                    {item.key === 'other' && (
-                      <div className="otherInputBox">
-                        <OtherInput {...this.props} isSelect={browserIsMobile() ? true : false} />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+          <div
+            className={cx('RadioGroupCon', {
+              flexColumn: vertical,
+              horizonArrangementRadio: (direction === '0' || direction === '2') && browserIsMobile(),
+            })}
+          >
+            {displayOptions.map((item, index) => {
+              return (
+                <div
+                  className="flexColumn"
+                  style={direction === '0' && !browserIsMobile() ? { width: this.getItemWidth(displayOptions) } : {}}
+                >
+                  {browserIsMobile() && disabled && item.key === 'other' ? (
+                    <div
+                      className="flexColumn"
+                      style={direction === '0' && !browserIsMobile() ? { width: `${width}px` } : {}}
+                    >
+                      <Radio
+                        needDefaultUpdate
+                        key={index}
+                        disabled={disabled}
+                        text={this.renderList(item, checkIds)}
+                        value={item.key}
+                        checked={_.includes(checkIds, item.key)}
+                        title={item.value}
+                        onClick={this.onChange}
+                      />
+                    </div>
+                  ) : (
+                    <div
+                      className="flexColumn"
+                      style={direction === '0' && !browserIsMobile() ? { width: `${width}px` } : {}}
+                    >
+                      <Radio
+                        needDefaultUpdate
+                        key={index}
+                        disabled={disabled}
+                        text={this.renderList(item, checkIds)}
+                        value={item.key}
+                        checked={_.includes(checkIds, item.key)}
+                        title={item.value}
+                        onClick={this.onChange}
+                      />
+                      {item.key === 'other' && (
+                        <div className="otherInputBox">
+                          <OtherInput {...this.props} isSelect={browserIsMobile() ? true : false} />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
     );
   }
 }
+
+export default autoSize(Widgets, { onlyWidth: true });

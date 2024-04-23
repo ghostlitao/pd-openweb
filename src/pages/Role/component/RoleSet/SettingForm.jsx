@@ -1,11 +1,12 @@
 import React, { PureComponent, Fragment } from 'react';
 import PropTypes from 'prop-types';
 import cx from 'classnames';
-import { ScrollView, Input, Radio, Dropdown, Checkbox, LoadDiv, Tooltip, Icon } from 'ming-ui';
+import { ScrollView, Input, Radio, Dropdown, Checkbox, LoadDiv, Tooltip, Icon, Switch } from 'ming-ui';
 import SheetTable, { changeSheetModel } from './SheetTable';
 import { PERMISSION_WAYS, TEXTS, roleDetailPropType, actionList } from 'src/pages/Role/config.js';
 import styled from 'styled-components';
 import _ from 'lodash';
+import { WrapFooter } from 'src/pages/Role/style.jsx';
 
 const WrapCon = styled.div`
   .optionTxt {
@@ -13,7 +14,7 @@ const WrapCon = styled.div`
     color: #919191;
   }
   .toUser {
-    color: #757575;
+    color: #5a5a5a;
     &:hover {
       color: #2196f3;
     }
@@ -29,52 +30,7 @@ const WrapCon = styled.div`
 const Wrap = styled.div`
   width: 52%;
 `;
-const WrapFooter = styled.div`
-  .saveBtn {
-    height: 36px;
-    padding: 0 30px;
-    color: #fff;
-    line-height: 36px;
-    border-radius: 4px 4px 4px 4px;
-    font-size: 14px;
-    font-weight: 400;
-    transition: color ease-in 0.2s, border-color ease-in 0.2s, background-color ease-in 0;
-    background: #1e88e5;
-    &:hover {
-      background: #1565c0;
-    }
-    &.disabled {
-      color: #fff;
-      background: #b2dbff;
-      cursor: not-allowed;
-      &:hover {
-        background: #b2dbff;
-      }
-    }
-  }
-  .delBtn {
-    height: 36px;
-    padding: 0 30px;
-    line-height: 36px;
-    border-radius: 4px 4px 4px 4px;
-    font-size: 14px;
-    opacity: 1;
-    border: 1px solid #eaeaea;
-    margin-left: 23px;
-    font-weight: 400;
-    transition: color ease-in 0.2s, border-color ease-in 0.2s, background-color ease-in 0;
-    &:hover {
-      border: 1px solid #ccc;
-    }
-    &.disabled {
-      color: #eaeaea;
-      cursor: not-allowed;
-      &:hover {
-        border: 1px solid #eaeaea;
-      }
-    }
-  }
-`;
+
 const PERMISSION_WAYS_WITH_CHECKBOX = [
   PERMISSION_WAYS.OnlyManageSelfRecord,
   PERMISSION_WAYS.OnlyManageSelfAndSubRecord,
@@ -227,10 +183,10 @@ export default class extends PureComponent {
             </div>
             {showCheckbox && !isForPortal ? (
               <div className="mTop15 flexRow alignItemsCenter">
-                <Checkbox
-                  className={'subCheckbox InlineBlock'}
-                  checked={isChecked}
+                <Switch
                   size="small"
+                  className="InlineBlock"
+                  checked={isChecked}
                   onClick={checked => {
                     if (checked) {
                       const index = PERMISSION_WAYS_WITH_CHECKED.indexOf(permissionWay);
@@ -240,10 +196,9 @@ export default class extends PureComponent {
                       this.changePermissionWay(PERMISSION_WAYS_WITH_CHECKED[index]);
                     }
                   }}
-                >
-                  {_l('下属加入/拥有的记录')}
-                </Checkbox>
-                <Tooltip text={<span>{_l('汇报关系中，下属拥有的记录')} </span>} popupPlacement="top">
+                />
+                <span className="mLeft10"> {_l('下属加入/拥有的记录')}</span>
+                <Tooltip text={<span>{_l('在组织管理【汇报关系】中管理用户的下属')} </span>} popupPlacement="top">
                   <i className="icon-info_outline Font16 Gray_9e mLeft3 TxtMiddle" />
                 </Tooltip>
               </div>
@@ -252,13 +207,9 @@ export default class extends PureComponent {
               <div className="mTop15 flexRow">
                 <div className="left">
                   <span className="flexRow alignItemsCenter">
-                    <Checkbox
-                      className={'subCheckbox InlineBlock'}
+                    <Switch
+                      className="InlineBlock"
                       checked={optionalControls.filter(l => extendAttrs.includes(l.id)).length > 0}
-                      clearselected={
-                        optionalControls.filter(l => extendAttrs.includes(l.id)).length > 0 &&
-                        optionalControls.filter(l => !extendAttrs.includes(l.id)).length !== 0
-                      }
                       size="small"
                       onClick={checked => {
                         if (checked) {
@@ -267,14 +218,13 @@ export default class extends PureComponent {
                           onChange({ extendAttrs: optionalControls.map(l => l.id) });
                         }
                       }}
-                    >
-                      {_l('匹配用户权限标签的记录')}
-                    </Checkbox>
+                    />
+                    <span className="mLeft10">{_l('匹配用户权限标签的记录')}</span>
                     <Tooltip
                       text={
                         <span>
                           {_l(
-                            '可启用的权限标签字段来自于[用户扩展信息]的标签字段。勾选后，可根据[用户扩展信息-人员表]中配置的字段值，查看工作表被关联的字段所属记录。',
+                            '在本应用【用户-扩展】中管理用户的权限标签',
                           )}{' '}
                         </span>
                       }
@@ -334,7 +284,11 @@ export default class extends PureComponent {
                         <Checkbox
                           className={'subCheckbox InlineBlock TxtMiddle'}
                           disabled={o.key === 'generalAdd' && PERMISSION_WAYS.OnlyViewAllRecord === permissionWay} //对所有记录只有查看权限 同时 操作权限 不可新增
-                          checked={roleDetail[o.key].enable}
+                          checked={
+                            o.key === 'generalAdd' && PERMISSION_WAYS.OnlyViewAllRecord === permissionWay
+                              ? false
+                              : roleDetail[o.key].enable
+                          }
                           size="small"
                           onClick={checked => {
                             onChange({
@@ -403,14 +357,20 @@ export default class extends PureComponent {
                     (!!sheets.filter(obj => obj.views.filter(o => o[item.key]).length).length ||
                       !!pages.filter(o => o.checked).length);
                 } else if (item.operatorKey === 'ADD') {
-                  checked = sheets.filter(obj => obj.canAdd).length === sheets.length;
+                  checked = sheets.filter(obj => obj.canAdd).length === sheets.length && sheets.length > 0;
                   clearselected =
                     !checked &&
                     sheets.filter(obj => obj.canAdd).length !== sheets.length &&
                     sheets.filter(obj => obj.canAdd).length > 0;
                 } else {
-                  checked = !sheets.filter(obj => obj.views.filter(o => !o[item.key]).length).length;
-                  clearselected = !checked && !!sheets.filter(obj => obj.views.filter(o => o[item.key]).length).length;
+                  let viewsData = [];
+                  let allViews = [];
+                  sheets.map(obj => {
+                    viewsData.push(...obj.views.filter(o => o[item.key]));
+                    allViews.push(...obj.views);
+                  });
+                  checked = viewsData.length === allViews.length && allViews.length > 0;
+                  clearselected = !checked && viewsData.length !== allViews.length && viewsData.length > 0;
                 }
                 return (
                   <div key={index} className={'tableHeaderItem tableHeaderOther'}>
@@ -512,18 +472,19 @@ export default class extends PureComponent {
   };
 
   render() {
-    const {
+    let {
       roleDetail: { name, description, roleId, hideAppForMembers } = {},
       loading,
       onChange,
       onSave,
-      setQuickTag,
       onDel,
       saveLoading,
       roleDetailCache,
       isForPortal,
+      setQuickTag,
+      canEditUser,
     } = this.props;
-
+    roleId = roleId === 'new' ? '' : roleId;
     if (loading) return <LoadDiv className="mTop10" />;
 
     return (
@@ -536,10 +497,27 @@ export default class extends PureComponent {
                 this.container = el;
               }}
             >
-              <div className="flexRow alignItemsCenter">
+              <div className="roleTitle Bold Font17">{!roleId ? _l('创建角色') : _l('编辑角色')}</div>
+              <div className="flexRow alignItemsCenter mTop30">
                 <div className="Font14 bold flex">{_l('角色名称')}</div>
+              </div>
+              <div className="mTop8 flexRow">
+                <Input
+                  type="text"
+                  value={name}
+                  className={'nameInput'}
+                  manualRef={el => {
+                    this.input = el;
+                  }}
+                  maxLength={20}
+                  onChange={value => {
+                    onChange({
+                      name: value,
+                    });
+                  }}
+                />
                 {!!roleId && !isForPortal && (
-                  <span className="Font14 toUser Hand flexRow alignItemsCenter">
+                  <span className="Font14 toUser Hand flexRow alignItemsCenter mLeft30">
                     <Checkbox
                       className="Gray"
                       size="small"
@@ -566,22 +544,6 @@ export default class extends PureComponent {
                   </span>
                 )}
               </div>
-              <div className="mTop8">
-                <Input
-                  type="text"
-                  value={name}
-                  className={'nameInput'}
-                  manualRef={el => {
-                    this.input = el;
-                  }}
-                  maxLength={20}
-                  onChange={value => {
-                    onChange({
-                      name: value,
-                    });
-                  }}
-                />
-              </div>
               <div className="Font14 mTop25 bold">{_l('描述')}</div>
               <div className="mTop8">
                 <Input
@@ -600,7 +562,7 @@ export default class extends PureComponent {
             </div>
           </ScrollView>
         </WrapCon>
-        <WrapFooter className={'footer flexRow'}>
+        <WrapFooter className={'footer flexRow alignItemsCenter'}>
           <div
             className={cx('saveBtn Hand flexRow alignItemsCenter', {
               disabled: saveLoading || (_.isEqual(this.props.roleDetail, roleDetailCache) && !!roleId),
@@ -622,10 +584,27 @@ export default class extends PureComponent {
                 onDel();
               }
             }}
-            className={cx('delBtn Hand', { disabled: _.isEqual(this.props.roleDetail, roleDetailCache) && !!roleId })}
+            className={cx('delBtn Hand', {
+              disabled: _.isEqual(this.props.roleDetail, roleDetailCache) && !!roleId,
+            })}
           >
             {!roleId ? _l('删除') : _l('取消')}
           </div>
+          {!!roleId && canEditUser && (
+            <React.Fragment>
+              <div className="line"></div>
+              <div
+                className="toUser Hand Bold"
+                onClick={() => {
+                  this.props.handleChangePage(() => {
+                    setQuickTag({ roleId: roleId, tab: 'user' });
+                  });
+                }}
+              >
+                {_l('管理用户')}
+              </div>
+            </React.Fragment>
+          )}
         </WrapFooter>
       </React.Fragment>
     );

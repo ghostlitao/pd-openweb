@@ -69,9 +69,9 @@ export default class Widgets extends Component {
     }
   }
 
-  realTimeSearch = _.throttle(mobileKeywords => this.handleSearch(mobileKeywords), 300);
+  realTimeSearch = _.debounce(() => this.handleSearch(), 500);
 
-  handleSearch = (mobileKeywords = '') => {
+  handleSearch = () => {
     const {
       advancedSetting: { requestmap, itemsource, itemtitle } = {},
       dataSource,
@@ -84,7 +84,6 @@ export default class Widgets extends Component {
       getControlRef,
     } = this.props;
     const { keywords } = this.state;
-    const isMobile = browserIsMobile();
 
     this.setState({ data: null });
 
@@ -97,8 +96,7 @@ export default class Widgets extends Component {
     }
 
     this.setState({ loading: true, open: true });
-    let searchValue = isMobile ? mobileKeywords : keywords;
-    const paramsData = getParamsByConfigs(requestMap, formData, searchValue, getControlRef);
+    const paramsData = getParamsByConfigs(requestMap, formData, keywords, getControlRef);
 
     let params = {
       data: !requestMap.length || _.isEmpty(paramsData) ? '' : paramsData,
@@ -156,6 +154,7 @@ export default class Widgets extends Component {
           this.props.onChange(
             {
               action: 'clearAndSet',
+              isDefault: true,
               rows: safeParse(itemData[item.cid] || '[]').map(i => {
                 return {
                   ...i,
@@ -173,7 +172,7 @@ export default class Widgets extends Component {
             item.type === 10000007 && itemData[item.cid] && _.isArray(safeParse(itemData[item.cid]))
               ? safeParse(itemData[item.cid]).join(',')
               : itemData[item.cid];
-          this.props.onChange(itemVal, control.controlId);
+          this.props.onChange(itemVal, control.controlId, false);
         }
         this.setState({ data: null, open: false, keywords: '' });
       }
@@ -239,7 +238,7 @@ export default class Widgets extends Component {
 
   getSuffixIcon = () => {
     const { enumDefault, disabled, advancedSetting: { clicksearch, min = '0' } = {} } = this.props;
-    const canClick = this.state.keywords.length >= parseInt(min);
+    const canClick = _.get(this.state, 'keywords.length') >= parseInt(min);
     if (enumDefault === 2) {
       if (clicksearch === '1') {
         return <Icon icon="search1 Font14" />;
@@ -249,7 +248,7 @@ export default class Widgets extends Component {
           className={cx('searchIconBox', { disabled: disabled || !canClick })}
           onClick={e => {
             e.stopPropagation();
-            if (!canClick) return alert(_l('最少输入%0个关键字', min));
+            if (!canClick) return alert(_l('最少输入%0个关键字', min), 3);
             this.handleSearch();
           }}
         >
@@ -295,7 +294,7 @@ export default class Widgets extends Component {
           ) : (
             <span className="TxtCenter flex overflow_ellipsis">
               {isSuccess && <i className="icon-done successIcon"></i>}
-              <span className='Bold'> {hint || _l('查询')}</span>
+              <span className="Bold"> {hint || _l('查询')}</span>
             </span>
           )}
         </SearchBtn>
@@ -360,11 +359,21 @@ export default class Widgets extends Component {
           controlName={controlName}
           advancedSetting={advancedSetting}
           optionData={optionData}
-          handleSearch={this.handleSearch}
+          handleSearch={keywords => {
+            this.setState({ keywords }, this.handleSearch);
+          }}
           renderList={this.renderList}
-          realTimeSearch={this.realTimeSearch}
+          realTimeSearch={keywords => {
+            this.setState({ keywords }, () => {
+              if (this.state.keywords.length < parseInt(min)) return;
+              this.realTimeSearch();
+            });
+          }}
           disabled={disabled}
           handleSelect={this.handleSelect}
+          clearData={() => {
+            this.setState({ data: [] });
+          }}
         />
       );
     }
@@ -397,10 +406,10 @@ export default class Widgets extends Component {
             ) : null
           }
           onSelect={(value, option) => this.handleSelect(option)}
-          onChange={value => {
+          onChange={(value, option) => {
             // keywords判断是为了直接点击删除
-            if (value || !keywords.length) {
-              this.props.onChange(value);
+            if (_.get(option, 'label') || !keywords.length) {
+              this.props.onChange(_.get(option, 'label'));
             }
           }}
           onFocus={() => this.setState({ open: true })}
@@ -412,7 +421,7 @@ export default class Widgets extends Component {
           {optionData.map((item, index) => {
             const label = getShowValue(this.getMappingItem(itemtitle), item[itemtitle]);
             return (
-              <Select.Option key={index} value={label} label={label}>
+              <Select.Option key={index} value={index} label={label}>
                 {this.renderList(item)}
               </Select.Option>
             );

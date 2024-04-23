@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Table } from 'antd';
+import { Table, ConfigProvider, Empty } from 'antd';
 import _ from 'lodash';
+import { ScrollView } from 'ming-ui';
 import renderText from 'src/pages/worksheet/components/CellControls/renderText.js';
 import WorksheetRecordLogThumbnail from './WorksheetRecordLogThumbnail';
 import { SYSTEM_CONTROL } from 'src/pages/widgetConfig/config/widget';
@@ -30,6 +31,54 @@ function WorksheetRecordLogSubTable(props) {
   const [loading, setLoading] = useState(false);
   const [columns, setColumns] = useState([]);
   const [data, setData] = useState([]);
+  const [pageIndex, setPageIndex] = useState(1);
+  const [loadEnd, setLoadEnd] = useState(false);
+  const [log, setLog] = useState(null);
+
+  const getData = param => {
+    let _pageIndex = param ? param.pageIndex : pageIndex;
+    sheetAjax
+      .getDetailTableLog({
+        worksheetId: recordInfo.worksheetId,
+        rowId: recordInfo.rowId,
+        uniqueId: extendParam.uniqueId,
+        createTime: extendParam.createTime,
+        lastMark: extendParam.createTime,
+        requestType: extendParam.requestType,
+        objectType: extendParam.objectType,
+        pageIndex: _pageIndex,
+        pageSize: 20,
+        log: param ? param.log : log,
+      })
+      .then(res => {
+        setLoading(false);
+        setPageIndex(_pageIndex + 1);
+        const { oldRows, newRows } = res;
+        let oldList = safeParse(oldRows, 'array');
+        let newList = safeParse(newRows, 'array');
+        let defaultList = _.intersectionBy(newList, oldList, 'rowid').map(l => {
+          return {
+            ...l,
+            oldValue: oldList.find(m => m.rowid === l.rowid),
+            newValue: newList.find(m => m.rowid === l.rowid),
+            type: 'update',
+          };
+        });
+        let add = _.differenceBy(newList, oldList, 'rowid').map(l => {
+          return { ...l, type: 'add' };
+        });
+        let remove = _.differenceBy(oldList, newList, 'rowid').map(l => {
+          return { ...l, type: 'remove' };
+        });
+        let _data = data.concat(_.sortBy(defaultList.concat(add, remove), ['ctime']));
+        setData(_data);
+        if (res.flag) setLoadEnd(true);
+        if (!res.flag && _data.length < 10) {
+          getData({ pageIndex: _pageIndex + 1, log: param ? param.log : log });
+        }
+      });
+  };
+
   useEffect(() => {
     setLoading(true);
     sheetAjax
@@ -77,7 +126,9 @@ function WorksheetRecordLogSubTable(props) {
                 value: value,
                 value2: value,
               };
+
               let content = renderText(cell);
+
               if (content) {
                 return <MaskCell cell={cell} />;
               } else {
@@ -96,40 +147,8 @@ function WorksheetRecordLogSubTable(props) {
           _prop.newValue = JSON.stringify(_dataNew.map(l => l.recordId));
           _prop.oldValue = JSON.stringify(_dataOld.map(l => l.recordId));
         }
-        sheetAjax
-          .getDetailTableLog({
-            worksheetId: recordInfo.worksheetId,
-            rowId: recordInfo.rowId,
-            uniqueId: extendParam.uniqueId,
-            createTime: extendParam.createTime,
-            lastMark: extendParam.createTime,
-            requestType: extendParam.requestType,
-            objectType: extendParam.objectType,
-            log: {
-              ..._prop,
-            },
-          })
-          .then(data => {
-            setLoading(false);
-            const { oldRows, newRows } = data;
-            let oldList = safeParse(oldRows, 'array');
-            let newList = safeParse(newRows, 'array');
-            let defaultList = _.intersectionBy(newList, oldList, 'rowid').map(l => {
-              return {
-                ...l,
-                oldValue: oldList.find(m => m.rowid === l.rowid),
-                newValue: newList.find(m => m.rowid === l.rowid),
-                type: 'update',
-              };
-            });
-            let add = _.differenceBy(newList, oldList, 'rowid').map(l => {
-              return { ...l, type: 'add' };
-            });
-            let remove = _.differenceBy(oldList, newList, 'rowid').map(l => {
-              return { ...l, type: 'remove' };
-            });
-            setData(_.sortBy(defaultList.concat(add, remove), ['ctime']));
-          });
+        setLog(_prop);
+        getData({ pageIndex: 1, log: _prop });
       });
     // 组装columns
   }, []);
@@ -176,9 +195,12 @@ function WorksheetRecordLogSubTable(props) {
         );
       }
       if (type === 29 && _.startsWith(value, '{')) {
-        let _rows = safeParse(safeParse(value).rows, 'array');
+        const info = safeParse(value);
+        let _rows = safeParse(info.rows, 'array');
+
         return _rows.map(item => {
-          let _value = item.name;
+          let _value = item.name || _l('未命名');
+
           return (
             <span
               className={`rectTag ${
@@ -189,12 +211,27 @@ function WorksheetRecordLogSubTable(props) {
                   : 'defaultBackground'
               }`}
             >
-              {_value}
+              {cell.dataSource === info.worksheetId
+                ? renderText({ ...cell.sourceControl, value: item.name }) || _value
+                : _value}
             </span>
           );
         });
       }
-      return (
+      if (type === 36) {
+        _value = String(_value) === '1' ? '☑' : '☐';
+      }
+      if (type === 35) {
+        const titleControl = cell.relationControls.find(l => l.controlId === cell.sourceTitleControlId);
+        _value = titleControl
+          ? renderText({
+              ...titleControl,
+              value: [11].includes(titleControl.type) ? JSON.stringify([value]) : value,
+            }) || value
+          : value;
+      }
+
+      return typeof _value === 'string' ? (
         <span
           className={`rectTag ${
             editRowType === 'add' ? 'newBackground' : editRowType === 'remove' ? 'oldBackground' : 'defaultBackground'
@@ -202,7 +239,7 @@ function WorksheetRecordLogSubTable(props) {
         >
           {_value}
         </span>
-      );
+      ) : null;
     } catch (error) {
       console.log(error);
       return null;
@@ -214,9 +251,10 @@ function WorksheetRecordLogSubTable(props) {
       let cell = {
         ...control,
         value: typeof item !== 'string' ? JSON.stringify([item]) : item,
-        value2: control.type === 42 ? item : [item],
+        value2: [42, 11, 10].includes(control.type) ? item : [item],
       };
       let content = renderText(cell);
+
       if (content) {
         return (
           <React.Fragment key={`worksheetRecordLogSubTableUpdataItem-${type}-${control.controlId}-${index}`}>
@@ -235,24 +273,39 @@ function WorksheetRecordLogSubTable(props) {
     });
   };
 
+  const handleScrollEnd = _.debounce(() => {
+    if (loadEnd) return;
+    setLoading(true);
+
+    getData();
+  }, 500);
+
+  const renderEmpty = () => (
+    <Empty
+      imageStyle={{
+        height: 40,
+      }}
+      image={Empty.PRESENTED_IMAGE_SIMPLE}
+      description={<span>{_l('无数据，或是移除记录暂不支持查看详情')}</span>}
+    ></Empty>
+  );
+
   return (
-    <Table
-      loading={loading}
-      className="worksheetRecordLogSubTable"
-      rowClassName={record => {
-        return `worksheetRecordLogSubTableRow ${record.type}`;
-      }}
-      columns={columns}
-      dataSource={data}
-      scroll={{ x: 1300 }}
-      pagination={false}
-      bordered={true}
-      locale={{
-        Empty: {
-          description: _l('暂无数据'),
-        },
-      }}
-    />
+    <ScrollView className="flex" onScrollEnd={handleScrollEnd}>
+      <ConfigProvider renderEmpty={renderEmpty}>
+        <Table
+          loading={loading}
+          className="worksheetRecordLogSubTable"
+          rowClassName={record => `worksheetRecordLogSubTableRow ${record.type}`}
+          rowKey={record => `worksheetRecordLogSubTableRow-${record.rowid}`}
+          columns={columns}
+          dataSource={data}
+          scroll={{ x: 1300 }}
+          pagination={false}
+          bordered={true}
+        />
+      </ConfigProvider>
+    </ScrollView>
   );
 }
 export default WorksheetRecordLogSubTable;

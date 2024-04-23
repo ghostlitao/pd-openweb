@@ -1,9 +1,6 @@
 import React, { Fragment } from 'react';
 import ReactDOM from 'react-dom';
-import Dialog from 'ming-ui/components/Dialog';
-import RadioGroup from 'ming-ui/components/RadioGroup2';
-import Checkbox from 'ming-ui/components/Checkbox';
-import Button from 'ming-ui/components/Button';
+import { RadioGroup, Dialog, Checkbox, Button } from 'ming-ui';
 import './less/DeleteReconfirm.less';
 import _ from 'lodash';
 
@@ -11,6 +8,7 @@ const noop = () => {};
 
 export default ({
   style,
+  bodyStyle = {},
   footer,
   className,
   description,
@@ -79,27 +77,35 @@ export default ({
       description={description}
       footer={_.isUndefined(footer) ? renderFooter() : footer}
     >
-      {data.length > 1 ? (
-        <RadioGroup data={data} vertical radioItemClassName="deleteReconfirmRadioItem" onChange={onChange} />
-      ) : (
-        <div>
-          {data.map(({ text, value }) =>
-            clickOmitText ? (
-              <Fragment key={value}>
-                <Checkbox
-                  style={{ display: 'inline' }}
-                  value={value}
-                  text={null}
-                  onClick={(checkd, value) => onChange(checkd ? value : undefined)}
-                />
-                <span>{text}</span>
-              </Fragment>
-            ) : (
-              <Checkbox value={value} text={text} onClick={(checkd, value) => onChange(checkd ? value : undefined)} />
-            ),
-          )}
-        </div>
-      )}
+      <div style={bodyStyle}>
+        {data.length > 1 ? (
+          <RadioGroup
+            needDefaultUpdate
+            data={data}
+            vertical
+            radioItemClassName="deleteReconfirmRadioItem"
+            onChange={onChange}
+          />
+        ) : (
+          <div>
+            {data.map(({ text, value }) =>
+              clickOmitText ? (
+                <Fragment key={value}>
+                  <Checkbox
+                    style={{ display: 'inline' }}
+                    value={value}
+                    text={null}
+                    onClick={(checkd, value) => onChange(checkd ? value : undefined)}
+                  />
+                  <span>{text}</span>
+                </Fragment>
+              ) : (
+                <Checkbox value={value} text={text} onClick={(checkd, value) => onChange(checkd ? value : undefined)} />
+              ),
+            )}
+          </div>
+        )}
+      </div>
     </Dialog>,
     container,
   );

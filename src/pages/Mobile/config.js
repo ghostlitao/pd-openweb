@@ -3,13 +3,13 @@ import { addSubPathOfRoutes } from 'src/util';
 export const ROUTE_CONFIG = addSubPathOfRoutes(
   {
     appHome: {
-      path: '/mobile/appHome',
+      path: '/mobile/dashboard',
       component: () =>
         import(
           /* webpackChunkName: "mobile-home" */
           'mobile/AppHome'
         ),
-      title: _l('首页'),
+      title: _l('工作台'),
     },
     appGroupList: {
       path: '/mobile/appGroupList',
@@ -33,7 +33,7 @@ export const ROUTE_CONFIG = addSubPathOfRoutes(
     processMatters: {
       path: '/mobile/processMatters',
       component: () => import('mobile/Process/ProcessMatters'),
-      title: _l('流程事项'),
+      title: _l('流程待办'),
     },
     processInform: {
       path: '/mobile/processInform',
@@ -94,6 +94,11 @@ export const ROUTE_CONFIG = addSubPathOfRoutes(
       component: () => import('mobile/RecordList'),
       title: _l('记录'),
     },
+    mobileView: {
+      path: '/mobile/mobileView/:appId/:groupId/:worksheetId/:viewId?',
+      component: () => import('mobile/RecordList/mobile'),
+      title: _l('层级视图'),
+    },
     customPage: {
       path: '/mobile/customPage/:appId/:groupId/:worksheetId',
       component: () => import('mobile/CustomPage'),
@@ -110,7 +115,7 @@ export const ROUTE_CONFIG = addSubPathOfRoutes(
       title: _l('流程详情'),
     },
     addRecord: {
-      path: '/mobile/addRecord/:appId/:worksheetId/:viewId',
+      path: '/mobile/addRecord/:appId/:worksheetId/:viewId?',
       component: () => import('mobile/Record/addRecord'),
       title: _l('添加记录'),
     },
@@ -129,6 +134,16 @@ export const ROUTE_CONFIG = addSubPathOfRoutes(
       component: () => import('mobile/SearchRecord'),
       title: _l('搜索'),
     },
+    recordCollection: {
+      path: '/mobile/recordfav/:projectId',
+      component: () => import('mobile/RecordCollect'),
+      title: _l('记录收藏'),
+    },
+    appCollection: {
+      path: '/mobile/appfav/:projectId',
+      component: () => import('mobile/AppCollect'),
+      title: _l('应用收藏'),
+    },
   },
   window.subPath,
 );
@@ -143,4 +158,6 @@ export const PORTAL = [
   'groupFilterDetail',
   'addDiscuss',
   'discuss',
+  'recordCollection',
+  'appCollection',
 ];

@@ -1,19 +1,10 @@
 import styled from 'styled-components';
 export const BillInfoWrap = styled.div`
-  padding: 16px;
   height: 100%;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   .billInfoHeader {
-    height: 56px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid #EAEAEA;
-    background-color: #fff;
-    padding: 0 24px;
-    box-sizing: border-box;
     .title {
       color: '#333333';
       font-size: 17px;
@@ -23,14 +14,6 @@ export const BillInfoWrap = styled.div`
       color: #2196f3;
       margin: 0 8px;
     }
-  }
-  .billInfoBox {
-    flex: 1;
-    padding: 30px 24px;
-    background-color: #fff;
-    display: flex;
-    flex-direction: column;
-    box-sizing: border-box;
   }
   .accountInfo {
     display: flex;
@@ -121,16 +104,18 @@ export const BillInfoWrap = styled.div`
     border-bottom: 1px solid #ddd;
     .item {
       text-align: left;
-      width: 12.5%;
+      width: 10%;
       .ming.Dropdown .Dropdown--input {
         padding: 0;
       }
     }
     .time {
-      width: 16%;
+      width: 20%;
+    }
+    .type {
+      width: 20%;
     }
     .operation {
-      width: 9%;
       text-align: center;
     }
     .rechargeType {
@@ -152,14 +137,15 @@ export const BillInfoWrap = styled.div`
 
       .item {
         text-align: left;
-        width: 12.5%;
+        width: 10%;
       }
       .time {
-        width: 16%;
+        width: 20%;
       }
-
+      .type {
+        width: 20%;
+      }
       .operation {
-        width: 9%;
         text-align: center;
       }
 
@@ -210,7 +196,7 @@ export const BillInfoWrap = styled.div`
         height: 24px;
         border-radius: 50%;
       }
-      span {
+      > span {
         margin-left: 6px;
       }
     }

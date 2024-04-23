@@ -1,10 +1,10 @@
 import React, { Component } from 'react';
-import { LoadDiv } from 'ming-ui';
+import { LoadDiv, Dialog } from 'ming-ui';
 import domtoimage from 'dom-to-image';
 import { saveAs } from 'file-saver';
 import styled from 'styled-components';
-import ToolBar from 'src/pages/integration/dataIntegration/TaskCon/TaskCanvas/components/ToolBar';
-import EditCon from './EditCon.jsx/index.jsx';
+// import ToolBar from 'src/pages/integration/dataIntegration/TaskCon/TaskCanvas/components/ToolBar';
+import EditCon from './EditCon/index.jsx';
 import TaskNode from './TaskNode';
 import { formatTaskNodeData, formatDataWithLine } from './util';
 import _ from 'lodash';
@@ -37,25 +37,6 @@ const WrapEdit = styled.div`
   right: 0;
   z-index: 10;
 `;
-
-const initData = {
-  '070b9e3fd75544eb92e06b4f4687a198': {
-    nodeId: '070b9e3fd75544eb92e06b4f4687a198',
-    nodeType: 'SOURCE_TABLE',
-    name: '读取数据源',
-    nextIds: ['070b9e3fd75544eb92e06b4f4687a199'],
-    prevIds: [],
-    config: {},
-  },
-  '070b9e3fd75544eb92e06b4f4687a199': {
-    nodeId: '070b9e3fd75544eb92e06b4f4687a199',
-    nodeType: 'DEST_TABLE',
-    name: '写入数据目的地',
-    nextIds: [],
-    prevIds: [],
-    config: {},
-  },
-};
 class TaskCanvas extends Component {
   constructor(props) {
     super(props);
@@ -91,6 +72,15 @@ class TaskCanvas extends Component {
         currentId: nextProps.curId,
       });
     }
+    if (!_.isEqual(nextProps.flowData.flowNodes, this.props.flowData.flowNodes)) {
+      const { flowData = {} } = nextProps;
+      const { flowNodes, firstNodeId } = flowData;
+      this.setState({
+        flowNodes,
+        list: formatDataWithLine(formatTaskNodeData(_.values(flowNodes), firstNodeId)),
+        loading: false,
+      });
+    }
   }
 
   //删除节点
@@ -102,30 +92,31 @@ class TaskCanvas extends Component {
       flowId,
       nodeId,
     }).then(res => {
-      // const { toAdd, toUpdate, toDeleteIds = [] } = res;
+      this.setState({
+        currentId: '',
+      });
       this.onCompute(res);
     });
   };
   //计算更新后的数据
   onCompute = data => {
-    const { firstNodeId, flowNodes } = this.state;
-    const { toAdd = [], toUpdate = [], toDeleteIds = [] } = data;
-    let a = _.cloneDeep(formatTaskNodeData(_.values(flowNodes), firstNodeId));
-    const updateIds = toUpdate.map(o => o.nodeId);
-    a = a.filter(o => ![...updateIds, ...toDeleteIds].includes(o.nodeId)).concat([...toAdd, ...toUpdate]);
-    console.log(a);
-    let map = {};
-    a.forEach(row => {
-      map[row.nodeId] = row;
+    const { flowNodes } = this.state;
+    const { toAdd = [], toUpdate = [], toDeleteIds = [], srcIsDb } = data;
+    const updateIds = (toUpdate || []).map(o => o.nodeId);
+    let map = _.omit(flowNodes, updateIds);
+    map = _.omit(map, toDeleteIds || []);
+    [...(toUpdate || []), ...(toAdd || [])].map(o => {
+      map[o.nodeId] = o;
     });
-    this.props.onUpdate({ ...this.props.flowData, flowNodes: map });
+    _.mapKeys(map, o => {
+      map[o.nodeId] = _.omit(o, ['x', 'y']);
+    });
     this.setState(
       {
-        list: formatDataWithLine(formatTaskNodeData(a, firstNodeId)),
         loading: true,
-        flowNodes: map,
       },
       () => {
+        this.props.onUpdate({ ...this.props.flowData, flowNodes: map, srcIsDb });
         this.setState({
           loading: false,
         });
@@ -134,30 +125,69 @@ class TaskCanvas extends Component {
   };
 
   //更新节点信息
-  updateNode = node => {
-    const { currentProjectId: projectId, onUpdate } = this.props;
-    const { flowId = '', list = [] } = this.state;
+  updateNode = (node, forName) => {
+    const { currentProjectId: projectId } = this.props;
+    const { flowId = '' } = this.state;
     const { nodeId, name, nodeType, nodeConfig } = node;
-    // TaskFlow.updateNode({
-    //   projectId,
-    //   flowId,
-    //   nodeId,
-    //   name,
-    //   nodeType,
-    //   // status: 'NORMAL',
-    //   // description: 'm52di3',
-    //   nodeConfig,
-    // }).then(res => {
-    //   this.onCompute(res);
-    // });
-    this.setState({
-      list: list.map(o => {
-        if (o.nodeId === node.nodeId) {
-          return node;
-        } else {
-          return o;
-        }
-      }),
+    if (forName) {
+      TaskFlow.renameNode({
+        projectId,
+        flowId,
+        nodeId,
+        name,
+      }).then(res => {
+        const { srcIsDb } = res;
+        this.onCompute({
+          toUpdate: [node],
+          toAdd: [],
+          toDeleteIds: [],
+          srcIsDb,
+        });
+      });
+      return;
+    }
+    TaskFlow.updateNode({
+      projectId,
+      flowId,
+      nodeId,
+      name,
+      nodeType,
+      nodeConfig,
+    }).then(res => {
+      const { errorMsg, errorMsgList, isSucceeded, toAdd, toDeleteIds, toUpdate, srcIsDb } = res;
+      if (res.failed) {
+        alert(res.errorMsg, 2);
+        return;
+      }
+      this.onCompute({
+        toUpdate: !!toUpdate
+          ? !toUpdate.find(o => o.nodeId === node.nodeId)
+            ? [...toUpdate, node]
+            : toUpdate
+          : [node],
+        toAdd: !!toAdd ? toAdd : [],
+        toDeleteIds: !!toDeleteIds ? toDeleteIds : [],
+        srcIsDb,
+      });
+      if (!isSucceeded && errorMsgList) {
+        return Dialog.confirm({
+          title: _l('报错信息'),
+          className: 'connectorErrorDialog',
+          description: (
+            <div className="errorInfo" style={{ marginBottom: -30 }}>
+              {errorMsgList.map((error, index) => {
+                return (
+                  <div key={index} className="mTop5">
+                    {error}
+                  </div>
+                );
+              })}
+            </div>
+          ),
+          removeCancelBtn: true,
+          okText: _l('关闭'),
+        });
+      }
     });
   };
   genScreenshot = () => {
@@ -204,10 +234,6 @@ class TaskCanvas extends Component {
 
   render() {
     const { loading, scale, list, currentId, firstNodeId, flowNodes } = this.state;
-    if (loading) {
-      return <LoadDiv />;
-    }
-    console.log(this.state.list);
     return (
       <Wrap className="taskContainer Relative flex">
         <div
@@ -223,31 +249,42 @@ class TaskCanvas extends Component {
               this.closeEdit();
             }}
           >
-            {list.map(o => {
-              return (
-                <TaskNode
-                  {...this.props}
-                  onChangeCurrentNode={currentId => {
-                    this.setState({
-                      currentId,
-                    });
-                  }}
-                  currentId={currentId}
-                  nodeData={o}
-                  nodes={flowNodes}
-                  list={list}
-                  onDelete={() => {
-                    this.deleteNode(o.nodeId);
-                  }}
-                  onUpdate={node => {
-                    this.updateNode(node);
-                  }}
-                  onAddNodes={data => {
-                    this.onCompute(data);
-                  }}
-                />
-              );
-            })}
+            {loading ? (
+              <LoadDiv />
+            ) : (
+              list.map(o => {
+                return (
+                  <TaskNode
+                    {...this.props}
+                    onChangeCurrentNode={currentId => {
+                      this.setState({
+                        currentId,
+                      });
+                    }}
+                    currentId={currentId}
+                    nodeData={o}
+                    nodes={flowNodes}
+                    list={list}
+                    onDelete={() => {
+                      this.deleteNode(o.nodeId);
+                    }}
+                    onUpdate={(node, forName) => {
+                      this.updateNode(
+                        {
+                          ...node,
+                          status: 'NORMAL',
+                        },
+                        forName,
+                      );
+                    }}
+                    key={o.nodeId}
+                    onAddNodes={data => {
+                      this.onCompute(data);
+                    }}
+                  />
+                );
+              })
+            )}
           </TableTreeWrap>
         </div>
         {/* 暂时不开放 */}
@@ -256,6 +293,11 @@ class TaskCanvas extends Component {
           <WrapEdit className="editTaskNodes">
             <EditCon
               {...this.props}
+              onChangeCurrentNode={currentId => {
+                this.setState({
+                  currentId,
+                });
+              }}
               node={list.find(o => o.nodeId === currentId)}
               nodeList={flowNodes}
               list={list}
@@ -269,7 +311,17 @@ class TaskCanvas extends Component {
                     currentId: node.nodeId,
                   });
                 }
-                this.updateNode(node);
+                this.updateNode({
+                  ...node,
+                  status: 'NORMAL',
+                });
+              }}
+              onUpdateFlowDatasources={data => {
+                const { flowData } = this.props;
+                this.props.onUpdate({
+                  ...flowData,
+                  datasources: flowData.datasources.filter(o => o.id !== data.id).concat(data),
+                });
               }}
             />
           </WrapEdit>

@@ -11,8 +11,14 @@ import emptyCover from 'src/pages/worksheet/assets/emptyCover.png';
 import { WORKFLOW_SYSTEM_FIELDS_SORT } from 'src/pages/worksheet/common/ViewConfig/util';
 import './index.less';
 import previewAttachments from 'src/components/previewAttachments/previewAttachments';
+import { getRecordColorConfig, getRecordColor, getControlStyles } from 'src/pages/worksheet/util';
 import { isDocument } from 'src/components/UploadFiles/utils';
 import _ from 'lodash';
+import styled from 'styled-components';
+
+const Con = styled.div`
+  ${({ controlStyles }) => controlStyles || ''}
+`;
 
 function getCoverControlData(data) {
   return _.find(data, file => File.isPicture(file.ext) || (isDocument(file.ext) && file.previewUrl));
@@ -31,7 +37,7 @@ export default class RecordCard extends Component {
     const { data, view } = props;
     this.state = {
       checked: data[view.advancedSetting.checkradioid] === '1',
-      coverError: false
+      coverError: false,
     };
   }
   get cover() {
@@ -53,7 +59,7 @@ export default class RecordCard extends Component {
     const showControls = [...view.displayControls, view.advancedSetting.abstract];
     const allControls = [
       { controlId: 'ownerid', controlName: _l('拥有者'), type: 26 },
-      { controlId: 'caid', controlName: _l('创建者'), type: 26 },
+      { controlId: 'caid', controlName: _l('创建人'), type: 26 },
       { controlId: 'ctime', controlName: _l('创建时间'), type: 16 },
       { controlId: 'utime', controlName: _l('最近修改时间'), type: 16 },
     ].concat(controls);
@@ -72,15 +78,16 @@ export default class RecordCard extends Component {
         : null;
     if (url && !coverError) {
       const image = new Image();
-      image.onload = () => {}
+      image.onload = () => {};
       image.onerror = () => {
         this.setState({ coverError: true });
-      }
+      };
       image.src = url;
     }
     return url;
   }
   previewAttachment(attachments, index) {
+    const { data, view } = this.props;
     previewAttachments({
       index: index || 0,
       attachments: attachments.map(attachment => {
@@ -98,6 +105,9 @@ export default class RecordCard extends Component {
       showThumbnail: true,
       hideFunctions: ['editFileName'],
       disableNoPeimission: true,
+      recordId: data.rowid,
+      controlId: view.coverCid,
+      worksheetId: view.worksheetId,
     });
   }
   handleCoverClick = e => {
@@ -162,9 +172,11 @@ export default class RecordCard extends Component {
     );
   }
   renderControl(id, nameVisible = false) {
-    const { data } = this.props;
+    const { data, view } = this.props;
     const { cardControls } = this;
     const visibleControl = _.find(cardControls, { controlId: id }) || {};
+    const cell = Object.assign({}, visibleControl, { value: data[visibleControl.controlId] });
+
     return (
       <div className="controlWrapper" key={id}>
         {(nameVisible || visibleControl.desc) && (
@@ -203,10 +215,12 @@ export default class RecordCard extends Component {
         <div className="controlContent">
           {data[visibleControl.controlId] ? (
             <CellControl
+              className={`control-val-${visibleControl.controlId} w100`}
+              worksheetId={view.worksheetId}
+              row={data}
               rowHeight={34}
-              cell={Object.assign({}, visibleControl, { value: data[visibleControl.controlId] })}
+              cell={cell}
               from={4}
-              className={'w100'}
             />
           ) : (
             <div className="emptyTag"></div>
@@ -217,20 +231,42 @@ export default class RecordCard extends Component {
   }
   renderContent() {
     const { data, view, allowAdd, controls, sheetSwitchPermit } = this.props;
-    const { advancedSetting, coverCid, showControlName } = view;
+    const { viewType, advancedSetting, coverCid, showControlName } = view;
     const isShowWorkflowSys = isOpenPermit(permitList.sysControlSwitch, sheetSwitchPermit);
     let titleControl = _.find(controls, control => control.attribute === 1) || {};
     const titleText = getTitleTextFromControls(controls, data);
     const { checked } = this.state;
-    const appshowtype = advancedSetting.appshowtype || '0';
+    const appshowtype = viewType === 6 ? '1' : advancedSetting.appshowtype || '0';
     const displayControls = isShowWorkflowSys
       ? view.displayControls.filter(id => id !== titleControl.controlId)
       : view.displayControls
           .filter(id => id !== titleControl.controlId)
           .filter(v => !_.includes(WORKFLOW_SYSTEM_FIELDS_SORT, v));
+    const recordColorConfig = getRecordColorConfig(view);
+    const recordColor =
+      recordColorConfig &&
+      getRecordColor({
+        controlId: recordColorConfig.controlId,
+        colorItems: recordColorConfig.colorItems,
+        controls,
+        row: data,
+      });
+
     return (
-      <div className="recordCardContent flex">
-        <div className="flexRow valignWrapper mBottom5">
+      <div
+        className="recordCardContent flex"
+        style={{
+          backgroundColor: recordColor && recordColorConfig.showBg ? recordColor.lightColor : undefined,
+          border: `1px solid ${recordColor && recordColorConfig.showBg ? recordColor.lightColor : '#fff'}`,
+        }}
+      >
+        {recordColor && recordColorConfig.showLine && (
+          <div
+            className={cx('colorTag', { colorTagRight: advancedSetting.coverposition === '1' })}
+            style={{ backgroundColor: recordColor.color }}
+          ></div>
+        )}
+        <div className={cx('flexRow valignWrapper mBottom5', `control-val-${titleControl.controlId}`)}>
           {advancedSetting.checkradioid && (
             <Checkbox
               className="mRight5"
@@ -242,7 +278,7 @@ export default class RecordCard extends Component {
               }}
             />
           )}
-          <div className="Gray bold Font14 ellipsis">{titleText}</div>
+          <div className="titleText Gray bold Font14 ellipsis">{titleText}</div>
         </div>
         {advancedSetting.abstract && (
           <div className="Gray_9e Font12 mBottom8 abstract">{this.renderControl(advancedSetting.abstract)}</div>
@@ -267,13 +303,25 @@ export default class RecordCard extends Component {
     }
   };
   render() {
-    const { view, data, onClick, batchOptVisible } = this.props;
+    const { view, data, onClick, batchOptVisible, controls } = this.props;
     const { advancedSetting, coverCid } = view;
     let batchOptChecked = batchOptVisible && data.check;
+    const showControlStyle = _.get(view, 'advancedSetting.controlstyleapp') === '1';
+
+    const controlStyles =
+      showControlStyle &&
+      getControlStyles(
+        view.displayControls
+          .map(id => _.find(controls, { controlId: id }))
+          .concat(_.find(controls, { attribute: 1 }))
+          .filter(_.identity),
+      );
     return (
-      <div
+      <Con
+        controlStyles={controlStyles}
         className={cx('mobileWorksheetRecordCard', {
           coverRight: [undefined, '0'].includes(advancedSetting.coverposition),
+          converTop: ['2'].includes(advancedSetting.coverposition),
           batchOptStyle: batchOptChecked,
         })}
         onClick={batchOptVisible ? e => this.checkedCurrentRow(e, data) : onClick}
@@ -289,7 +337,7 @@ export default class RecordCard extends Component {
             <Icon icon="done" />
           </div>
         )}
-      </div>
+      </Con>
     );
   }
 }

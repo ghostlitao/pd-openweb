@@ -27,7 +27,7 @@ export default class Email extends Component {
       <div className="pLeft8 pRight8">
         <div className="pTop5">
           <span className="Gray_75">{_l('收件人：')}</span>
-          <MembersName accounts={item.accounts} />
+          <MembersName {...this.props} accounts={item.accounts} />
         </div>
         <div className="pBottom5 mTop4">
           <span className="Gray_75">{_l('主题：')}</span>
@@ -38,7 +38,7 @@ export default class Email extends Component {
   }
 
   render() {
-    const { processId, item, disabled, selectNodeId, openDetail } = this.props;
+    const { processId, item, disabled, selectNodeId, openDetail, isSimple } = this.props;
 
     return (
       <div className="flexColumn">
@@ -56,7 +56,9 @@ export default class Email extends Component {
               <i className={cx('workflowAvatar icon-workflow_email', item.accounts.length ? 'BGBlue' : 'BGGray')} />
             </div>
             <NodeOperate nodeClassName="BGBlue" {...this.props} />
-            <div className="workflowContent Font13">{this.renderContent()}</div>
+            <div className="workflowContent Font13">
+              {isSimple ? <span className="pLeft8 pRight8 Gray_9e">{_l('加载中...')}</span> : this.renderContent()}
+            </div>
           </div>
           <CreateNode {...this.props} />
         </section>

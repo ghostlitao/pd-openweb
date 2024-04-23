@@ -12,6 +12,7 @@ import MoreOperation from '../WorkSheetLeft/MoreOperation';
 import Drag from '../WorkSheetLeft/Drag';
 import AppItem from './AppItem';
 import homeAppApi from 'src/api/homeApp';
+import { getTranslateInfo } from 'src/util';
 import './index.less';
 
 const WorkSheetPortal = (props) => {
@@ -23,16 +24,18 @@ const WorkSheetPortal = (props) => {
   const data = isCharge && appPkg.viewHideNavi ? props.data : props.data.filter(item => item.status === 1 && !item.navigateHide).filter(filterEmptyAppItem);
   const ref = useRef(null);
 
-  useEffect(() => {
+  const getSheetList = () => {
     sheetListActions.getSheetList({
       appId,
       appSectionId: groupId,
     });
-  }, [groupId]);
+  }
+
+  useEffect(getSheetList, [groupId]);
 
   const handleSaveName = (e, id) => {
     setEditId('');
-    const workSheetName = e.target.value.slice(0, 25) || _l('未命名分组');
+    const workSheetName = e.target.value.slice(0, 100) || _l('未命名分组');
     homeAppApi.updateAppSection({
       appId,
       appSectionId: id,
@@ -98,7 +101,7 @@ const WorkSheetPortal = (props) => {
               />
             ) : (
               <Fragment>
-                <div className="Font16 bold">{item.workSheetName}</div>
+                <div className="Font16 bold">{getTranslateInfo(appId, item.workSheetId).name || item.workSheetName}</div>
                 {item.status === 2 && (
                   <Tooltip popupPlacement="bottom" text={<span>{_l('仅系统角色可见（包含管理员、运营者、开发者）')}</span>}>
                     <Icon className="Font16 mLeft10 pointer visibilityIcon" icon="visibility_off" style={{ color: '#ee6f09' }} />
@@ -183,7 +186,7 @@ const WorkSheetPortal = (props) => {
               appId={appId}
               groupId={groupId}
               sheetListActions={sheetListActions}
-              getSheetList={sheetListActions.getSheetList}
+              getSheetList={getSheetList}
             />
           </div>
         </div>

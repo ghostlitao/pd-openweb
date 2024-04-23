@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { Icon, LoadDiv, RadioGroup, Input } from 'ming-ui';
 import { Select } from 'antd';
-import { DATABASE_TYPE, TEST_STATUS, CREATE_TYPE_RADIO_LIST, CREATE_TYPE, namePattern } from '../../constant';
+import { DATABASE_TYPE, TEST_STATUS, CREATE_TYPE_RADIO_LIST, CREATE_TYPE, sourceNamePattern } from '../../constant';
 import CustomFields from 'src/components/newCustomFields';
 import { customFormData, getCardDescription } from './formConfig';
 import SourceSelectModal from '../SourceSelectModal';
@@ -11,6 +11,9 @@ import dataSourceApi from '../../../api/datasource';
 import appManagementApi from 'src/api/appManagement';
 import _ from 'lodash';
 import { v4 as uuidv4 } from 'uuid';
+import SSHConnect from './SSHConnect';
+import TestConnectButton from './testConnectButton';
+import { getExtraParams } from '../../utils';
 
 const Wrapper = styled.div`
   .selectItem {
@@ -73,54 +76,6 @@ const FormFooter = styled.div`
   }
 `;
 
-const TestConnectButton = styled.div`
-  display: inline-block;
-  border: 1px solid #2196f3;
-  border-radius: 3px;
-  color: #2196f3;
-  background-color: #fff;
-  font-size: 14px;
-  line-height: 18px;
-  height: 36px;
-  padding: 8px 30px;
-  margin-top: 48px;
-  cursor: pointer;
-
-  &.default {
-    &:hover {
-      color: #fff;
-      background-color: #2196f3;
-    }
-  }
-
-  &.testing {
-    display: inline-flex;
-    align-items: center;
-  }
-
-  &.testSuccess {
-    color: #4caf50;
-    border-color: #4caf50;
-    i {
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      margin-right: 5px;
-      background: #4caf50;
-      color: #fff;
-    }
-  }
-
-  &.testFailed {
-    color: #f44336;
-    border-color: #f44336;
-    i {
-      color: #f44336;
-      margin-right: 5px;
-    }
-  }
-`;
-
 const FormItem = styled.div`
   margin-top: 16px;
   color: #757575;
@@ -173,11 +128,13 @@ export default function ConfigForm(props) {
   const [errorInfo, setErrorInfo] = useState([]);
   const [whitelistIp, setWhitelistIp] = useState([]);
   const [testStatus, setTestStatus] = useState(TEST_STATUS.DEFAULT);
+  const [sshEnable, setSshEnable] = useState(false);
   const fieldRef = useRef(null);
 
   // 获取白名单
   useEffect(() => {
     dataSourceApi.whitelistIp().then(res => res && setWhitelistIp(res));
+    dataSourceApi.sshServerEnable().then(res => setSshEnable(!!res));
   }, []);
 
   // 获取应用列表
@@ -207,6 +164,11 @@ export default function ConfigForm(props) {
 
     if (error) return;
 
+    if (connectorConfigData[roleType].formData.enableSsh && !connectorConfigData[roleType].formData.sshConfigId) {
+      alert(_l('请选择SSH进行测试连接'), 3);
+      return;
+    }
+
     data.forEach(element => {
       formData[element.controlId] = element.value;
     });
@@ -220,13 +182,11 @@ export default function ConfigForm(props) {
       password: formData.password,
       initDb: formData.initDb,
       connectOptions: formData.connectOptions,
+      cdcParams: formData.cdcParams,
       type: connectorConfigData[roleType].type,
-      extraParams:
-        connectorConfigData[roleType].type === DATABASE_TYPE.ORACLE
-          ? { [JSON.parse(formData.serviceType)[0] === 'ServiceName' ? 'serviceName' : 'SID']: formData.serviceName }
-          : connectorConfigData[roleType].type === DATABASE_TYPE.MONGO_DB
-          ? { isSrvProtocol: !!parseInt(formData.isSrvProtocol) }
-          : {},
+      extraParams: getExtraParams(connectorConfigData[roleType].type, formData),
+      enableSsh: connectorConfigData[roleType].formData.enableSsh,
+      sshConfigId: connectorConfigData[roleType].formData.sshConfigId,
     };
 
     setTestStatus(TEST_STATUS.TESTING);
@@ -242,19 +202,13 @@ export default function ConfigForm(props) {
       if (result.isSucceeded) {
         setSaveDisabled(false);
 
-        const extraParams =
-          connectorConfigData[roleType].type === DATABASE_TYPE.ORACLE
-            ? { [JSON.parse(formData.serviceType)[0] === 'ServiceName' ? 'serviceName' : 'SID']: formData.serviceName }
-            : connectorConfigData[roleType].type === DATABASE_TYPE.MONGO_DB
-            ? { isSrvProtocol: !!parseInt(formData.isSrvProtocol) }
-            : {};
-
         setConnectorConfigData({
           [roleType]: Object.assign({}, connectorConfigData[roleType], {
             formData: {
+              ...connectorConfigData[roleType].formData,
               ...formData,
               id: connectorConfigData[roleType].formData.id,
-              extraParams,
+              extraParams: getExtraParams(connectorConfigData[roleType].type, formData),
             },
           }),
         });
@@ -300,7 +254,7 @@ export default function ConfigForm(props) {
               onBlur={event =>
                 setConnectorConfigData({
                   [roleType]: Object.assign({}, connectorConfigData[roleType], {
-                    sourceName: event.target.value.replace(namePattern, ''),
+                    sourceName: event.target.value.replace(sourceNamePattern, ''),
                   }),
                 })
               }
@@ -347,6 +301,7 @@ export default function ConfigForm(props) {
             setConnectorConfigData({
               [roleType]: Object.assign({}, value, { createType: CREATE_TYPE.NEW, sourceName: '', formData: {} }),
             });
+            setSaveDisabled(true);
             setSelectModalVisible(false);
           }}
           onClose={() => setSelectModalVisible(false)}
@@ -405,35 +360,54 @@ export default function ConfigForm(props) {
           </FormItem>
         </div>
       ) : (
-        <CustomFields
-          ref={fieldRef}
-          flag={flag}
-          from={3}
-          recordId={uuidv4()}
-          data={customFormData(
-            connectorConfigData[roleType].type,
-            connectorConfigData[roleType].roleType,
-            isCreateConnector,
-            connectorConfigData[roleType].formData,
-            allFieldDisabled,
-          )}
-          onChange={(data, changed) => {
-            const formData = {};
-            data.forEach(element => {
-              formData[element.controlId] = element.value;
-            });
+        <React.Fragment>
+          <CustomFields
+            ref={fieldRef}
+            flag={flag}
+            from={3}
+            recordId={uuidv4()}
+            data={customFormData(
+              connectorConfigData[roleType].type,
+              connectorConfigData[roleType].roleType,
+              isCreateConnector,
+              connectorConfigData[roleType].formData,
+              allFieldDisabled,
+            )}
+            onChange={(data, changed) => {
+              const formData = {};
+              data.forEach(element => {
+                formData[element.controlId] = element.value;
+              });
 
-            setConnectorConfigData({
-              [roleType]: Object.assign({}, connectorConfigData[roleType], {
-                formData: {
-                  ...formData,
-                  id: (connectorConfigData[roleType].formData || {}).id,
-                },
-              }),
-            });
-            setSaveDisabled(!(_.includes(['name', 'roleType'], changed[0]) && isEditSource));
-          }}
-        />
+              setConnectorConfigData({
+                [roleType]: Object.assign({}, connectorConfigData[roleType], {
+                  formData: {
+                    ...connectorConfigData[roleType].formData,
+                    ...formData,
+                    id: (connectorConfigData[roleType].formData || {}).id,
+                    extraParams: getExtraParams(connectorConfigData[roleType].type, formData),
+                  },
+                }),
+              });
+              setSaveDisabled(!(_.includes(['name', 'roleType'], changed[0]) && isEditSource));
+            }}
+          />
+          {sshEnable && (
+            <SSHConnect
+              projectId={props.currentProjectId}
+              data={connectorConfigData[roleType].formData}
+              onChange={obj => {
+                setConnectorConfigData({
+                  [roleType]: Object.assign({}, connectorConfigData[roleType], {
+                    formData: { ...connectorConfigData[roleType].formData, ...obj },
+                  }),
+                });
+              }}
+              setSubmitDisabled={setSaveDisabled}
+              disabled={isCreateConnector && connectorConfigData[roleType].createType === CREATE_TYPE.SELECT_EXIST}
+            />
+          )}
+        </React.Fragment>
       )}
 
       {((!isApplicationSheet && connectorConfigData[roleType].createType !== CREATE_TYPE.SELECT_EXIST) ||
@@ -446,12 +420,7 @@ export default function ConfigForm(props) {
             </div>
           )}
 
-          <TestConnectButton className={testStatus.className} onClick={onTestConnect}>
-            {testStatus === TEST_STATUS.TESTING && <LoadDiv size="small" style={{ marginRight: 5 }} />}
-            {testStatus === TEST_STATUS.SUCCESS && <Icon icon="done" />}
-            {testStatus === TEST_STATUS.FAILED && <Icon icon="info1" />}
-            {testStatus.text}
-          </TestConnectButton>
+          <TestConnectButton testStatus={testStatus} onTestConnect={onTestConnect} className="mTop50" />
 
           {errorInfo.length > 0 && (
             <div className="info mTop15">

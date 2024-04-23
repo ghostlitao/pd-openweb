@@ -1,80 +1,29 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Fragment } from 'react';
 import styled from 'styled-components';
 import cx from 'classnames';
 import { useSetState } from 'react-use';
-import { LoadDiv, Dialog, Button, Support } from 'ming-ui';
+import SvgIcon from 'src/components/SvgIcon';
+import { LoadDiv, Dialog, Button, Support, Switch, Dropdown } from 'ming-ui';
 import worksheetAjax from 'src/api/worksheet';
 import SelectSheetFromApp from '../SelectSheetFromApp';
+import { enumWidgetType } from 'src/pages/widgetConfig/util';
+import { DEFAULT_CONFIG } from 'src/pages/widgetConfig/config/widget';
+import { AddRelate } from '../relationSearch/styled';
 import _ from 'lodash';
 
-const AddRelate = styled.div`
-  .intro {
-    color: #9e9e9e;
-    span {
-      margin-left: 6px;
-      color: #2196f3;
-    }
-  }
-  .relateWrap {
-    position: relative;
-    margin-top: 40px;
-    height: 300px;
-    border: 1px solid #ededed;
-    padding: 20px 18px;
-  }
-  .relateTypeTab {
-    display: flex;
-    position: absolute;
-    top: -16px;
-    border: 1px solid #ededed;
-    background: #fff;
-    li {
-      line-height: 32px;
-      padding: 0 12px;
-      transition: all 0.25s;
-      border-right: 1px solid #ededed;
-      cursor: pointer;
-      color: #9e9e9e;
-      &:last-child {
-        border-right: none;
-      }
-
-      &.active,
-      &:hover {
-        color: #2196f3;
-      }
-    }
-  }
-  .footerBtn {
-    text-align: right;
-    margin-top: 32px;
-  }
-  .existRelateWrap {
-    .emptyHint {
-      margin-top: 120px;
-      text-align: center;
-    }
-    li {
-      line-height: 36px;
-      padding: 0 12px;
-      border-radius: 3px;
-      &:hover {
-        background-color: #f5f5f5;
-      }
-      &.active {
-        background-color: #e5f3ff;
-      }
-    }
-  }
-  .relateListWrap {
-    max-height: 260px;
-    overflow: auto;
-    .title {
-      margin: 12px 0;
-      span {
-        margin: 0 4px;
-      }
-    }
+const InputWrap = styled.div`
+  display: flex;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 12px;
+  padding-right: 10px;
+  border-bottom: 1px solid #f0f0f0;
+  input {
+    line-height: 36px;
+    flex: 1;
+    border: none;
+    outline: none;
+    padding-left: 8px;
   }
 `;
 
@@ -82,8 +31,9 @@ const RELATE_TYPE = [
   { key: 'new', text: _l('新建关联') },
   { key: 'exist', text: _l('已有关联') },
 ];
+
 export default function ConfigRelate(props) {
-  const { globalSheetInfo, value = '', deleteWidget, onOk } = props;
+  const { globalSheetInfo, value = '', allControls = [], deleteWidget, onOk } = props;
   const { appId: defaultAppId, worksheetId: sourceId, name: sourceName } = globalSheetInfo;
   const [{ appId, sheetId, sheetName }, setSelectedId] = useSetState({
     appId: defaultAppId,
@@ -95,21 +45,53 @@ export default function ConfigRelate(props) {
     selectedControl: {},
     loading: false,
   });
+  const [{ relateFields, open }, setFields] = useState({
+    relateFields: [],
+    open: false,
+  });
   const [relateType, setType] = useState('new');
   const [visible, setVisible] = useState(true);
+  const [searchValue, setSearchValue] = useState('');
 
   useEffect(() => {
-    if (relateType !== 'exist' || loading) return;
+    if (!_.isEmpty(relateControls) && relateType === 'new') {
+      if (sheetId) {
+        handleSetSource();
+      } else {
+        setFields({
+          relateFields: [],
+          open: false,
+        });
+        setControls({ selectedControl: {} });
+      }
+      return;
+    }
+    if ((relateType === 'exist' && sheetId) || loading || (relateType === 'new' && !sheetId)) return;
     setControls({ loading: true });
-    worksheetAjax.getWorksheetControls({
-      worksheetId: sourceId,
-      getControlType: 1,
-    })
+    worksheetAjax
+      .getWorksheetControls({
+        worksheetId: sourceId,
+        getControlType: 1,
+      })
       .then(({ data }) => {
-        setControls({ relateControls: data.controls });
+        const filterControls = (data.controls || []).filter(
+          i => !_.find(allControls, a => a.controlId === i.controlId),
+        );
+        setControls({ relateControls: filterControls });
+        if (sheetId && relateType === 'new') {
+          handleSetSource({ newControls: filterControls });
+        }
       })
       .always(() => setControls({ loading: false }));
-  }, [relateType]);
+  }, [relateType, sheetId]);
+
+  const handleSetSource = ({ newControls, open } = {}) => {
+    const controls = (newControls || relateControls || [])
+      .filter(i => i.dataSource === sheetId)
+      .filter(i => !_.find(allControls, a => a.controlId === i.controlId));
+    setFields({ relateFields: controls, open: _.isUndefined(open) ? !_.isEmpty(controls) : open });
+    setControls({ selectedControl: _.isUndefined(open) ? controls[0] : {} });
+  };
 
   const closeRelateConfig = () => {
     setVisible(false);
@@ -126,35 +108,105 @@ export default function ConfigRelate(props) {
             appId={appId}
             sheetId={sheetId}
           />
+          {_.isEmpty(relateFields) ? null : (
+            <Fragment>
+              <div className={cx('relateWarning', { active: open })}>
+                {_l('检测到所选表已关联 %0，是否建立', sourceName)}
+                <Support type={3} text={_l('双向关联')} href="https://help.mingdao.com/sheet12" />
+                {_l('同步数据？')}
+                <Switch
+                  checked={open}
+                  text={''}
+                  onClick={checked => handleSetSource({ open: checked ? false : undefined })}
+                />
+              </div>
+              {open ? (
+                <Fragment>
+                  <div className="selectItem Bold">{_l('%0 中的关联字段', sheetName)}</div>
+                  <Dropdown
+                    className="w100"
+                    menuStyle={{ width: '100%' }}
+                    border
+                    value={_.get(selectedControl, 'sourceControl.controlId')}
+                    data={relateFields.map(i => {
+                      return {
+                        value: _.get(i, 'sourceControl.controlId'),
+                        text: _.get(i, 'sourceControl.controlName'),
+                      };
+                    })}
+                    onChange={value =>
+                      setControls({
+                        selectedControl: _.find(relateFields, i => _.get(i, 'sourceControl.controlId') === value) || {},
+                      })
+                    }
+                  />
+                </Fragment>
+              ) : null}
+            </Fragment>
+          )}
         </div>
       );
     }
     if (loading) return <LoadDiv />;
+    const filterData = searchValue
+      ? relateControls.filter(i => i.sourceEntityName.includes(searchValue))
+      : relateControls;
     return (
       <div className="existRelateWrap">
         {_.isEmpty(relateControls) ? (
           <div className="emptyHint">{_l('没有与当前工作表关联的表')}</div>
         ) : (
           <div className="relateListWrap">
-            <div className="title Gray_9e">
-              {_l('添加与')}
-              <span className="Bold ">{sourceName}</span>
-              {_l('关联的')}
+            <div className="title mBottom0">
+              {_l('添加关联当前')}
+              <span className="Bold mLeft5 mRight5">{sourceName}</span>
+              {_l('的')}
+              <span className="Gray_9e">
+                （{_l('建立')}
+                <Support type={3} text={_l('双向关联')} href="https://help.mingdao.com/sheet12" />
+                {_l('同步数据')}）
+              </span>
             </div>
-            <ul>
-              {relateControls.map(item => (
-                <li
-                  className={cx({ active: item.controlId === selectedControl.controlId })}
-                  key={item.controlId}
-                  onClick={() => {
-                    setControls({ selectedControl: item });
-                    setSelectedId({ sheetId: item.dataSource, appId: '' });
-                  }}>
-                  <span>{item.sourceEntityName}</span>
-                  <span className="Gray_9e">{_l(' - %0', _.get(item, ['sourceControl', 'controlName']))}</span>
-                </li>
-              ))}
-            </ul>
+            <InputWrap>
+              <i className="icon-search Gray_75 Font16"></i>
+              <input
+                autoFocus
+                value={searchValue}
+                placeholder={_l('搜索')}
+                onChange={e => {
+                  setSearchValue(e.target.value);
+                }}
+              />
+              {searchValue && (
+                <i className="icon-cancel1 Gray_9e Font16 pointer" onClick={() => setSearchValue('')}></i>
+              )}
+            </InputWrap>
+
+            {_.isEmpty(filterData) ? (
+              <div className="TxtCenter mTop50">{_l('暂无搜索结果')}</div>
+            ) : (
+              <ul>
+                {filterData.map(item => {
+                  const { type, controlName } = item.sourceControl || {};
+                  return (
+                    <li
+                      className={cx({ active: item.controlId === selectedControl.controlId })}
+                      key={item.controlId}
+                      onClick={() => {
+                        setControls({ selectedControl: item });
+                        setSelectedId({ sheetId: item.dataSource, sheetName: item.controlName });
+                      }}
+                    >
+                      <SvgIcon url={item.iconUrl} fill="#999999" size={18} className="InlineBlock Width18" />
+                      <span className="Bold mLeft10">{item.sourceEntityName}</span>
+                      <span className="Gray_9e mLeft4 Font14">
+                        {_l(' - %0：%1', _.get(DEFAULT_CONFIG[enumWidgetType[type]], 'widgetName'), controlName)}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
         )}
       </div>
@@ -163,15 +215,16 @@ export default function ConfigRelate(props) {
 
   return (
     <Dialog
-      style={{ width: '560px' }}
+      style={{ width: '640px' }}
       visible={visible}
-      title={_l('添加关联记录')}
+      title={<span className="Bold">{_l('添加关联记录')}</span>}
       footer={null}
-      onCancel={closeRelateConfig}>
+      onCancel={closeRelateConfig}
+    >
       <AddRelate>
         <div className="intro">
           {_l('在表单中显示关联的记录。如：订单关联客户')}
-          <Support type={3} href="https://help.mingdao.com/zh/sheet2.html" text={_l('帮助')} />
+          <Support type={3} href="https://help.mingdao.com/sheet2" text={_l('帮助')} />
         </div>
         <div className="relateWrap">
           <ul className="relateTypeTab">
@@ -183,7 +236,10 @@ export default function ConfigRelate(props) {
                   setType(key);
                   setSelectedId({});
                   setControls({ selectedControl: {} });
-                }}>
+                  setFields({ relateFields: [], open: false });
+                  setSearchValue('');
+                }}
+              >
                 {text}
               </li>
             ))}
@@ -196,8 +252,10 @@ export default function ConfigRelate(props) {
           </Button>
           <Button
             type="primary"
+            className="Bold"
             disabled={!sheetId}
-            onClick={() => onOk({ sheetId, control: selectedControl, sheetName })}>
+            onClick={() => onOk({ sheetId, control: selectedControl, sheetName })}
+          >
             {_l('确定')}
           </Button>
         </div>

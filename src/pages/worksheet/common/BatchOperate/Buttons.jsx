@@ -58,6 +58,7 @@ function getButtonWidth({ icon, name }) {
 
 function Buttons(props) {
   const {
+    isCharge,
     count,
     width,
     appId,
@@ -106,8 +107,9 @@ function Buttons(props) {
   return (
     <Con>
       <CustomButtons
+        isCharge={isCharge}
         hideDisabled
-        isBatchOperate
+        isBatchOperate={selectedRows.length > 1 || isAll}
         type="iconText"
         {...buttonsProps}
         buttons={buttons.slice(0, buttonShowNum)}
@@ -131,7 +133,6 @@ function Buttons(props) {
               onClickAway={() => setPopupVisible(false)}
               onClickAwayExceptions={[
                 '.mdModalWrap',
-                '.mdDialog',
                 '.mui-dialog-container',
                 '.dropdownTrigger',
                 '.addFilterPopup',
@@ -139,17 +140,19 @@ function Buttons(props) {
                 '.mui-datetimepicker',
                 '.mui-datetimerangepicker',
                 '.selectUserBox',
-                '.CityPicker',
                 '.worksheetFilterOperateList',
                 '.ant-select-dropdown',
                 '.ant-picker-dropdown',
                 '.rc-trigger-popup',
                 '#dialogSelectDept_container',
+                '.CityPicker',
+                '.CityPicker-wrapper'
               ]}
             >
               <CustomButtons
+                isCharge={isCharge}
                 hideDisabled
-                isBatchOperate
+                isBatchOperate={selectedRows.length > 1 || isAll}
                 type="menu"
                 icon
                 {...buttonsProps}

@@ -37,6 +37,7 @@ export default class RecordCard extends Component {
   };
   static defaultProps = {
     from: 1,
+    showControls: [],
   };
   state = {
     forceShowFullValue: null,
@@ -49,7 +50,10 @@ export default class RecordCard extends Component {
     if (isMobile) {
       return;
     }
-    previewQiniuUrl(cover.previewUrl.replace(/\?(.*)/, ''), { disableDownload });
+    previewQiniuUrl(cover.previewUrl.replace(/\|imageView2\/1\/w\/\d+\/h\/\d+/, ''), {
+      disableDownload,
+      ext: (cover.previewUrl.match(/\.(jpg|jpeg|png|gif|bmp)(\?|$)/i) || '')[1] || 'png',
+    });
     e.stopPropagation();
   }
   get cover() {
@@ -69,7 +73,7 @@ export default class RecordCard extends Component {
     const { controls, showControls } = this.props;
     const allControls = [
       { controlId: 'ownerid', controlName: _l('拥有者'), type: 26 },
-      { controlId: 'caid', controlName: _l('创建者'), type: 26 },
+      { controlId: 'caid', controlName: _l('创建人'), type: 26 },
       { controlId: 'ctime', controlName: _l('创建时间'), type: 16 },
       { controlId: 'utime', controlName: _l('最近修改时间'), type: 16 },
     ].concat(controls);
@@ -90,6 +94,9 @@ export default class RecordCard extends Component {
       sourceEntityName,
       viewId,
       isCharge,
+      disabledLink,
+      worksheetId,
+      appId,
     } = this.props;
     const { cover, cardControls } = this;
     const { forceShowFullValue } = this.state;
@@ -115,6 +122,7 @@ export default class RecordCard extends Component {
           focused,
           noControls: !cardControls.length,
           withoutCover: !coverCid,
+          disabledLink,
         })}
         onClick={onClick}
       >
@@ -160,6 +168,9 @@ export default class RecordCard extends Component {
                     viewId={viewId}
                     projectId={projectId}
                     isCharge={isCharge}
+                    row={data}
+                    worksheetId={worksheetId}
+                    appId={appId}
                   />
                 ) : (
                   <div className="emptyTag"></div>

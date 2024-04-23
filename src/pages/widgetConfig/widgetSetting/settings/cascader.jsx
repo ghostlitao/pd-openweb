@@ -1,7 +1,6 @@
 import React, { useEffect, Fragment, useState } from 'react';
-import { Modal, Tooltip } from 'antd';
 import { useSetState } from 'react-use';
-import { RadioGroup, Checkbox } from 'ming-ui';
+import { RadioGroup } from 'ming-ui';
 import styled from 'styled-components';
 import worksheetAjax from 'src/api/worksheet';
 import { SettingItem } from '../../styled';
@@ -9,7 +8,7 @@ import { getAdvanceSetting, handleAdvancedSettingChange } from '../../util/setti
 import components from '../components';
 import _ from 'lodash';
 
-const { SelectDataSource, RelateSheetInfo } = components;
+const { SelectDataSource, RelateDetailInfo } = components;
 
 export const MENU_STYLE = [
   {
@@ -88,17 +87,21 @@ export default function Cascader(props) {
   }, [controlId]);
   useEffect(() => {
     if (!dataSource) return;
-    worksheetAjax.getWorksheetInfo({
-      worksheetId: dataSource,
-      getViews: true,
-      getTemplate: true,
-      appId,
-    })
+    worksheetAjax
+      .getWorksheetInfo({
+        worksheetId: dataSource,
+        getViews: true,
+        getTemplate: true,
+        appId,
+      })
       .then(res => {
         const viewInfo = _.find(res.views, item => item.viewId === viewId);
         if (!viewInfo) {
           setInfo({ sheetInfo: res, hasError: true });
           return;
+        }
+        if (_.isEmpty(data.relationControls)) {
+          onChange({ relationControls: _.get(res, 'template.controls') });
         }
         setInfo({ sheetInfo: res, viewInfo });
       })
@@ -138,7 +141,7 @@ export default function Cascader(props) {
           </div>
           <i className="icon-edit_17 Gray_9e pointer" onClick={() => setEdit({ editVisible: true, editType: 3 })}></i>
         </div>
-        <RelateSheetInfo name={sheetInfo.name} />
+        <RelateDetailInfo {...props} sheetInfo={sheetInfo} />
       </Fragment>
     );
   };

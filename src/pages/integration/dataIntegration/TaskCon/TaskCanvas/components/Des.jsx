@@ -22,26 +22,40 @@ export default function Des(props) {
     let txt = '';
     switch (nodeData.nodeType) {
       case 'UNION':
-        txt = (
-          UNION_TYPE_LIST.find(o => o.type === (_.get(nodeData, ['nodeConfig', 'config', 'unionType']) || 'UNION')) ||
-          {}
-        ).txt;
+        txt = (UNION_TYPE_LIST.find(o => o.type === (_.get(nodeData, 'nodeConfig.config.unionType') || 'UNION')) || {})
+          .txt;
         break;
       case 'JOIN':
-        txt = (
-          JOIN_TYPE.find(o => o.type === (_.get(nodeData, ['nodeConfig', 'config', 'joinType']) || 'INNER_JOIN')) || {}
-        ).txt;
+        txt = (JOIN_TYPE.find(o => o.type === (_.get(nodeData, 'nodeConfig.config.joinType') || 'INNER_JOIN')) || {})
+          .txt;
         break;
       case 'FILTER':
-        const items = _.get(nodeData, ['nodeConfig', 'config', 'items']) || [];
-        if (items.length > 1) {
+        let items = _.get(nodeData, 'nodeConfig.config.items') || [];
+        let data = [];
+        (items || []).map(o => {
+          if (!!o.isGroup) {
+            data = [...data, ...o.groupFilters];
+          } else {
+            data = [...data, o];
+          }
+        });
+        items = data.filter(o => !!o);
+        if (items.length > 0) {
           txt = _l('%0个筛选条件', items.length);
         } else {
-          txt = '筛选';
+          txt = <span className="ThemeColor3">{'设置此节点'}</span>;
         }
         break;
       case 'AGGREGATE':
-        // txt = _l('分类 %0个字段，汇总 %1个字段', items.length, items.length);
+        let groupFields = _.get(nodeData, 'nodeConfig.config.groupFields') || [];
+        let aggregateFields = _.get(nodeData, 'nodeConfig.config.aggregateFields') || [];
+        if (groupFields.length > 0 && aggregateFields.length > 0) {
+          txt = _l('分类 %0个字段，汇总 %1个字段', groupFields.length, aggregateFields.length);
+        } else if (groupFields.length > 0) {
+          txt = _l('分类 %0个字段', groupFields.length);
+        } else if (aggregateFields.length > 0) {
+          txt = _l('汇总 %0个字段', aggregateFields.length);
+        }
         break;
     }
     if (!txt) {
@@ -56,7 +70,7 @@ export default function Des(props) {
   if (isAct) {
     return renderDes(nodeData);
   }
-  let tableName = _.get(nodeData, ['nodeConfig', 'config', 'tableName']);
+  let tableName = _.get(nodeData, 'nodeConfig.config.tableName');
   return tableName ? ( //工作表名称
     <div className={`des overflow_ellipsis WordBreak ${props.className}`}>{tableName}</div>
   ) : (

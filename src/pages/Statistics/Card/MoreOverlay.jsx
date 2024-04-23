@@ -22,7 +22,7 @@ export default class MoreOverlay extends Component {
     };
   }
   handleExportExcel = exportType => {
-    const { report, worksheetId, exportData } = this.props;
+    const { report, worksheetId, exportData, filter } = this.props;
     const {
       filters = [],
       filtersGroup = [],
@@ -42,14 +42,11 @@ export default class MoreOverlay extends Component {
         filterRangeId,
         rangeType,
         rangeValue,
+        dynamicFilter: rangeType ? filter.dynamicFilter : undefined,
         sorts,
         filters: [filters, filtersGroup, filterControls].filter(n => !_.isEmpty(n)),
       })
-      .then(result => {
-        if (!result) {
-          alert(_l('导出错误'), 2);
-        }
-      })
+      .then(result => {})
       .fail(error => {
         alert(error, 2);
       });
@@ -119,6 +116,7 @@ export default class MoreOverlay extends Component {
   }
   renderOverlay() {
     const {
+      themeColor,
       reportType,
       report,
       ownerId,
@@ -126,7 +124,7 @@ export default class MoreOverlay extends Component {
       isMove,
       isCharge,
       permissionType,
-      onOpenFilter,
+      onSheetView,
       onOpenSetting,
       onRemove,
     } = this.props;
@@ -151,21 +149,21 @@ export default class MoreOverlay extends Component {
             </div>
           </Menu.Item>
         )}
-        {onOpenFilter && !!reportStatus && (
+        {onSheetView && !!reportStatus && (
           <Menu.Item
             className="pLeft10"
             onClick={() => {
-              onOpenFilter();
+              onSheetView();
               this.handleUpdateDropdownVisible(false);
             }}
           >
             <div className="flexRow valignWrapper">
-              <Icon className="Gray_9e Font18 mLeft5 mRight5" icon="filter" />
-              <span>{_l('筛选')}</span>
+              <Icon className="Gray_9e Font18 mLeft5 mRight5" icon="table" />
+              <span>{_l('以表格显示')}</span>
             </div>
           </Menu.Item>
         )}
-        {!md.global.Account.isPortal && (
+        {!md.global.Account.isPortal && !location.href.includes('embed/page') && (
           <Menu.Item
             className="pLeft10"
             onClick={() => {
@@ -179,36 +177,42 @@ export default class MoreOverlay extends Component {
             </div>
           </Menu.Item>
         )}
-        <Menu.SubMenu
-          popupClassName="chartMenu"
-          title={_l('导出Excel')}
-          icon={<Icon className="Gray_9e Font18 mRight5" icon="file_download" />}
-          popupOffset={[0, 0]}
-        >
-          <Menu.Item
-            style={{ width: 180 }}
-            className="pLeft20"
-            onClick={() => {
-              this.handleExportExcel(0);
-            }}
+        {!window.isPublicApp && (
+          <Menu.SubMenu
+            popupClassName="chartMenu"
+            title={_l('导出Excel%06002')}
+            icon={<Icon className="Gray_9e Font18 mRight5" icon="file_download" />}
+            popupOffset={[0, 0]}
           >
-            <div className="flexRow valignWrapper">{_l('按照原值导出')}</div>
-          </Menu.Item>
-          <Menu.Item
-            style={{ width: 180 }}
-            className="pLeft20"
-            onClick={() => {
-              this.handleExportExcel(1);
-            }}
-          >
-            <div className="flexRow valignWrapper">{_l('按显示单位导出')}</div>
-          </Menu.Item>
-        </Menu.SubMenu>
-        {[reportTypes.PivotTable].includes(reportType) && (
+            <Menu.Item
+              style={{ width: 180 }}
+              className="pLeft20"
+              onClick={() => {
+                this.handleExportExcel(0);
+              }}
+            >
+              <div className="flexRow valignWrapper">{_l('按照原值导出%06000')}</div>
+            </Menu.Item>
+            <Menu.Item
+              style={{ width: 180 }}
+              className="pLeft20"
+              onClick={() => {
+                this.handleExportExcel(1);
+              }}
+            >
+              <div className="flexRow valignWrapper">{_l('按显示单位导出%06001')}</div>
+            </Menu.Item>
+          </Menu.SubMenu>
+        )}
+        {[reportTypes.PivotTable].includes(reportType) && !md.global.Account.isPortal && (
           <Menu.Item
             className="pLeft10"
             onClick={() => {
-              window.open(`/printPivotTable/${report.id}`);
+              const { filters = [], filtersGroup = [] } = this.props.exportData;
+              const printFilter = [filters, filtersGroup].filter(n => !_.isEmpty(n));
+              this.handleUpdateDropdownVisible(false);
+              sessionStorage.setItem(`printFilter-${report.id}`, JSON.stringify(printFilter));
+              window.open(`/printPivotTable/${report.id}/${encodeURIComponent(themeColor || '')}`);
             }}
           >
             <div className="flexRow valignWrapper">
@@ -217,7 +221,7 @@ export default class MoreOverlay extends Component {
             </div>
           </Menu.Item>
         )}
-        {isMove && isCharge && (
+        {isMove && (
           <Fragment>
             <Divider className="mTop5 mBottom5" />
             <Menu.Item className="pLeft10" onClick={this.handleUpdateOwnerId}>

@@ -11,25 +11,12 @@ import DropOption from 'src/pages/Role/PortalCon/components/DropOption';
 import SearchInput from 'src/pages/AppHomepage/AppCenter/components/SearchInput';
 import _ from 'lodash';
 import { getCurrentProject } from 'src/util';
-import UserHead from 'src/pages/feed/components/userHead';
-import { getIcon, getColor, getTxtColor, pageSize } from 'src/pages/Role/AppRoleCon/UserCon/config';
+import UserHead from 'src/components/userHead';
+import { getIcon, getColor, getTxtColor } from 'src/pages/Role/AppRoleCon/UserCon/config';
 import moment from 'moment';
-
+const pageSize = 1000;
 const Wrap = styled.div`
   padding: 20px 10px 20px 10px;
-  .bar {
-    padding: 0 44px;
-    .toOthers,
-    .del {
-      font-weight: 400;
-      color: #2196f3;
-      line-height: 37px;
-      height: 37px;
-      background: #f3faff;
-      padding: 0 20px;
-      border-radius: 3px;
-    }
-  }
   .wrapTr:not(.checkBoxTr):not(.optionWrapTr) {
     width: calc(calc(calc(100% - 70px - 38px) / 100) * 15);
   }
@@ -116,9 +103,8 @@ function Others(props) {
             {data.memberType === 5 ? (
               <UserHead
                 key={data.accountId}
-                projectId={_.isEmpty(getCurrentProject(projectId)) ? '' : projectId}
+                projectId={projectId}
                 size={32}
-                lazy="false"
                 user={{
                   ...data,
                   accountId: data.id,
@@ -172,7 +158,7 @@ function Others(props) {
     {
       id: 'operateTime',
       name: _l('添加时间'),
-      sorter: true,
+      // sorter: true,
       className: 'timeTr',
       minW: 130,
       render: (text, data, index) => {
@@ -214,11 +200,20 @@ function Others(props) {
       },
     },
   ];
+  const handleSearch = keyWords => {
+    setState({ keyWords });
+    SetAppRolePagingModel({
+      ...appRolePagingModel,
+      pageIndex: 1,
+      keywords: keyWords,
+    });
+  };
+  const onSearch = _.debounce(keywords => handleSearch(keywords), 500);
   return (
     <Wrap className={cx('flex flexColumn overflowHidden', { isAllType: roleId !== 'all' })}>
-      <div className="bar flexRow">
+      <div className="bar flexRow alignItemsCenter barActionCon">
         <div className="title flex">
-          <span className="Font17 Bold">{props.title}</span>{' '}
+          <span className="Font17 Bold">{props.title}</span>
           <span className="Gray_9e mLeft10">{_l('%0个外协用户', total || 0)}</span>
         </div>
         {selectedIds.length > 0 && (
@@ -248,15 +243,7 @@ function Others(props) {
                 className="roleSearch"
                 placeholder={props.placeholder || _l('搜索')}
                 value={keyWords}
-                onChange={keyWords => {
-                  setState({ keyWords });
-                  SetAppRolePagingModel({
-                    ...appRolePagingModel,
-                    pageIndex: 1,
-                    keywords: keyWords,
-                  });
-                  getOutList({ appId }, true);
-                }}
+                onChange={onSearch}
               />
             </div>
           </WrapBar>
@@ -276,7 +263,13 @@ function Others(props) {
           setSelectedIds(list);
         }}
         showCheck={canEdit}
-        list={pageIndex <= 1 && loading ? [] : userList}
+        list={
+          pageIndex <= 1 && loading
+            ? []
+            : !keyWords
+            ? userList
+            : userList.filter(o => o.name.toLocaleLowerCase().indexOf(keyWords.toLocaleLowerCase()) >= 0)
+        }
         pageIndex={pageIndex}
         total={total}
         onScrollEnd={() => {

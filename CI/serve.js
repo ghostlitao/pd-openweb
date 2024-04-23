@@ -80,7 +80,7 @@ const middlewareList = [
       ignoreCase: true,
     });
     if (req.url === '/') {
-      res.writeHead(301, { Location: '/app/my' });
+      res.writeHead(301, { Location: '/dashboard' });
       res.end();
     } else if (req.url && req.url.startsWith('/api/')) {
       // 代理接口请求到 api 服务器
@@ -206,14 +206,14 @@ async function serve({ done = () => {}, needOpen = true } = {}) {
       const lanIps = getLanIp();
       const localUrl = `http://localhost:${port}`;
       statusData.localUrl = localUrl;
-      console.log('\n明道云启动成功! 🎉 🎉 🎉\n');
+      console.log('\n启动成功! 🎉 🎉 🎉\n');
       logObj({
         地址: localUrl,
         局域网地址: `http://${lanIps[0]}:${port}`,
         'api 服务器': apiServer,
       });
       if (needOpen) {
-        open(localUrl + '/app/my');
+        open(localUrl + '/dashboard');
       }
       done();
     } else {

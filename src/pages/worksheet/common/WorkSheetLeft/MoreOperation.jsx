@@ -1,5 +1,6 @@
 import React, { Fragment, useState, useEffect, useRef } from 'react';
-import { Icon, Menu, MenuItem, Tooltip, Dialog, DeleteReconfirm, LoadDiv, Checkbox } from 'ming-ui';
+import { Icon, Menu, MenuItem, Tooltip, Dialog, DeleteReconfirm, LoadDiv, Checkbox, Input } from 'ming-ui';
+import ConfirmButton from 'ming-ui/components/Dialog/ConfirmButton';
 import SelectIcon from 'worksheet/common/SelectIcon/SelectIcon';
 import SheetMove from 'worksheet/common/SheetMove/SheetMove';
 import DialogImportExcelCreate from 'worksheet/components/DialogImportExcelCreate';
@@ -7,15 +8,17 @@ import Trigger from 'rc-trigger';
 import homeAppApi from 'src/api/homeApp';
 import sheetApi from 'src/api/worksheet';
 import CreateNew from './CreateNew';
+import { EditExternalLink } from './ExternalLink';
 import { APP_ROLE_TYPE } from 'src/pages/worksheet/constants/enum.js';
-import { canEditApp } from 'worksheet/redux/actions/util';
+import { canEditApp, canEditData } from 'worksheet/redux/actions/util';
 
 const CopySheetConfirmDescription = props => {
-  const { workSheetId, type } = props;
+  const { workSheetId, type, workSheetName } = props;
   const [loading, setLoading] = useState(true);
   const [controls, setControls] = useState([]);
   const [isCopyRelevance, setIsCopyRelevance] = useState(false);
   const [selectIds, setSelectIds] = useState([]);
+  const [name, setName] = useState(workSheetName);
 
   useEffect(() => {
     if (!type) {
@@ -38,11 +41,25 @@ const CopySheetConfirmDescription = props => {
     props.onChanegSelectIds(selectIds);
   }, [selectIds]);
 
+  useEffect(() => {
+    props.onChangeName(name);
+  }, [name]);
+
+  const renderResetName = () => {
+    return (
+      <div className={type ? 'mTop10' : 'mTop24'}>
+        <div className="mBottom10 Font14 Gray">{_l('副本名称')}</div>
+        <Input className="w100 Gray" value={name} onChange={value => setName(value.trim().slice(0, 100))} />
+      </div>
+    );
+  }
+
   return type ? (
-    _l('仅复制当前自定义页面的所有配置')
+    renderResetName()
   ) : (
     <Fragment>
-      <div>{_l('仅复制目标工作表的所有配置，工作表下的数据不会被复制')}</div>
+      <div className="mBottom10">{_l('仅复制目标工作表的所有配置，工作表下的数据不会被复制')}</div>
+      {renderResetName()}
       {loading && <LoadDiv className="mTop10" />}
       {!!controls.length && (
         <Fragment>
@@ -159,7 +176,18 @@ const handleDeleteGroup = ({ projectId, appId, groupId, appItem, sheetListAction
 
 const handleCopyWorkSheet = props => {
   const { appId, groupId, appItem, sheetListActions } = props;
-  const { workSheetId, workSheetName, type, icon, iconColor, iconUrl, parentGroupId } = appItem;
+  const {
+    workSheetId,
+    workSheetName,
+    type,
+    icon,
+    iconColor,
+    iconUrl,
+    parentGroupId,
+    configuration,
+    urlTemplate,
+    createType,
+  } = appItem;
   const copyArgs = {
     worksheetId: workSheetId,
     appId,
@@ -167,7 +195,40 @@ const handleCopyWorkSheet = props => {
     name: workSheetName,
     relationControlIds: [],
   };
-  Dialog.confirm({
+  const onOk = () => {
+    if (!copyArgs.name) {
+      alert(_l('请填写名称'), 3);
+      return;
+    }
+    if (type === 1) {
+      sheetListActions.copyCustomPage(
+        {
+          appId,
+          appSectionId: groupId,
+          name: copyArgs.name,
+          id: workSheetId,
+          icon,
+          iconColor,
+          iconUrl,
+          parentGroupId,
+        },
+        {
+          configuration,
+          urlTemplate,
+          createType,
+        },
+      );
+    } else {
+      sheetListActions.copySheet(copyArgs, {
+        icon,
+        iconColor,
+        iconUrl,
+        parentGroupId,
+      });
+    }
+    dialogConfirm();
+  };
+  const dialogConfirm = Dialog.confirm({
     width: 480,
     title: (
       <span className="bold">
@@ -178,33 +239,33 @@ const handleCopyWorkSheet = props => {
       <CopySheetConfirmDescription
         type={type}
         workSheetId={workSheetId}
+        workSheetName={_l('%0-复制', workSheetName)}
         onChanegSelectIds={ids => {
           copyArgs.relationControlIds = ids;
         }}
+        onChangeName={value => {
+          copyArgs.name = value;
+        }}
       />
     ),
-    okText: _l('复制'),
-    onOk: () => {
-      if (type === 1) {
-        sheetListActions.copyCustomPage({
-          appId,
-          appSectionId: groupId,
-          name: _l('%0-复制', workSheetName),
-          id: workSheetId,
-          icon,
-          iconColor,
-          iconUrl,
-          parentGroupId,
-        });
-        return;
-      }
-      sheetListActions.copySheet(copyArgs, {
-        icon,
-        iconColor,
-        iconUrl,
-        parentGroupId,
-      });
-    },
+    footer: (
+      <div className="Dialog-footer-btns">
+        <ConfirmButton
+          action={() => {
+            dialogConfirm();
+          }}
+          type="link"
+        >
+          {_l('取消')}
+        </ConfirmButton>
+        <ConfirmButton
+          action={onOk}
+          type="primary"
+        >
+          {_l('复制')}
+        </ConfirmButton>
+      </div>
+    )
   });
 };
 
@@ -233,33 +294,102 @@ export default function MoreOperation(props) {
   );
   const [sheetMoveVisible, setSheetMoveVisible] = useState(false);
   const [createType, setCreateType] = useState('');
+  const [externalLinkVisible, setExternalLinkVisible] = useState(false);
 
+  const isEditApp = canEditApp(_.get(appPkg, ['permissionType']), _.get(appPkg, ['isLock']));
   const isWorksheet = appItem.type === 0;
   const isActive = activeSheetId === appItem.workSheetId;
   const deleteText = {
-    0: _l('工作表'),
-    1: _l('自定义页面'),
-    2: _('分组'),
+    0: _l('删除工作表%02029'),
+    1: _l('删除自定义页面'),
+    2: _l('删除分组%02012'),
   };
 
-  const handleCreateAppItem = (type, name) => {
-    if (!name) {
-      alert(_l('请填写名称'), 3);
-      return;
-    }
+  const handleCreateAppItem = (type, args) => {
     sheetListActions.createAppItem({
       appId,
       groupId: appItem.workSheetId,
       firstGroupId: groupId,
       type,
-      name: name.slice(0, 25),
+      ...args,
     });
     setCreateType('');
   };
 
+  const handleMarkApp = () => {
+    homeAppApi
+      .markApp({
+        projectId,
+        appId,
+        itemId: appItem.workSheetId,
+        isMark: !appItem.isMarked,
+        type: appItem.type === 0 ? 2 : appItem.type, // 转换类型--0传2(工作表),1传1(自定义页面)
+      })
+      .then(res => {
+        if (res) {
+          alert(!appItem.isMarked ? _l('收藏成功') : _l('已取消收藏'));
+          sheetListActions.updateSheetListAppItem(appItem.workSheetId, { isMarked: !appItem.isMarked });
+        }
+      })
+      .fail(() => {
+        alert(!appItem.isMarked ? _l('收藏失败！') : _l('取消收藏失败！'), 2);
+      });
+  };
+
   const renderMenu = () => {
+    if (!(canEditApp(_.get(appPkg, ['permissionType'])) || canEditData(_.get(appPkg, ['permissionType'])))) {
+      return (
+        <Menu className="worksheetItemOperate">
+          <MenuItem
+            icon={
+              <Icon
+                icon={appItem.isMarked ? 'task-star' : 'star-hollow'}
+                className="Font16"
+                style={{ color: appItem.isMarked ? '#ffc402' : '#9e9e9e' }}
+              />
+            }
+            onClick={handleMarkApp}
+          >
+            <span className="text">{appItem.isMarked ? _l('取消收藏') : _l('收藏')}</span>
+          </MenuItem>
+        </Menu>
+      );
+    }
+
+    const showDivider = !isGroup || (isEditApp && appItem.type === 1 && (appItem.urlTemplate ? true : isActive));
+
     return (
       <Menu className="worksheetItemOperate">
+        {!isGroup && (
+          <MenuItem
+            icon={
+              <Icon
+                icon={appItem.isMarked ? 'task-star' : 'star-hollow'}
+                className="Font16"
+                style={{ color: appItem.isMarked ? '#ffc402' : '#9e9e9e' }}
+              />
+            }
+            onClick={handleMarkApp}
+          >
+            <span className="text">{appItem.isMarked ? _l('取消收藏') : _l('收藏')}</span>
+          </MenuItem>
+        )}
+        {isEditApp && appItem.type === 1 && (appItem.urlTemplate ? true : isActive) && (
+          <MenuItem
+            icon={<Icon icon="settings" className="Font16" />}
+            onClick={() => {
+              if (appItem.urlTemplate) {
+                setExternalLinkVisible(true);
+              } else {
+                window.editCustomPage && window.editCustomPage();
+              }
+              setPopupVisible(false);
+            }}
+          >
+            <span className="text">{appItem.urlTemplate ? _l('编辑外部链接') : _l('编辑画布')}</span>
+          </MenuItem>
+        )}
+        {showDivider && <hr className="splitter" />}
         <MenuItem
           icon={<Icon icon="edit" className="Font16" />}
           onClick={() => {
@@ -273,8 +403,8 @@ export default function MoreOperation(props) {
         >
           <span className="text">{onChangeEdit ? _l('修改名称') : _l('修改名称和图标%02023')}</span>
         </MenuItem>
-        {canEditApp(_.get(appPkg, ['permissionType']), _.get(appPkg, ['isLock'])) && (
-          <React.Fragment>
+        {isEditApp && (
+          <Fragment>
             {!isGroup && (
               <MenuItem
                 icon={<Icon icon="content-copy" className="Font16" />}
@@ -311,9 +441,9 @@ export default function MoreOperation(props) {
                   popupPlacement="right"
                   text={
                     <span>
-                      {isWorksheet
-                        ? _l('通常用于不需要用户直接访问的仅作为配置用途的表。如：关联的明细表、参数表等。')
-                        : _l('隐藏后，普通用户在导航中将看不到此页面入口。')}
+                      {_l(
+                        '设为隐藏后，普通用户在导航中将看不到此应用项入口，仅系统角色在导航中可见（包含管理员、运营者、开发者），应用项权限依然遵循角色权限原则。此配置通常用于不需要用户直接访问，仅作为配置用途的应用项，如：关联的明细表、参数表等。',
+                      )}
                     </span>
                   }
                 >
@@ -363,9 +493,9 @@ export default function MoreOperation(props) {
                 setPopupVisible(false);
               }}
             >
-              <span className="text">{_l('删除%0', deleteText[appItem.type])}</span>
+              <span className="text">{deleteText[appItem.type]}</span>
             </MenuItem>
-          </React.Fragment>
+          </Fragment>
         )}
       </Menu>
     );
@@ -448,6 +578,15 @@ export default function MoreOperation(props) {
             });
           }}
           onClose={() => setSheetMoveVisible(false)}
+        />
+      )}
+      {externalLinkVisible && (
+        <EditExternalLink
+          appId={appId}
+          groupId={groupId}
+          appItem={appItem}
+          updateSheetListAppItem={sheetListActions.updateSheetListAppItem}
+          onCancel={() => setExternalLinkVisible(false)}
         />
       )}
       {!!createType &&

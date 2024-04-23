@@ -30,6 +30,7 @@ class DiscussList extends Component {
   }
   componentWillUnmount() {
     ActionSheet.close();
+    this.props.dispatch(actions.emptySheetDiscussion());
   }
   getSheetDiscussion(pageIndex) {
     const { worksheetId, rowId, entityType } = this.props;
@@ -110,11 +111,9 @@ class DiscussList extends Component {
             }}
           >
             <Message
+              item={item}
               showReplyMessage={!!item.replyId}
               replyAccount={item.replyAccount}
-              message={item.message}
-              rUserList={item.accountsInMessage}
-              sourceType={item.sourceType}
             />
           </div>
         </Brief>

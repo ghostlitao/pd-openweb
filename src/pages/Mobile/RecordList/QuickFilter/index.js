@@ -4,7 +4,8 @@ import { connect } from 'react-redux';
 import * as actions from 'mobile/RecordList/redux/actions';
 import { bindActionCreators } from 'redux';
 import { Icon } from 'ming-ui';
-import FilterInput, { validate, conditionAdapter, formatQuickFilter, NumberTypes } from './Inputs';
+import FilterInput, { validate, conditionAdapter, turnControl, formatQuickFilter, NumberTypes } from './Inputs';
+import { formatFilterValuesToServer } from 'src/pages/worksheet/common/Sheet/QuickFilter/utils';
 import _ from 'lodash';
 
 const Con = styled.div`
@@ -43,8 +44,8 @@ const Con = styled.div`
   }
 `;
 
-function QuickFilter(props) {
-  const { view, filters, controls, updateQuickFilter, onHideSidebar } = props;
+export function QuickFilter(props) {
+  const { view, filters, controls, updateQuickFilter, onHideSidebar, mobileNavGroupFilters = [], quickFilter = [] } = props;
   const width = document.documentElement.clientWidth - 60;
   const showQueryBtn = view.advancedSetting && view.advancedSetting.enablebtn && view.advancedSetting.enablebtn === '1';
   const store = useRef({});
@@ -53,11 +54,17 @@ function QuickFilter(props) {
   const items = useMemo(
     () =>
       filters
-        .map(filter => ({
-          ...filter,
-          control: _.find(controls, c => c.controlId === filter.controlId),
-        }))
-        .filter(c => c.control),
+        .map(filter => {
+          const controlObj = _.find(controls, c => c.controlId === filter.controlId);
+          const newControl = controlObj && _.cloneDeep(turnControl(controlObj));
+          return {
+            ...filter,
+            control: newControl,
+            dataType: newControl ? newControl.type : filter.dataType,
+            filterType: newControl && newControl.encryId ? 2 : filter.filterType,
+          };
+        })
+        .filter(c => c.control && !(window.shareState.shareId && _.includes([26, 27, 48], c.control.type))),
     [JSON.stringify(filters)],
   );
   const update = newValues => {
@@ -73,13 +80,16 @@ function QuickFilter(props) {
       .map(conditionAdapter);
     if (quickFilter.length) {
       const quickFilterDataFormat = quickFilter.map(it => {
-        let { values } = it;
+        let { values = [] } = it;
         if (
-          (_.isArray(values) && (values[0] === 'isEmpty' || values[0].accountId === 'isEmpty')) ||
-          values[0].rowid === 'isEmpty'
+          (_.isArray(values) && (values[0] === 'isEmpty' || _.get(values[0], 'accountId') === 'isEmpty')) ||
+          _.get(values[0], 'rowid') === 'isEmpty'
         ) {
           it.filterType = 7;
           values = [];
+        }
+        if (it.type === 2) {
+          return { ...it, values: !_.isEmpty(values) ? [values.join('').trim()] : values };
         }
         return { ...it, values };
       });
@@ -104,6 +114,30 @@ function QuickFilter(props) {
   useEffect(() => {
     setValues({});
   }, [view.viewId]);
+  const filtersData = Object.keys(values)
+    .map(key => ({
+      controlId: 'fastFilter_' + _.get(items[key], 'control.controlId'),
+      filterValue: {
+        ...values[key],
+        values: formatFilterValuesToServer(_.get(items[key], 'control.type'), _.get(values[key], 'values')),
+      },
+    }))
+    .concat(
+      quickFilter
+        .filter(it => it.dataType === 2)
+        .map(v => ({
+          controlId: 'fastFilter_' + v.controlId,
+          filterValue: {
+            values: v.values,
+          },
+        })),
+    )
+    .concat(
+      mobileNavGroupFilters.map(c => ({
+        controlId: 'navGroup_' + c.controlId,
+        filterValue: { values: c.values },
+      })),
+    );
 
   return (
     <Con className="flexColumn h100 overflowHidden" style={{ width }}>
@@ -111,14 +145,17 @@ function QuickFilter(props) {
         <Icon className="Gray_9e close" icon="close" onClick={onHideSidebar} />
       </div>
       <div className="flex body">
-        {filters.map((item, i) => (
+        {items.map((item, i) => (
           <FilterInput
+            controls={controls}
             key={item.controlId}
             {...item}
             {...values[i]}
+            filtersData={filtersData}
             projectId={props.projectId}
             appId={props.appId}
             worksheetId={props.worksheetId}
+            filterText={props.filterText}
             onChange={(change = {}) => {
               store.current.activeType = item.control.type;
               const newValues = { ...values, [i]: { ...values[i], ...change } };
@@ -153,6 +190,9 @@ function QuickFilter(props) {
 }
 
 export default connect(
-  state => ({}),
+  state => ({
+    mobileNavGroupFilters: state.mobile.mobileNavGroupFilters,
+    quickFilter: state.mobile.quickFilter,
+  }),
   dispatch => bindActionCreators(_.pick(actions, ['updateQuickFilter']), dispatch),
 )(QuickFilter);
