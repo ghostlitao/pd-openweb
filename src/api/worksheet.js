@@ -1,3 +1,4 @@
+import queryString from 'query-string';
 export default {
   /**
   * 保存表控件
@@ -1652,7 +1653,29 @@ export default {
   * @returns {Promise<Boolean, ErrorModel>}
   **/
    getFilterRows: function (args, options = {}) {
-     
+     // 修改搜索条件
+     const searchQuery = queryString.parse(location.search);
+     const { viewId } = args;
+     if (viewId && location.pathname.toString().includes(viewId)) {
+       console.log('args :>> ', args, searchQuery);
+       Object.keys(searchQuery)
+         .filter(key => key.toString().startsWith('f_'))
+         .forEach(key => {
+           args.filterControls.push({
+             controlId: key.toString().replace('f_', ''),
+             dataType: 29,
+             dateRange: undefined,
+             dateRangeType: undefined,
+             filterType: 24,
+             maxValue: undefined,
+             minValue: undefined,
+             spliceType: 1,
+             value: undefined,
+             values: [searchQuery[key]],
+           });
+         });
+       console.log('args :>> ', args);
+     }
      return $.api('Worksheet', 'GetFilterRows', args, options);
    },
   /**
