@@ -206,6 +206,7 @@ export default function (props) {
                 )}
                 <div className="mTop24 clearfix Font14">
                   <div
+                    style={{ display: 'none' }}
                     className="cbRememberPasswordDiv Gray Font14 Left Hand flexRow alignItemsCenter"
                     onClick={() => onChange({ isCheck: !isCheck })}
                   >

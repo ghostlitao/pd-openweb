@@ -24,3 +24,5 @@ package-lock.json
 
 .scannerwork
 *.llog
+
+.history
